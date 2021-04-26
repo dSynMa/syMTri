@@ -42,6 +42,6 @@ Argument list:
 3. `--rep`: use this if you want the controller to pass back control to the monitor (ensure the LTL guarantees required are co-safety, i.e. no **G** operator);
 4. `--dot`: use this if you want the output to include a DOT representation of the controller for the combination;
 5. `--docker <container-name>`: use this if your Strix implementation is running on a docker container; and
-6. `--server <server-location>`: use this if your Strix implementation is running on a virtual machine and exposed through  a server (see ./api-strix-server) for the required interface.
+6. `--server <server-location>`: use this if your Strix implementation is running on a virtual machine and exposed through a server that exposes an endpoint at `<server-location>/strix` that responds to `GET` requests with controllers in KISS format (i.e. strix is called with the `-k` parameter).
 
-The default output is a monitor with outputs.
+The default output is a monitor with outputs in a format similar to the input monitor.
