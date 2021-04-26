@@ -32,7 +32,7 @@ The tool is developed as a Python project using >=Python 3.8, and can be built l
 
 ###  Releases
 
-You can find releases compiled in and for Ubuntu in the [releases page]().
+You can find releases compiled in and for Ubuntu in the [releases page](https://github.com/dSynMa/syMTri/releases/).
 
 ###  Running
 Argument list:
