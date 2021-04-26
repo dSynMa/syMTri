@@ -1,0 +1,27 @@
+monitor counter {
+    STATES {
+        0, 1, 2
+    }
+
+    INITIAL {
+        0
+    }
+
+    VALUATION {
+        inUse := 0;
+        unused := 0;
+        count := 0
+    }
+
+    FLAGGING {
+        2
+    }
+
+    TRANSITIONS {
+        0 -> 0 {personInroom & inUse < n >> inUse := inUse + 1},
+        0 -> 1 {personInroom & inUse >= n},
+        1 -> 1 {personInroom & count < m >> unused := unused + 1},
+        1 -> 1 {personInroom >> unused := 0},
+        1 -> 2 {personInroom & unused >= m}
+    }
+}
