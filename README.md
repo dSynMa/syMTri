@@ -30,7 +30,15 @@ The input expected for the LTL is a [TLSF](https://arxiv.org/pdf/1604.02284.pdf)
 
 ###  Building
 
-The tool is developed as a Python project using >=Python 3.8, and can be built like any other Python project.
+The tool is developed as a Python project using >=Python 3.8, and can be built like any other Python project. Our preference is to use a venv while developing, then building a single executable using PyInstaller, as follows:
+
+On Windows:
+
+`pyinstaller --onefile --paths ./venv/Lib/site-packages main.py`
+
+On Ubuntu:
+
+`pyinstaller --onefile --paths ./venv/lib/python3.9/site-packages main.py`
 
 ###  Releases
 
