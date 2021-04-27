@@ -9,12 +9,16 @@ from prop_lang.atom import Atom
 
 
 def strix(ltl: str, in_act: [Atom], out_act: [Atom], end_act: Atom, docker: str) -> Tuple[bool, Monitor]:
-    in_act_string = ",".join([str(a) for a in in_act])
-    out_act_string = ",".join([str(a) for a in out_act])
+    in_act_string = ",".join([str(a).lower() for a in in_act])
+    out_act_string = ",".join([str(a).lower() for a in out_act])
     ltl_string = ltl
+    for inp in in_act:
+        ltl_string = ltl_string.replace("\"" + str(inp) + "\"", str(inp).lower())
+    for out in out_act:
+        ltl_string = ltl_string.replace("\"" + str(out) + "\"", str(out).lower())
 
     try:
-        cmd = "strix -k -f '" + ltl_string + "' --ins='" + in_act_string + "' --outs='" + out_act_string + "'"
+        cmd = "strix -k -f \"" + ltl_string + "\" --ins=\"" + in_act_string + "\" --outs=\"" + out_act_string + "\""
         if docker is not None:
             cmd = "docker run " + docker + " " + cmd
         so = subprocess.getstatusoutput(cmd)
