@@ -23,7 +23,9 @@ The input expected for the LTL is a [TLSF](https://arxiv.org/pdf/1604.02284.pdf)
 
 ### Requirements
 
-1. [Strix](https://gitlab.lrz.de/i7/strix) is required since it is used for the brunt of the synthesis work (no need to install all the extra dependencies of Strix). The tool by default assumes that `strix` is available from the `PATH` environment variable. However, there are options to access it through from a user-provided docker container (e.g. https://hub.docker.com/r/pmallozzi/ltltools) or server interface (see the **Running** section below). 
+1. [Strix](https://gitlab.lrz.de/i7/strix) is required since it is used for the brunt of the synthesis work (no need to install all the extra dependencies of Strix). There are several options to how Strix is installed.
+ - The default option is that Strix is installed natively and that the command `strix` is available from the `PATH` environment variable;
+ - If you are using Windows or another OS not supported by Strix, you have two options with associated arguments: Access it through from a user-provided docker container (e.g. https://hub.docker.com/r/pmallozzi/ltltools) or a server interface. See the **Running** section below for more information about these options.
 2. [SyfCo](https://github.com/meyerphi/syfco) is required to be installed by the tool to prepare the input for Strix. SyfCo is **required** to be available from the `PATH` environment variable.
 
 ###  Building
