@@ -55,3 +55,15 @@ Argument list:
 6. `--server <server-location>`: use this if your Strix implementation is running on a virtual machine and exposed through a server that exposes an endpoint at `<server-location>/strix` that responds to `GET` requests with controllers in KISS format (i.e. strix is called with the `-k` parameter).
 
 The default output is a monitor with outputs in a format similar to the input monitor.
+
+An example run command is the following:
+
+On Windows (with Strix on docker):
+
+`./syMTri-windows.exe --m "examples/cleaning-robot/monitor.date" --l "examples/cleaning-robot/controller.tlsf" --docker "pmallozzi/ltltools" --rep`
+
+On Ubuntu (with Strix installed natively):
+
+`./syMTri --m "examples/cleaning-robot/monitor.date" --l "examples/cleaning-robot/controller.tlsf" --rep`
+
+
