@@ -14,11 +14,9 @@ def strix(ltl: str, in_act: [Atom], out_act: [Atom], end_act: Atom, docker: str)
     ltl_string = ltl
 
     try:
-        cmd = " -f '" + ltl_string + "' --ins='" + in_act_string + "' --outs='" + out_act_string + "' -k"
+        cmd = "strix -k -f '" + ltl_string + "' --ins='" + in_act_string + "' --outs='" + out_act_string + "'"
         if docker is not None:
-            cmd = "docker run " + docker + cmd
-        else:
-            cmd = "strix" + cmd
+            cmd = "docker run " + docker + " " + cmd
         so = subprocess.getstatusoutput(cmd)
         output: str = so[1]
 
