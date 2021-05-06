@@ -10,13 +10,15 @@ from graphviz.dot import Digraph
 
 class Monitor:
 
-    def __init__(self, name, sts, init_st, init_val: [TypedValuation], flag_sts, transitions: [Transition]):
+    def __init__(self, name, sts, init_st, init_val: [TypedValuation], flag_sts, transitions: [Transition], input_events, output_events):
         self.name = name
         self.initial_state = init_st
         self.states: Set = set(sts)
         self.flag_states = flag_sts
         self.transitions = transitions
         self.valuation = init_val
+        self.input_events  = input_events
+        self.output_events = output_events
 
     def add_transition(self, src, condition: Formula, action: Formula, output: [Atom], tgt):
         self.transitions.append(Transition(src, condition, action, output, tgt))
@@ -61,21 +63,17 @@ class Monitor:
         used_states = [s for s in self.states if len([t for t in self.transitions if t.src == s or t.tgt == s]) > 0]
         self.states = used_states
 
-    def to_nuXmv(self):
-        text = "MODULE\n"
-
-        return text
 
     def __str__(self):
         text = "monitor " + self.name + " {\n"
+        tagged_states = [str(self.initial_state) + " : init"] \
+                        + [str(s) + " : flag" for s in self.flag_states] \
+                        + [str(s) for s in self.states if s not in self.flag_states and s is not self.initial_state]
         text += "\tSTATES {\n"
-        text += "\t\t" + ",\n\t\t".join([str(s) for s in self.states])+ "\n"
+        text += "\t\t" + ",\n\t\t".join(tagged_states)+ "\n"
         text += "\t}\n"
-        text += "\tINITIAL {\n"
-        text += "\t\t" + str(self.initial_state) + "\n"
-        text += "\t}" + "\n"
-        text += "\tFLAGGING {\n"
-        text += "\t\t" + ",".join(self.flag_states) + "\n"
+        text += "\tEVENTS {\n"
+        text += "\t\t" + ",".join([i + " : input" for i in self.input_events] + [o + " : output" for o in self.output_events]) + "\n"
         text += "\t}" + "\n"
         text += "\tINITIAL_VALUATION {\n"
         text += "\t\t" + ";\n\t\t".join([str(x) for x in self.valuation]) + "\n"

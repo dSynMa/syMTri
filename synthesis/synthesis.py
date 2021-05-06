@@ -114,7 +114,9 @@ def seq(mon: Monitor, contr: Monitor) -> Monitor:
                      "m" + str(mon.initial_state),
                         mon.valuation + contr.valuation,
                         [],
-                        monitor_transitions_to_not_flag + contr_transitions_to_non_flag_and_non_init + mon_to_contr
+                        monitor_transitions_to_not_flag + contr_transitions_to_non_flag_and_non_init + mon_to_contr,
+                        mon.input_events + contr.input_events,
+                        mon.output_events + contr.output_events
                         )
 
     seq_contr.reduce()
@@ -159,7 +161,9 @@ def seq_rep(mon: Monitor, contr: Monitor) -> Monitor:
                          "m" + str(mon.initial_state),
                             mon.valuation + contr.valuation,
                             [],
-                            monitor_transitions_to_not_flag + contr_transitions_to_non_flag_and_non_init + mon_to_contr + contr_to_mon
+                            monitor_transitions_to_not_flag + contr_transitions_to_non_flag_and_non_init + mon_to_contr + contr_to_mon,
+                            mon.input_events + contr.input_events,
+                            mon.output_events + contr.output_events
                             )
 
     seq_rep_contr.reduce()

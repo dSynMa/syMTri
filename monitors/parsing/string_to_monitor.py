@@ -13,30 +13,63 @@ def monitor_parser():
     yield string("monitor") >> spaces()
     monitor_name = yield name << spaces()
     yield string("{") >> spaces()
-    states = yield state_parser
+    (states, initial_state, flagging_states) = yield state_parser
     yield spaces()
-    initial_state = yield initial_state_parser
-    yield spaces()
-    flagging_states = yield flagging_states_parser
+    (input, output) = yield event_parser
     yield spaces()
     initial_vals = yield initial_val_parser
     yield spaces()
     transitions = yield transitions_parser
     yield spaces() >> string("}") >> spaces()
 
-    monitor = Monitor(monitor_name, states, initial_state, initial_vals, flagging_states, transitions)
+    monitor = Monitor(monitor_name, states, initial_state, initial_vals, flagging_states, transitions, input, output)
 
     return monitor
 
+
 @generate
-def state_parser():
-    yield string("STATES") >> spaces() >> string("{") >> spaces()
-    states = yield sepBy(state, regex("(,|;)") << spaces())
+def event_parser():
+    yield string("EVENTS") >> spaces() >> string("{") >> spaces()
+    tagged_events = yield sepBy(tagged_event_parser << spaces(), regex("(,|;)") << spaces())
     yield optional(regex("(,|;)"))
     yield spaces()
     yield string("}")
     yield spaces()
-    return states
+    input = [s for (s, tag) in tagged_events if tag.startswith("in")]
+    if len(input) != 1:
+        yield parsec.none_of(parsec.spaces())
+    output = [s for (s, tag) in tagged_events if tag.startswith("out")]
+    return input, output
+
+
+@generate
+def tagged_event_parser():
+    event_name = yield name << spaces()
+    event_label = yield optional(string(":") >> spaces() >> regex("(in(put)?|out(put)?)"), "")
+    return (event_name, event_label)
+
+
+@generate
+def state_parser():
+    yield string("STATES") >> spaces() >> string("{") >> spaces()
+    tagged_states = yield sepBy(tagged_state_parser << spaces(), regex("(,|;)") << spaces())
+    yield optional(regex("(,|;)"))
+    yield spaces()
+    yield string("}")
+    yield spaces()
+    initial_state = [s for (s, tag) in tagged_states if tag == "init"]
+    if len(initial_state) != 1:
+        yield parsec.none_of(parsec.spaces())
+    flag_states = [s for(s, tag) in tagged_states if tag == "flag"]
+    states = [s for (s, _) in tagged_states]
+    return states, initial_state[0], flag_states
+
+
+@generate
+def tagged_state_parser():
+    state_name = yield state << spaces()
+    state_label = yield optional(string(":") >> spaces() >> regex("(init|flag)"), "")
+    return (state_name, state_label)
 
 @generate
 def initial_state_parser():
@@ -67,7 +100,7 @@ def bool_val_parser():
 @generate
 def num_val_parser():
     var = yield name << spaces() << string(":") << spaces()
-    type = yield regex("(integer|real|([0-9]+|" + nameRegex + ")+\.\.+([0-9]+|" + nameRegex + "))") << spaces()
+    type = yield regex("(integer|real|([0-9]+|" + nameRegex + ")+\.\.([0-9]+|" + nameRegex + "))") << spaces()
     yield spaces()
     yield string(":=") << spaces()
     value = yield math_expression << spaces()
@@ -76,7 +109,7 @@ def num_val_parser():
 
 @generate
 def initial_val_parser():
-    yield string("INITIAL_VALUATION") >> spaces() >> string("{") >> spaces()
+    yield string("VALUATION") >> spaces() >> string("{") >> spaces()
     vals = yield sepBy(try_choice(bool_val_parser, num_val_parser), regex("(,|;)") >> spaces())
     yield spaces()
     yield optional(regex("(,|;)"))

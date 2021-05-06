@@ -90,7 +90,10 @@ def p_kiss(p):
                    p[7],
                    [],
                    [],
-                   [])
+                   [],
+                   [str(i) for i in vars.in_act],
+                   [str(o) for o in vars.out_act]
+                   )
     for t in p[8]:
         p[0].add_transition(t[0], t[1], t[2], t[3], t[4])
 
@@ -99,12 +102,12 @@ def p_kiss(p):
 
 def p_expression_inputs(p):
     'inputs_st : INPUTS istatelist'
-    # vars.inputs = p[2]
+    vars.inputs = p[2]
 
 
 def p_expression_outputs(p):
     'outputs_st : OUTPUTS ostatelist'
-    # vars.outputs = p[2]
+    vars.outputs = p[2]
 
 
 def p_expression_istatelist(p):
