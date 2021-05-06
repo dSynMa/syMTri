@@ -83,3 +83,38 @@ class Monitor:
         text += "\t}" + "\n"
         text += "}"
         return text.replace("&&", "&").replace("||", "|")
+
+
+    def to_nuXmv(self):
+        guards = []
+        acts = []
+        for transition in self.transitions:
+            guard = "state = " + transition.src + " & " + str(transition.condition)
+            act = "next(state) = " + transition.tgt + "".join([" & next" + str(act).replace(" := ", ") = (") for act in transition.action])
+            guards.append(guard)
+            acts.append(act)
+
+        define = "DEFINE\n"
+        transitions = []
+        i = 0
+        while i < len(self.transitions):
+            define += "\tguard_" + str(i) + " := " + guards[i] + ";\n"
+            define += "\tact_" + str(i) + " := " + acts[i] + ";\n"
+            transitions.append("(guard_" + str(i) + " & " + "act_" + str(i) + ")")
+            i += 1
+
+        text = "MODULE main\n"
+        text += "VAR\n"
+        text += "\tstate : {" + ",".join([str(st) for st in self.states]) + "};\n"
+        text += "".join(["\t" + str(val.name) + " : " + str(val.type) + ";\n" for val in self.valuation])
+        text += "".join(["\t" + val + " : boolean" + ";\n" for val in self.input_events])
+        text += "".join(["\t" + val + " : boolean" + ";\n" for val in self.output_events])
+
+        text += define
+        text += "INIT\n"
+        text += "\tstate = " + str(self.initial_state) + "\n"
+        text += "".join(["\t& \t" + str(val.name) + " = " + str(val.value) + "\n" for val in self.valuation])
+        text += "TRANS\n"
+        text += "\t" + "\n\t|\t".join(transitions)
+
+        return text
