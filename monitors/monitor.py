@@ -1,6 +1,7 @@
 from typing import Set
 
 from monitors.transition import Transition
+from monitors.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
@@ -9,7 +10,7 @@ from graphviz.dot import Digraph
 
 class Monitor:
 
-    def __init__(self, name, sts, init_st, init_val: [BiOp], flag_sts, transitions: [Transition]):
+    def __init__(self, name, sts, init_st, init_val: [TypedValuation], flag_sts, transitions: [Transition]):
         self.name = name
         self.initial_state = init_st
         self.states: Set = set(sts)
@@ -73,11 +74,11 @@ class Monitor:
         text += "\tINITIAL {\n"
         text += "\t\t" + str(self.initial_state) + "\n"
         text += "\t}" + "\n"
-        text += "\tVALUATION {\n"
-        text += "\t\t" + ";\n\t\t".join([str(x).strip("(").strip(")") for x in self.valuation]) + "\n"
-        text += "\t}" + "\n"
         text += "\tFLAGGING {\n"
         text += "\t\t" + ",".join(self.flag_states) + "\n"
+        text += "\t}" + "\n"
+        text += "\tINITIAL_VALUATION {\n"
+        text += "\t\t" + ";\n\t\t".join([str(x) for x in self.valuation]) + "\n"
         text += "\t}" + "\n"
         text += "\tTRANSITIONS {\n"
         text += "\t\t{" + "},\n\t\t{".join([str(t) for t in self.transitions]) + "}\n"

@@ -7,21 +7,23 @@ monitor counter {
         0
     }
 
-    VALUATION {
-        inUse := 0;
-        unused := 0;
-        count := 0
-    }
-
     FLAGGING {
         2
     }
 
+    INITIAL_VALUATION {
+        n : integer := 10;
+        m : integer := 10;
+        inUse : boolean := (true & false);
+        unused : 0...m  := 0;
+        count : 0...m  := 0;
+    }
+
     TRANSITIONS {
-        0 -> 0 {personInroom & inUse < n >> inUse := inUse + 1},
-        0 -> 1 {personInroom & inUse >= n},
-        1 -> 1 {personInroom & count < m >> unused := unused + 1},
-        1 -> 1 {personInroom >> unused := 0},
-        1 -> 2 {personInroom & unused >= m}
+        0 -> 0 [personInroom & inUse < n >> inUse := inUse + 1],
+        0 -> 1 [personInroom & inUse >= n],
+        1 -> 1 [personInroom & unused < m >> unused := unused + 1],
+        1 -> 1 [personInroom >> unused := 0],
+        1 -> 2 [personInroom & unused >= m]
     }
 }

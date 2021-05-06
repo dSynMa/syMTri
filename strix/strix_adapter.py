@@ -1,8 +1,6 @@
-import os
-from ctypes import Array
 from typing import Tuple
 from monitors.monitor import Monitor
-from monitors.kiss_to_date.kiss_to_monitor import kiss_to_monitor
+from monitors.parsing.kiss_to_monitor import kiss_to_monitor
 import subprocess
 
 from prop_lang.atom import Atom

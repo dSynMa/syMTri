@@ -1,8 +1,7 @@
 from typing import Tuple
 
 from monitors.monitor import Monitor
-from monitors.kiss_to_date.kiss_to_monitor import kiss_to_monitor
-from prop_lang import formula
+from monitors.parsing.kiss_to_monitor import kiss_to_monitor
 import requests as req
 from urllib.parse import quote
 
@@ -16,7 +15,7 @@ def strix(ltl: str, in_act: [Atom], out_act: [Atom], end_act: Atom, endpoint: st
     out_act_string = ",".join([str(a) for a in out_act])
     ltl_string = quote(ltl)
     try:
-        url_req = endpoint + "?in=" + in_act_string + "&out=" + out_act_string + "&ltl=" + ltl_string + ""
+        url_req = endpoint + "?in=" + in_act_string + "&out=" + out_act_string + "&parsing=" + ltl_string + ""
         resp = req.get(url_req)
         output: str = resp.text
 

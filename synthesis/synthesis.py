@@ -5,8 +5,8 @@ from monitors.monitor import Monitor
 from monitors.transition import Transition
 from prop_lang.formula import Formula
 from prop_lang.atom import Atom
+from prop_lang.parsing.string_to_ltl import string_to_ltl
 from prop_lang.util import tighten_ltl, andd
-from prop_lang.ltl.string_to_ltl import string_to_ltl
 from strix import server_adapter, strix_adapter
 from strix.strix_adapter import syfco_ltl, syfco_ltl_in, syfco_ltl_out
 
