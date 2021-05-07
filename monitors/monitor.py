@@ -88,15 +88,16 @@ class Monitor:
         guards = []
         acts = []
         for transition in self.transitions:
-            vars_in_act = [str(act.left) for act in transition.action]
+            if transition.src not in self.flag_states:
+                vars_in_act = [str(act.left) for act in transition.action]
 
-            guard = "state = " + transition.src + " & " + str(transition.condition)
-            act = "next(state) = " + transition.tgt \
-                  + "".join([" & next" + str(act).replace(" := ", ") = (") for act in transition.action]) \
-                  + "".join([" & next(" + str(typed_val.name) + ") = (" + str(typed_val.name) + ")"
-                             for typed_val in self.valuation if str(typed_val.name) not in vars_in_act])
-            guards.append(guard)
-            acts.append(act)
+                guard = "state = " + transition.src + " & " + str(transition.condition)
+                act = "next(state) = " + transition.tgt \
+                      + "".join([" & next" + str(act).replace(" := ", ") = (") for act in transition.action]) \
+                      + "".join([" & next(" + str(typed_val.name) + ") = (" + str(typed_val.name) + ")"
+                                 for typed_val in self.valuation if str(typed_val.name) not in vars_in_act])
+                guards.append(guard)
+                acts.append(act)
 
         define = "DEFINE\n"
         transitions = []
@@ -106,6 +107,14 @@ class Monitor:
             define += "\tact_" + str(i) + " := " + acts[i] + ";\n"
             transitions.append("(guard_" + str(i) + " & " + "act_" + str(i) + ")")
             i += 1
+
+        flagged = []
+        for flag_state in self.flag_states:
+            guard = "state = " + str(flag_state)
+            act = "next(state) = " + str(flag_state)
+            flagged.append("(" + guard + " & " + act + ")")
+        define += "\t" + "flagged := " + " | ".join(flagged) + ";\n"
+        transitions.append("flagged")
 
         text = "MODULE main\n"
         text += "VAR\n"
@@ -127,15 +136,17 @@ class Monitor:
         guards = []
         acts = []
         for transition in self.transitions:
-            vars_in_act = [str(act.left) for act in transition.action]
+            if transition.src not in self.flag_states:
+                vars_in_act = [str(act.left) for act in transition.action]
 
-            guard = "state = " + transition.src + " & " + str(transition.condition)
-            act = "next(state) = " + transition.tgt \
-                  + "".join([" & next" + str(act).replace(" := ", ") = (") for act in transition.action]) \
-                  + "".join([" & next(" + str(typed_val.name) + ") = (" + str(typed_val.name) + ")"
-                             for typed_val in self.valuation if str(typed_val.name) not in vars_in_act])
-            guards.append(guard)
-            acts.append(act)
+                guard = "state = " + transition.src + " & " + str(transition.condition)
+                act = "next(state) = " + transition.tgt \
+                      + "".join([" & next" + str(act).replace(" := ", ") = (") for act in transition.action]) \
+                      + "".join([" & next(" + str(typed_val.name) + ") = (" + str(typed_val.name) + ")"
+                                 for typed_val in self.valuation if str(typed_val.name) not in vars_in_act])
+                guards.append(guard)
+                acts.append(act)
+
 
         define = "DEFINE\n"
         transitions = []
@@ -145,6 +156,11 @@ class Monitor:
             define += "\tact_" + str(i) + " := " + acts[i] + ";\n"
             transitions.append("\t\tguard_" + str(i) + " : " + "act_" + str(i) + ";\n")
             i += 1
+
+        for flag_state in self.flag_states:
+            guard = "state = " + str(flag_state)
+            act = "next(state) = " + str(flag_state)
+            transitions.append("\t\t" + guard + " : " + act + ";\n")
 
         text = "MODULE main\n"
         text += "VAR\n"
