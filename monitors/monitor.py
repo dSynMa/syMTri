@@ -94,7 +94,7 @@ class Monitor:
             guard = "state = " + transition.src + " & " + str(transition.condition)
             act = "next(state) = " + transition.tgt \
                   + "".join([" & next" + str(act).replace(" := ", ") = (") for act in transition.action]) \
-                  + "".join([" & next(" + str(typed_val.name) + ") := (" + str(typed_val.name) + ")"
+                  + "".join([" & next(" + str(typed_val.name) + ") = (" + str(typed_val.name) + ")"
                              for typed_val in self.valuation if str(typed_val.name) not in vars_in_act])
             guards.append(guard)
             acts.append(act)
@@ -134,7 +134,7 @@ class Monitor:
             guard = "state = " + transition.src + " & " + str(transition.condition)
             act = "next(state) = " + transition.tgt \
                   + "".join([" & next" + str(act).replace(" := ", ") = (") for act in transition.action]) \
-                  + "".join([" & next(" + str(typed_val.name) + ") := (" + str(typed_val.name) + ")"
+                  + "".join([" & next(" + str(typed_val.name) + ") = (" + str(typed_val.name) + ")"
                              for typed_val in self.valuation if str(typed_val.name) not in vars_in_act])
             guards.append(guard)
             acts.append(act)
