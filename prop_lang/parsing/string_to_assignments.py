@@ -1,10 +1,8 @@
 import parsec
 from parsec import *
 
-from prop_lang.atom import Atom
 from prop_lang.biop import BiOp
 from prop_lang.parsing.string_to_fol import variable, fol_expression, math_expression
-from prop_lang.uniop import UniOp
 
 
 @generate

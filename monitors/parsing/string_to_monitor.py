@@ -1,12 +1,14 @@
 from monitors.monitor import Monitor
 from monitors.transition import Transition
 from monitors.typed_valuation import TypedValuation
+from prop_lang.atom import Atom
 from prop_lang.parsing.string_to_assignments import *
 from prop_lang.parsing.string_to_fol import fol_expression
 
 nameRegex = r'[_a-zA-Z][_a-zA-Z0-9$@\_\-]*'
 name = regex(nameRegex)
 state = regex(r'[a-zA-Z0-9@$_-]+')
+
 
 @generate
 def monitor_parser():
@@ -60,7 +62,7 @@ def state_parser():
     initial_state = [s for (s, tag) in tagged_states if tag == "init"]
     if len(initial_state) != 1:
         yield parsec.none_of(parsec.spaces())
-    flag_states = [s for(s, tag) in tagged_states if tag == "flag"]
+    flag_states = [s for (s, tag) in tagged_states if tag == "flag"]
     states = [s for (s, _) in tagged_states]
     return states, initial_state[0], flag_states
 
@@ -70,6 +72,7 @@ def tagged_state_parser():
     state_name = yield state << spaces()
     state_label = yield optional(string(":") >> spaces() >> regex("(init|flag)"), "")
     return (state_name, state_label)
+
 
 @generate
 def initial_state_parser():
@@ -116,6 +119,7 @@ def initial_val_parser():
     yield spaces() >> string("}")
     return vals
 
+
 # 0 -> 0 {personInroom & inUse < n >> inUse := inUse + 1},
 
 @generate
@@ -138,7 +142,7 @@ def transition_parser():
             act = []
     yield spaces()
     yield string("]") >> spaces()
-    if cond == []:
+    if not cond:
         cond = Atom("true")
     return Transition(source, cond, act, Atom("TRUE"), dest)
 
@@ -154,7 +158,7 @@ def transitions_parser():
 parser = monitor_parser
 
 
-def string_to_monitor(input : str) -> Monitor:
+def string_to_monitor(input: str) -> Monitor:
     monitor = (parser << parsec.eof()).parse(input)
     monitor.reduce()
     return monitor

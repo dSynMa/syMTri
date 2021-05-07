@@ -5,4 +5,3 @@ class Formula(BaseBox):
 
     def __str__(self):
         pass
-

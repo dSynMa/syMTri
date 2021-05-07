@@ -1,5 +1,5 @@
 class TypedValuation:
-    def __init__(self, name : str, type : str, value):
+    def __init__(self, name: str, type: str, value):
         self.name = name
         self.type = type
         self.value = value

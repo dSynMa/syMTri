@@ -1,4 +1,5 @@
 import argparse
+
 from monitors.parsing.string_to_monitor import string_to_monitor
 from synthesis.synthesis import synthesize_seq_rep, synthesize_seq
 
@@ -33,7 +34,6 @@ def main():
             raise Exception("TLSF path not specified.")
         else:
             return
-
 
     if args.rep:
         (realiz, date) = synthesize_seq_rep(date, args.ltl, args.server, args.docker)

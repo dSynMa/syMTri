@@ -1,11 +1,12 @@
 from typing import Tuple
+from urllib.parse import quote
+
+import requests as req
 
 from monitors.monitor import Monitor
 from monitors.parsing.kiss_to_monitor import kiss_to_monitor
-import requests as req
-from urllib.parse import quote
-
 from prop_lang.atom import Atom
+
 
 # endpoint = "http://192.168.88.134:5000/kiss"
 

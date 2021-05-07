@@ -1,4 +1,3 @@
-from prop_lang.atom import Atom
 from prop_lang.formula import Formula
 
 

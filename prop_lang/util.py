@@ -1,8 +1,9 @@
-from prop_lang.formula import Formula
+import re
+
 from prop_lang.atom import Atom
 from prop_lang.biop import BiOp
+from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-import re
 
 
 def andd(left: Formula, right: Formula):
@@ -119,7 +120,7 @@ def tighten_ltl_basic(ltl: Formula, end: Atom):
             if success:
                 left = andd(nott(ltl.right), nott(end))
                 if ltl.left.name != "TRUE":
-                        left = andd(ltl.left, left)
+                    left = andd(ltl.left, left)
                 result = (True, until(left,
                                       ltl_next), new_end_conditions, list(dict.fromkeys([end] + ends)))
         if re.match("&&?", ltl.op):

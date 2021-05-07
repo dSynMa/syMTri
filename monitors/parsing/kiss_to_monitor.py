@@ -1,7 +1,6 @@
 from typing import Tuple
 
 import ply.yacc as yacc
-
 from pip._vendor.distlib.compat import raw_input
 from ply import lex
 

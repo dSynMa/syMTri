@@ -16,7 +16,8 @@ def fol_expression():
 
 @generate
 def unit_fol_expression():
-    expr = yield try_choice(math_bi_expression, try_choice(variable, try_choice(boolean_val, try_choice(uni_expression, bracketed_expression))))
+    expr = yield try_choice(math_bi_expression, try_choice(variable, try_choice(boolean_val, try_choice(uni_expression,
+                                                                                                        bracketed_expression))))
     yield spaces()
     return expr
 

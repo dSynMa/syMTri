@@ -1,8 +1,8 @@
+import subprocess
 from typing import Tuple
+
 from monitors.monitor import Monitor
 from monitors.parsing.kiss_to_monitor import kiss_to_monitor
-import subprocess
-
 from prop_lang.atom import Atom
 
 
@@ -60,7 +60,7 @@ def syfco_ltl_in(tlsf_file: str):
     pass
 
 
-def syfco_ltl_out(tlsf_file: str) :#-> Array[Atom]:
+def syfco_ltl_out(tlsf_file: str):  # -> Array[Atom]:
     try:
         OUTS_cmd = 'syfco -f ltl --print-output-signals ' + tlsf_file
         so = subprocess.getstatusoutput(OUTS_cmd)

@@ -1,23 +1,24 @@
 from typing import Set
 
+from graphviz.dot import Digraph
+
 from monitors.transition import Transition
 from monitors.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
-from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from graphviz.dot import Digraph
 
 
 class Monitor:
 
-    def __init__(self, name, sts, init_st, init_val: [TypedValuation], flag_sts, transitions: [Transition], input_events, output_events):
+    def __init__(self, name, sts, init_st, init_val: [TypedValuation], flag_sts, transitions: [Transition],
+                 input_events, output_events):
         self.name = name
         self.initial_state = init_st
         self.states: Set = set(sts)
         self.flag_states = flag_sts
         self.transitions = transitions
         self.valuation = init_val
-        self.input_events  = input_events
+        self.input_events = input_events
         self.output_events = output_events
 
     def add_transition(self, src, condition: Formula, action: Formula, output: [Atom], tgt):
@@ -41,7 +42,6 @@ class Monitor:
         dot.edge("init", str(self.initial_state), style="solid")
 
         for t in self.transitions:
-            outputs = ""
             if t.output is None:
                 outputs = ""
             else:
@@ -63,17 +63,17 @@ class Monitor:
         used_states = [s for s in self.states if len([t for t in self.transitions if t.src == s or t.tgt == s]) > 0]
         self.states = used_states
 
-
     def __str__(self):
         text = "monitor " + self.name + " {\n"
         tagged_states = [str(self.initial_state) + " : init"] \
                         + [str(s) + " : flag" for s in self.flag_states] \
                         + [str(s) for s in self.states if s not in self.flag_states and s is not self.initial_state]
         text += "\tSTATES {\n"
-        text += "\t\t" + ",\n\t\t".join(tagged_states)+ "\n"
+        text += "\t\t" + ",\n\t\t".join(tagged_states) + "\n"
         text += "\t}\n"
         text += "\tEVENTS {\n"
-        text += "\t\t" + ",".join([i + " : input" for i in self.input_events] + [o + " : output" for o in self.output_events]) + "\n"
+        text += "\t\t" + ",".join(
+            [i + " : input" for i in self.input_events] + [o + " : output" for o in self.output_events]) + "\n"
         text += "\t}" + "\n"
         text += "\tINITIAL_VALUATION {\n"
         text += "\t\t" + ";\n\t\t".join([str(x) for x in self.valuation]) + "\n"
@@ -83,7 +83,6 @@ class Monitor:
         text += "\t}" + "\n"
         text += "}"
         return text.replace("&&", "&").replace("||", "|")
-
 
     def to_nuXmv(self):
         guards = []
@@ -123,7 +122,6 @@ class Monitor:
         text += "\t" + "\n\t|\t".join(transitions)
 
         return text
-
 
     def to_nuXmv_case_style(self):
         guards = []
