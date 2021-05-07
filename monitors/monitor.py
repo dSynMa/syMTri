@@ -101,20 +101,22 @@ class Monitor:
 
         define = "DEFINE\n"
         transitions = []
+        guard_ids = []
         i = 0
         while i < len(self.transitions):
             define += "\tguard_" + str(i) + " := " + guards[i] + ";\n"
             define += "\tact_" + str(i) + " := " + acts[i] + ";\n"
             transitions.append("(guard_" + str(i) + " & " + "act_" + str(i) + ")")
+            guard_ids.append("guard_" + str(i))
             i += 1
 
-        flagged = []
-        for flag_state in self.flag_states:
-            guard = "state = " + str(flag_state)
-            act = "next(state) = " + str(flag_state)
-            flagged.append("(" + guard + " & " + act + ")")
-        define += "\t" + "flagged := " + " | ".join(flagged) + ";\n"
-        transitions.append("flagged")
+        transitions.append("!(" + " | ".join(guard_ids) + ") & identity")
+
+        identity = ["next(state) = state"]
+        for typed_val in self.valuation:
+            identity.append("next(" + str(typed_val.name) + ") = " + str(typed_val.name))
+
+        define += "\tidentity := " + " & ".join(identity) + ";\n"
 
         text = "MODULE main\n"
         text += "VAR\n"
@@ -147,7 +149,6 @@ class Monitor:
                 guards.append(guard)
                 acts.append(act)
 
-
         define = "DEFINE\n"
         transitions = []
         i = 0
@@ -157,10 +158,11 @@ class Monitor:
             transitions.append("\t\tguard_" + str(i) + " : " + "act_" + str(i) + ";\n")
             i += 1
 
-        for flag_state in self.flag_states:
-            guard = "state = " + str(flag_state)
-            act = "next(state) = " + str(flag_state)
-            transitions.append("\t\t" + guard + " : " + act + ";\n")
+        identity = ["next(state) = state"]
+        for typed_val in self.valuation:
+            identity.append("next(" + str(typed_val.name) + ") = " + str(typed_val.name))
+
+        define += "\tidentity := " + " & ".join(identity) + ";\n"
 
         text = "MODULE main\n"
         text += "VAR\n"
@@ -177,6 +179,7 @@ class Monitor:
         if len(transitions) != 0:
             text += "\tcase\n"
             text += "".join(transitions)
+            text += "\t\tTRUE : identity;\n"
             text += "\tesac"
 
         return text
