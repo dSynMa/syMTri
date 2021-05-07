@@ -89,8 +89,13 @@ class Monitor:
         guards = []
         acts = []
         for transition in self.transitions:
+            vars_in_act = [str(act.left) for act in transition.action]
+
             guard = "state = " + transition.src + " & " + str(transition.condition)
-            act = "next(state) = " + transition.tgt + "".join([" & next" + str(act).replace(" := ", ") = (") for act in transition.action])
+            act = "next(state) = " + transition.tgt \
+                  + "".join([" & next" + str(act).replace(" := ", ") = (") for act in transition.action]) \
+                  + "".join([" & next(" + str(typed_val.name) + ") := (" + str(typed_val.name) + ")"
+                             for typed_val in self.valuation if str(typed_val.name) not in vars_in_act])
             guards.append(guard)
             acts.append(act)
 
@@ -124,8 +129,13 @@ class Monitor:
         guards = []
         acts = []
         for transition in self.transitions:
+            vars_in_act = [str(act.left) for act in transition.action]
+
             guard = "state = " + transition.src + " & " + str(transition.condition)
-            act = "next(state) = " + transition.tgt + "".join([" & next" + str(act).replace(" := ", ") = (") for act in transition.action])
+            act = "next(state) = " + transition.tgt \
+                  + "".join([" & next" + str(act).replace(" := ", ") = (") for act in transition.action]) \
+                  + "".join([" & next(" + str(typed_val.name) + ") := (" + str(typed_val.name) + ")"
+                             for typed_val in self.valuation if str(typed_val.name) not in vars_in_act])
             guards.append(guard)
             acts.append(act)
 
