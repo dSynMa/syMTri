@@ -4,7 +4,7 @@
 
 ### Description
 
-syMTri allows you to combine monitors as symbolic automata (inspired by [DATEs]()) with LTL formulas. There are two
+syMTri allows you to combine monitors as symbolic automata (inspired by [DA](https://link.springer.com/chapter/10.1007/978-3-642-03240-0_13)T[Es](https://github.com/ccol002/larva-rv-tool)) with LTL formulas. There are two
 modalities for this combination:
 
 1. The monitor passes control to the LTL formula; or
