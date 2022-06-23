@@ -1,14 +1,17 @@
 from unittest import TestCase
 
-from prop_lang.ltl.string_to_ltl import string_to_ltl
+import parsec
+
+from prop_lang.parsing.string_to_ltl import string_to_ltl
 
 
 class Test(TestCase):
     def test_string_to_ltl_0(self):
-        ltl = string_to_ltl("(a & (a)")
-        print(ltl)
-        if ltl is not None:
+        try:
+            ltl = string_to_ltl("(a & (a)")
             self.fail()
+        except parsec.ParseError:
+            assert True
 
     def test_string_to_ltl_1(self):
         ltl = string_to_ltl("(a) & (a)")

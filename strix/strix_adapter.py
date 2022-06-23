@@ -1,12 +1,12 @@
 import subprocess
 from typing import Tuple
 
-from monitors.monitor import Monitor
+from monitors.flaggingmonitor import FlaggingMonitor
 from monitors.parsing.kiss_to_monitor import kiss_to_monitor
-from prop_lang.atom import Atom
+from prop_lang.variable import Variable
 
 
-def strix(ltl: str, in_act: [Atom], out_act: [Atom], end_act: Atom, docker: str) -> Tuple[bool, Monitor]:
+def strix(ltl: str, in_act: [Variable], out_act: [Variable], end_act: Variable, docker: str) -> Tuple[bool, FlaggingMonitor]:
     in_act_string = ",".join([str(a).lower() for a in in_act])
     out_act_string = ",".join([str(a).lower() for a in out_act])
     ltl_string = ltl
@@ -52,7 +52,7 @@ def syfco_ltl_in(tlsf_file: str):
         INS_cmd = 'syfco -f ltl --print-input-signals ' + tlsf_file
         so = subprocess.getstatusoutput(INS_cmd)
         INS_str: str = so[1]
-        INS = [Atom(a.strip(" ")) for a in INS_str.split(",")]
+        INS = [Variable(a.strip(" ")) for a in INS_str.split(",")]
 
         return INS
     except Exception as err:
@@ -60,12 +60,12 @@ def syfco_ltl_in(tlsf_file: str):
     pass
 
 
-def syfco_ltl_out(tlsf_file: str):  # -> Array[Atom]:
+def syfco_ltl_out(tlsf_file: str):
     try:
         OUTS_cmd = 'syfco -f ltl --print-output-signals ' + tlsf_file
         so = subprocess.getstatusoutput(OUTS_cmd)
         OUTS_str: str = so[1]
-        OUTS = [Atom(a.strip(" ")) for a in OUTS_str.split(",")]
+        OUTS = [Variable(a.strip(" ")) for a in OUTS_str.split(",")]
 
         return OUTS
     except Exception as err:

@@ -4,11 +4,9 @@ import ply.yacc as yacc
 from pip._vendor.distlib.compat import raw_input
 from ply import lex
 
-from monitors.monitor import Monitor
-from prop_lang.atom import Atom
-from prop_lang.biop import BiOp
+from monitors.flaggingmonitor import FlaggingMonitor
 from prop_lang.formula import Formula
-from prop_lang.uniop import UniOp
+from prop_lang.variable import Variable
 
 tokens = (
     'NUMBER',
@@ -74,9 +72,9 @@ class vars:
     states_no = 0
     reset_state = ""
     end_state = "end"
-    in_act: [Atom]
-    out_act: [Atom]
-    end_act: Atom
+    in_act: [Variable]
+    out_act: [Variable]
+    end_act: Variable
 
 
 # .inputs req0 req1 .outputs grant0 grant1 .i 2 .o 2 .p 2 .s 2 .r S0 -- S0 S1 10 -- S1 S0 01
@@ -84,15 +82,15 @@ class vars:
 def p_kiss(p):
     'expression : inputs_st outputs_st inputs outputs products states reset transitions'
     name = ""
-    p[0] = Monitor(name,
-                   [],
-                   p[7],
-                   [],
-                   [],
-                   [],
-                   [str(i) for i in vars.in_act],
-                   [str(o) for o in vars.out_act]
-                   )
+    p[0] = FlaggingMonitor(name,
+                           [],
+                           p[7],
+                           [],
+                           [],
+                           [],
+                           [str(i) for i in vars.in_act],
+                           [str(o) for o in vars.out_act]
+                           )
     for t in p[8]:
         p[0].add_transition(t[0], t[1], t[2], t[3], t[4])
 
@@ -217,26 +215,16 @@ def kiss_events_to_date_events(inputs: bool, kiss_events: str) -> Tuple[bool, Fo
             else:
                 req.append(event)
         i = i + 1
-    atom = None
-    if len(notreq) > 0:
-        for a in notreq:
-            if atom is None:
-                atom = UniOp("!", a)
-            else:
-                atom = BiOp(atom, "&", UniOp("!", a))
 
+    if vars.end_act in req:
+        return True, vars.end_act
+
+    output = []
     if len(req) > 0:
         for a in notreq:
-            if atom is None:
-                atom = Atom(a)
-            else:
-                atom = BiOp(atom, "&", Atom(a))
+            output.add(Variable(a))
 
-    if vars.end_act is not None:
-        if vars.end_act in req:
-            return True, vars.end_act
-
-    return False, atom
+    return False, output
 
 
 class error:
@@ -265,7 +253,7 @@ def interactive_parser():
         print(result)
 
 
-def kiss_to_monitor(text: str, in_act: [Atom], out_act: [Atom], end_act: Atom) -> Monitor:
+def kiss_to_monitor(text: str, in_act: [Variable], out_act: [Variable], end_act: Variable) -> FlaggingMonitor:
     error.text = text
     vars.in_act = in_act
     vars.out_act = out_act

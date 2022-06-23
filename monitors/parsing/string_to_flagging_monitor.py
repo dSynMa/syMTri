@@ -1,10 +1,9 @@
-from monitors.monitor import Monitor
+from monitors.flaggingmonitor import FlaggingMonitor
 from monitors.transition import Transition
 from monitors.typed_valuation import TypedValuation
 from prop_lang.parsing.string_to_assignments import *
-from prop_lang.parsing.string_to_prop_logic import prop_logic_expression, number_val
+from prop_lang.parsing.string_to_prop_logic import prop_logic_expression
 from prop_lang.util import true
-from prop_lang.variable import Variable
 
 nameRegex = r'[_a-zA-Z][_a-zA-Z0-9$@\_\-]*'
 name = regex(nameRegex)
@@ -18,16 +17,14 @@ def monitor_parser():
     yield string("{") >> spaces()
     (states, initial_state, flagging_states) = yield state_parser
     yield spaces()
-    (env, con, mon) = yield event_parser
+    (input, output) = yield event_parser
     yield spaces()
     initial_vals = yield initial_val_parser
     yield spaces()
-    env_transitions = yield env_transitions_parser
-    yield spaces()
-    con_transitions = yield con_transitions_parser
+    transitions = yield transitions_parser
     yield spaces() >> string("}") >> spaces()
 
-    monitor = Monitor(monitor_name, states, initial_state, initial_vals, env_transitions, con_transitions, env, con, mon)
+    monitor = FlaggingMonitor(monitor_name, states, initial_state, initial_vals, flagging_states, transitions, input, output)
 
     return monitor
 
@@ -40,16 +37,17 @@ def event_parser():
     yield spaces()
     yield string("}")
     yield spaces()
-    env = [Variable(s) for (s, tag) in tagged_events if tag.startswith("env")]
-    con = [Variable(s) for (s, tag) in tagged_events if tag.startswith("con")]
-    mon = [Variable(s) for (s, tag) in tagged_events if tag.startswith("mon")]
-    return env, con, mon
+    input = [s for (s, tag) in tagged_events if tag.startswith("in")]
+    if len(input) != 1:
+        yield parsec.none_of(parsec.spaces())
+    output = [s for (s, tag) in tagged_events if tag.startswith("out")]
+    return input, output
 
 
 @generate
 def tagged_event_parser():
     event_name = yield name << spaces()
-    event_label = yield optional(string(":") >> spaces() >> regex("(con|mon|env)"), "")
+    event_label = yield optional(string(":") >> spaces() >> regex("(in(put)?|out(put)?)"), "")
     return (event_name, event_label)
 
 
@@ -115,12 +113,14 @@ def num_val_parser():
 @generate
 def initial_val_parser():
     yield string("VALUATION") >> spaces() >> string("{") >> spaces()
-    vals = yield sepBy(try_choice(bool_val_parser, num_val_parser), regex("(,|;)") << spaces())
+    vals = yield sepBy(try_choice(bool_val_parser, num_val_parser), regex("(,|;)") >> spaces())
     yield spaces()
     yield optional(regex("(,|;)"))
     yield spaces() >> string("}")
     return vals
 
+
+# 0 -> 0 {personInroom & inUse < n >> inUse := inUse + 1},
 
 @generate
 def transition_parser():
@@ -131,28 +131,25 @@ def transition_parser():
     yield string("[") >> spaces()
     cond = yield optional(prop_logic_expression, [])
     yield spaces()
-    act = yield optional(string("$") >> spaces() >> assignments << spaces(), [])
-    yield spaces()
-    events = yield optional(string(">>") >> spaces() >> sepBy(variable, regex(",")), [])
+    if cond == []:
+        yield optional(regex(">>+") >> spaces())
+        act = yield optional(assignments, [])
+    else:
+        actNext = yield optional(regex(">>+") >> spaces(), [])
+        if actNext != []:
+            act = yield assignments
+        else:
+            act = []
     yield spaces()
     yield string("]") >> spaces()
     if not cond:
         cond = true()
-    return Transition(source, cond, act, events, dest)
+    return Transition(source, cond, act, true(), dest)
 
 
 @generate
-def env_transitions_parser():
-    yield string("ENVIRONMENT") >> spaces() >> string("TRANSITIONS") >> spaces() >> string("{") >> spaces()
-    transitions = yield sepBy(transition_parser, spaces() << regex("(,|;)") << spaces())
-    yield spaces() >> string("}")
-    return transitions
-
-
-
-@generate
-def con_transitions_parser():
-    yield string("CONTROLLER") >> spaces() >> string("TRANSITIONS") >> spaces() >> string("{") >> spaces()
+def transitions_parser():
+    yield string("TRANSITIONS") >> spaces() >> string("{") >> spaces()
     transitions = yield sepBy(transition_parser, spaces() >> regex("(,|;)") >> spaces())
     yield spaces() >> string("}")
     return transitions
@@ -161,6 +158,7 @@ def con_transitions_parser():
 parser = monitor_parser
 
 
-def string_to_monitor(input: str) -> Monitor:
+def string_to_flagging_monitor(input: str) -> FlaggingMonitor:
     monitor = (parser << parsec.eof()).parse(input)
+    monitor.reduce()
     return monitor

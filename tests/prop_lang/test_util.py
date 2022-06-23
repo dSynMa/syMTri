@@ -1,61 +1,61 @@
 from unittest import TestCase
 
-from prop_lang.atom import Atom
-from prop_lang.util import nott, orr, tighten_ltl, next, andd, globally, eventually
+from prop_lang.util import neg, disjunct, tighten_ltl, X, conjunct, G, F
+from prop_lang.variable import Variable
 
 
 class Test(TestCase):
     def test_tighten_ltl_0(self):
-        ltl = eventually(Atom("a"))
+        ltl = F(Variable("a"))
         tightened = tighten_ltl(ltl)
         print(tightened)
         if tightened is None:
             self.fail()
 
     def test_tighten_ltl_1(self):
-        ltl = globally(Atom("a"))
+        ltl = G(Variable("a"))
         tightened = tighten_ltl(ltl)
         print(tightened)
         if tightened is not None:
             self.fail()
 
     def test_tighten_ltl_1(self):
-        ltl = andd(Atom("a"), Atom("b"))
+        ltl = conjunct(Variable("a"), Variable("b"))
         tightened = tighten_ltl(ltl)
         print(tightened)
         if tightened is None:
             self.fail()
 
     def test_tighten_ltl_2(self):
-        ltl = next(Atom("a"))
+        ltl = X(Variable("a"))
         tightened = tighten_ltl(ltl)
         print(tightened)
         if tightened is None:
             self.fail()
 
     def test_tighten_ltl_3(self):
-        ltl = andd(next(Atom("a")), Atom("b"))
+        ltl = conjunct(X(Variable("a")), Variable("b"))
         tightened = tighten_ltl(ltl)
         print(tightened)
         if tightened is None:
             self.fail()
 
     def test_tighten_ltl_4(self):
-        ltl = nott(Atom("a"))
+        ltl = neg(Variable("a"))
         tightened = tighten_ltl(ltl)
         print(tightened)
         if tightened is None:
             self.fail()
 
     def test_tighten_ltl_5(self):
-        ltl = nott(next(Atom("a")))
+        ltl = neg(X(Variable("a")))
         tightened = tighten_ltl(ltl)
         print(tightened)
         if tightened is not None:
             self.fail()
 
     def test_tighten_ltl_6(self):
-        ltl = orr(next(Atom("a")), Atom("b"))
+        ltl = disjunct(X(Variable("a")), Variable("b"))
         tightened = tighten_ltl(ltl)
         print(tightened)
         if tightened is None:

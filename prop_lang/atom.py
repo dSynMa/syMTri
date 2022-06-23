@@ -1,9 +1,8 @@
 from prop_lang.formula import Formula
+from abc import ABC, abstractmethod
 
 
-class Atom(Formula):
-    def __init__(self, name: str):
-        self.name = name
+class Atom(Formula, ABC):
 
     def __str__(self):
         return str(self.name)
@@ -11,8 +10,6 @@ class Atom(Formula):
     def __hash__(self):
         return self.name.__hash__()
 
+    @abstractmethod
     def __eq__(self, other):
-        """Overrides the default implementation"""
-        if isinstance(other, Atom):
-            return self.name == other.name
-        return NotImplemented
+        pass

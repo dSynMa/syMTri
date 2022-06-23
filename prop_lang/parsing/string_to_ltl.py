@@ -1,5 +1,5 @@
 from prop_lang.formula import Formula
-from prop_lang.parsing.string_to_fol import *
+from prop_lang.parsing.string_to_prop_logic import *
 from prop_lang.uniop import UniOp
 
 
@@ -14,7 +14,7 @@ def ltl_expression():
 @generate
 def unit_ltl_expression():
     yield spaces()
-    expr = yield try_choice(bracketed_ltl_expression, try_choice(uni_ltl_expression, unit_fol_expression))
+    expr = yield try_choice(bracketed_ltl_expression, try_choice(uni_ltl_expression, unit_prop_logic_expression))
     yield spaces()
     return expr
 
@@ -37,7 +37,7 @@ def uni_ltl_expression():
 @generate
 def bi_ltl_expression_once():
     left = yield unit_ltl_expression << spaces()
-    op = yield regex("(&+|\|+|=+|\-+>|<\-+>|U|W|R|M)") << spaces()
+    op = yield regex("(&+|\|+|\-+>|<\-+>|U|W|R|M)") << spaces()
     right = yield unit_ltl_expression << spaces()
     return BiOp(left, op, right)
 
@@ -45,8 +45,11 @@ def bi_ltl_expression_once():
 @generate
 def bi_ltl_expression():
     left = yield unit_ltl_expression << spaces()
-    op = yield regex("(&+|\|+|=+|\-+>|<\-+>|U|W|R|M)") << spaces()
-    rights = yield try_choice(sepBy(bi_ltl_expression_once, regex(op)), unit_ltl_expression) << spaces()
+    op = yield spaces() >> regex("(&+|\|+|\-+>|<\-+>|U|W|R|M)") << spaces()
+    rights = yield sepBy(try_choice(bi_ltl_expression_once, unit_ltl_expression), regex(op)) << spaces()
+    if len(rights) == 0:
+        ret = yield fail_with("Dangling operator: " + str(left) + " " + str(op))
+        return ret
     right = rights[0]
     i = 1
     while i < len(rights):

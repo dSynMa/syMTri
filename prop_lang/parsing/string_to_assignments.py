@@ -2,7 +2,8 @@ import parsec
 from parsec import *
 
 from prop_lang.biop import BiOp
-from prop_lang.parsing.string_to_fol import variable, fol_expression, math_expression
+from prop_lang.parsing.string_to_prop_logic import variable, prop_logic_expression, math_expression, math_bi_expression, \
+    unit_prop_logic_expression, boolean_bi_expression
 
 
 @generate
@@ -19,7 +20,7 @@ def assignment():
     yield spaces()
     yield regex(":=")
     yield spaces()
-    val = yield try_choice(fol_expression, math_expression)
+    val = yield try_choice(math_bi_expression, try_choice(boolean_bi_expression, try_choice(unit_prop_logic_expression, math_expression)))
     return BiOp(var, ":=", val)
 
 
