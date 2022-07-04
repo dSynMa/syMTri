@@ -16,7 +16,7 @@ def monitor_parser():
     yield string("monitor") >> spaces()
     monitor_name = yield name << spaces()
     yield string("{") >> spaces()
-    (states, initial_state, flagging_states) = yield state_parser
+    (states, initial_state) = yield state_parser
     yield spaces()
     (env, con, mon) = yield event_parser
     yield spaces()
@@ -64,9 +64,8 @@ def state_parser():
     initial_state = [s for (s, tag) in tagged_states if tag == "init"]
     if len(initial_state) != 1:
         yield parsec.none_of(parsec.spaces())
-    flag_states = [s for (s, tag) in tagged_states if tag == "flag"]
     states = [s for (s, _) in tagged_states]
-    return states, initial_state[0], flag_states
+    return states, initial_state[0]
 
 
 @generate
