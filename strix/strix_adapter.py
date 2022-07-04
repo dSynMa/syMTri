@@ -1,9 +1,13 @@
+from posixpath import split
+import re
 import subprocess
 from typing import Tuple
 
 from monitors.flaggingmonitor import FlaggingMonitor
 from monitors.parsing.kiss_to_monitor import kiss_to_monitor
 from prop_lang.variable import Variable
+
+from hoa.parsers import HOAParser, HOA
 
 
 def strix(ltl: str, in_act: [Variable], out_act: [Variable], end_act: Variable, docker: str) -> Tuple[bool, FlaggingMonitor]:
@@ -16,7 +20,7 @@ def strix(ltl: str, in_act: [Variable], out_act: [Variable], end_act: Variable, 
         ltl_string = ltl_string.replace("\"" + str(out) + "\"", str(out).lower())
 
     try:
-        cmd = "strix -k -f \"" + ltl_string + "\" --ins=\"" + in_act_string + "\" --outs=\"" + out_act_string + "\""
+        cmd = "strix -f \"" + ltl_string + "\" --ins=\"" + in_act_string + "\" --outs=\"" + out_act_string + "\""
         if docker is not None:
             cmd = "docker run " + docker + " " + cmd
         so = subprocess.getstatusoutput(cmd)
@@ -25,7 +29,46 @@ def strix(ltl: str, in_act: [Variable], out_act: [Variable], end_act: Variable, 
         if output.startswith("UNREALIZABLE"):
             return (False, {})
         elif output.startswith("REALIZABLE"):
-            return (True, kiss_to_monitor(output.replace("REALIZABLE", "").strip(' '), in_act, out_act, end_act))
+            # print(output)
+            hoa_parser = HOAParser()
+            good_output = "\n".join(
+                ln for ln in output.split("\n")
+                if not ln.startswith("controllable-AP")
+                and not ln.startswith("REALIZABLE")
+            )
+            hoa: HOA = hoa_parser(good_output)
+            ctrl_aps = ([
+                ln for ln in output.split("\n")
+                if ln.startswith("controllable-AP")
+            ][0].strip().split()[1:])
+            ctrl_aps = set(int(i) for i in ctrl_aps)
+
+            mon = Monitor(
+                name="",
+                # sts=hoa.body.state2edges.keys(),
+                sts=[],
+                init_st=next(iter(hoa.header.start_states)),
+                init_val=[],
+                flag_sts=[end_act],
+                transitions=[],
+                input_events=[
+                    ap for i, ap in enumerate(hoa.header.propositions)
+                    if i in ctrl_aps],
+                output_events=[
+                    ap for i, ap in enumerate(hoa.header.propositions)
+                    if i not in ctrl_aps],
+            )
+            for st, edges in hoa.body.state2edges.items():
+                for e in edges:
+                    mon.add_transition(
+                        src=st,
+                        condition=e.label,
+                        action=[],
+                        output=[],
+                        tgt=e.state_conj[0]
+                    )
+
+            return (True, mon)
         else:
             raise Exception("Strix not returning appropriate value.")
     except Exception as err:
