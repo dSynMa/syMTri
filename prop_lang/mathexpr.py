@@ -3,11 +3,11 @@ from prop_lang.formula import Formula
 
 class MathExpr(Formula):
 
-    def MathExpr(self, f: Formula):
+    def __init__(self, f: Formula):
         self.formula = f
 
     def __str__(self):
-        return str(self.name)
+        return str(self.formula)
 
     def __hash__(self):
         return self.name.__hash__()
