@@ -50,7 +50,7 @@ def boolean_bi_expression():
 @generate
 def boolean_math_bi_expression():
     left = yield try_choice(math_bi_expression, math_expression) << spaces()
-    op = yield regex("(!=|=|>=|<=|>|<)") << spaces()
+    op = yield regex("(!=|=+|>=|<=|>|<)") << spaces()
     right = yield try_choice(math_bi_expression, math_expression) << spaces()
     return MathExpr(BiOp(left, op, right))
 
