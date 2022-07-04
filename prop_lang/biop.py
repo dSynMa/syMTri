@@ -29,7 +29,7 @@ class BiOp(Formula):
         return BiOp(self.left.replace(context), self.op, self.right.replace(context))
 
     def to_nuxmv(self):
-        if self.op == "%" or self.op is "%":
+        if self.op == "%":
             return UniOp("toint", BiOp(UniOp("unsigned word[8]", self.left.to_nuxmv()), "mod", UniOp("unsigned word[8]", self.right.to_nuxmv())))
         else:
             return BiOp(self.left.to_nuxmv(), self.op, self.right.to_nuxmv())
