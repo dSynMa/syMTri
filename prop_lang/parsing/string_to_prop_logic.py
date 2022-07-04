@@ -65,7 +65,7 @@ def math_bi_expression():
 
 @generate
 def variable():
-    var = yield regex("[a-zA-Z]+")
+    var = yield regex("[a-zA-Z\_]+")
     return Variable(var)
 
 
