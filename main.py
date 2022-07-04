@@ -12,7 +12,7 @@ def main():
     parser.add_argument('--to_nuxmv', dest='to_nuxmv', type=bool, nargs='?', const=True, default=False)
     parser.add_argument('--to_nuxmv_cases', dest='to_nuxmv_cases', type=bool, nargs='?', const=True, default=False)
     parser.add_argument('--l', dest='ltl', type=str)
-    parser.add_argument('--trig_rep', dest='trig-rep', type=bool, nargs='?', const=True, default=False)
+    parser.add_argument('--trig_rep', dest='trig_rep', type=bool, nargs='?', const=True, default=False)
     parser.add_argument('--trig_seq', dest='trig_seq', type=bool, nargs='?', const=True, default=False)
     parser.add_argument('--server', dest='server', type=str)
     parser.add_argument('--docker', dest='docker', type=str)

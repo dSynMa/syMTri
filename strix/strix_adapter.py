@@ -1,10 +1,7 @@
-from posixpath import split
-import re
 import subprocess
 from typing import Tuple
 
 from monitors.flaggingmonitor import FlaggingMonitor
-from monitors.parsing.kiss_to_monitor import kiss_to_monitor
 from prop_lang.variable import Variable
 
 from hoa.parsers import HOAParser, HOA
