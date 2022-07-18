@@ -16,9 +16,10 @@ def main():
     parser.add_argument('--format', dest='format', type=str, nargs='?', const=True, default="dot")
 
     # Synthesis workflow
-    parser.add_argument('--synthesise', dest='synthesise', help="Synthesis workflow.", type=bool)
+    parser.add_argument('--synthesise', dest='synthesise', help="Synthesis workflow.", type=bool, nargs='?', const=True)
 
-    parser.add_argument('--l', dest='ltl', help="Path to a .tlfs file.", type=str)
+    parser.add_argument('--l', dest='ltl', help="Inline LTL formula.", type=str)
+    parser.add_argument('--tlsf', dest='tlsf', help="Path to a .tlfs file.", type=str)
 
     # type of combination
     parser.add_argument('--parallel', dest='parallel', type=bool, nargs='?', const=True, default=False)
@@ -46,9 +47,9 @@ def main():
             print(date.to_nuXmv())
         else:
             print(date.to_nuXmv_case_style())
-    elif args.synthesis:
-        if args.ltl is None:
-            raise Exception("TLSF path not specified.")
+    elif args.synthesise:
+        if args.ltl is None and args.tlsf is None:
+            raise Exception("No property specified.")
 
         if args.trig_rep:
             date = string_to_flagging_monitor(date_file)
@@ -60,7 +61,7 @@ def main():
         elif args.parallel:
             date = string_to_monitor(date_file)
 
-            (realiz, date) = synthesize(date, args.ltl, args.server, args.docker)
+            (realiz, date) = synthesize(date, args.ltl, args.tlsf, args.server, args.docker)
         else:
             raise NotImplementedError("Synthesis method not specified.")
 
@@ -69,7 +70,7 @@ def main():
         else:
             print('Unrealizable.')
     else:
-        raise Exception("Specify either --translate or --synthesis.")
+        raise Exception("Specify either --translate or --synthesise.")
 
 
 if __name__ == "__main__":
