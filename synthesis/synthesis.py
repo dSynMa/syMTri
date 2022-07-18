@@ -71,10 +71,17 @@ def synthesize_ltl_seq_rep(aut: FlaggingMonitor, ltl: Formula, in_acts: [Variabl
         return (True, seq_rep(aut, mm))
 
 
-def synthesize(aut: Monitor, ltl_text: str, server: str, docker: str) -> Tuple[bool, Monitor]:
+def synthesize(aut: Monitor, ltl_text: str, tlsf_path: str, server: str, docker: str) -> Tuple[bool, Monitor]:
+    if tlsf_path is not None:
+        ltl_text = syfco_ltl(tlsf_path)
+        ltl_text = ltl_text.replace('"', "")
+        in_acts = syfco_ltl_in(tlsf_path)
+        out_acts = syfco_ltl_out(tlsf_path)
+
     ltl = string_to_ltl(ltl_text)
-    in_acts = [str(e) for e in aut.env_events + aut.mon_events] + [e for e in aut.states]
-    out_acts = [str(e) for e in aut.con_events]
+    in_acts = [e for e in aut.env_events + aut.mon_events] + [e for e in aut.states]
+    out_acts = [e for e in aut.con_events]
+    # TODO validate in_acts, out_acts against those from TLSF
     return abstract_synthesis_loop(aut, ltl, in_acts, out_acts, server, docker)
 
 
