@@ -1,6 +1,5 @@
 from prop_lang.formula import Formula
 
-
 class MathExpr(Formula):
 
     def __init__(self, f: Formula):
@@ -29,3 +28,6 @@ class MathExpr(Formula):
 
     def to_nuxmv(self):
         return self.formula.to_nuxmv()
+
+    def to_smt(self, symbol_table: Any):
+        return self.formula.to_smt(symbol_table)

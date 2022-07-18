@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 from monitors.typed_valuation import TypedValuation
 
@@ -24,4 +25,8 @@ class Formula(ABC):
 
     @abstractmethod
     def to_nuxmv(self):
+        pass
+
+    @abstractmethod
+    def to_smt(self, symbol_table: Any):
         pass

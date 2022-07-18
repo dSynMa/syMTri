@@ -1,7 +1,7 @@
 from monitors.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
 from prop_lang.variable import Variable
-
+from pysmt.shortcuts import Int, TRUE, FALSE
 
 class Value(Atom):
     def __init__(self, name: str):
@@ -39,3 +39,11 @@ class Value(Atom):
 
     def to_nuxmv(self):
         return self
+
+    def to_smt(self, _):
+        if self.is_true():
+            return TRUE
+        elif self.is_false():
+            return FALSE
+        else:
+            return Int(int(self.name))

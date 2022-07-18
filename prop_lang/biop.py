@@ -2,6 +2,10 @@ from monitors.typed_valuation import TypedValuation
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
 from prop_lang.variable import Variable
+from pysmt.shortcuts import And, Or, Implies
+from pysmt.shortcuts import (
+    Plus, Minus, Times, Div, BVSMod, EqualsOrIff, LE, LT, GT, GE, NotEquals
+)
 
 
 class BiOp(Formula):
@@ -33,3 +37,26 @@ class BiOp(Formula):
             return UniOp("toint", BiOp(UniOp("unsigned word[8]", self.left.to_nuxmv()), "mod", UniOp("unsigned word[8]", self.right.to_nuxmv())))
         else:
             return BiOp(self.left.to_nuxmv(), self.op, self.right.to_nuxmv())
+
+    def to_smt(self, symbol_table):
+        ops = {
+            "&&": And,
+            "||": Or,
+            "->": Implies,
+            "==": EqualsOrIff,
+            "!=": NotEquals,
+            "<->": EqualsOrIff,
+            ">": GT,
+            ">=": GE,
+            "<": LT,
+            "<=": LE,
+            "+": Plus,
+            "-": Minus,
+            "*": Times,
+            "/": Div,
+            "%": BVSMod
+        }
+        try:
+            op = ops[self.op]
+        except KeyError:
+            raise NotImplementedError(f"{self.op} unsupported")

@@ -1,5 +1,6 @@
 from monitors.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
+from pysmt.shortcuts import Symbol, INT, BOOL
 
 
 class Variable(Atom):
@@ -37,3 +38,13 @@ class Variable(Atom):
 
     def to_nuxmv(self):
         return self
+    
+    def to_smt(self, symbol_table):
+        typed_val = symbol_table[self.name]
+
+        if typed_val.type == "int":
+            return Symbol(self.name, INT)
+        elif typed_val.type == "bool":
+            return Symbol(self.name, BOOL)
+        else:
+            raise NotImplementedError(f"Type {typed_val.type} unsupported.")

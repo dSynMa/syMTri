@@ -2,6 +2,7 @@ from monitors.typed_valuation import TypedValuation
 from prop_lang.formula import Formula
 from prop_lang.variable import Variable
 
+from pysmt.shortcuts import Not, Minus, Int
 
 class UniOp(Formula):
     def __init__(self, op: str, right: Formula):
@@ -29,3 +30,11 @@ class UniOp(Formula):
 
     def to_nuxmv(self):
         return UniOp(self.op, self.right.to_nuxmv())
+
+    def to_smt(self, symbol_table):
+        if self.op == "!":
+            return Not(self.right.to_smt(symbol_table))
+        elif self.op == "-":
+            return Minus(Int(0), self.right.to_smt(symbol_table))
+        else:
+            raise NotImplementedError(f"{self.op} unsupported")
