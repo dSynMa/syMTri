@@ -58,5 +58,6 @@ class BiOp(Formula):
         }
         try:
             op = ops[self.op]
+            return op(self.left.to_smt(symbol_table), self.right.to_smt(symbol_table))
         except KeyError:
             raise NotImplementedError(f"{self.op} unsupported")
