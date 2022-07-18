@@ -1,4 +1,4 @@
-monitor counter {
+monitor eventually__allow_grant {
     STATES {
         0 : init, 1, 2
     }
