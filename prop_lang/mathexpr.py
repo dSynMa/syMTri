@@ -1,4 +1,7 @@
+from typing import Any
+
 from prop_lang.formula import Formula
+
 
 class MathExpr(Formula):
 
