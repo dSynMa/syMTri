@@ -1,4 +1,6 @@
 import os
+import shutil
+import subprocess
 from subprocess import check_output
 from unittest import SkipTest, TestCase
 
@@ -17,9 +19,8 @@ class TestSmt(TestCase):
     def _add_mathsat(self):
         self._check_os()
 
-        which_cmd = "which" if os.name == "posix" else "where"
-        msat_path = check_output((which_cmd, "mathsat"), encoding="utf8")
-        msat_path = msat_path.replace("\n", "")
+        msat_path = shutil.which("mathsat")
+
         # Add the solver to the environment
         env = get_env()
         try:
