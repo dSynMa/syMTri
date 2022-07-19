@@ -6,7 +6,7 @@ from prop_lang.formula import Formula
 from prop_lang.parsing.string_to_ltl import string_to_ltl
 from prop_lang.util import tighten_ltl, conjunct, implies
 from prop_lang.variable import Variable
-from strix import server_adapter, strix_adapter
+from strix import strix_adapter
 from strix.strix_adapter import syfco_ltl, syfco_ltl_in, syfco_ltl_out
 
 
@@ -29,10 +29,8 @@ def abstract_synthesis_loop(aut: Program, ltl: Formula, in_acts: [Variable], out
         Tuple[bool, Program]:
     abstract_monitor = aut.abstract_into_ltl();
     abstract_problem = implies(abstract_monitor, ltl)
-    if server:
-        (real, mm) = server_adapter.strix(abstract_problem, in_acts, out_acts, server)
-    else:
-        (real, mm) = strix_adapter.strix(abstract_problem, in_acts, out_acts, None, docker)
+
+    (real, mm) = strix_adapter.strix(abstract_problem, in_acts, out_acts, None, docker)
 
     if real:
         return mm

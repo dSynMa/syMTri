@@ -20,11 +20,6 @@ def main():
     parser.add_argument('--l', dest='ltl', help="Inline LTL formula.", type=str)
     parser.add_argument('--tlsf', dest='tlsf', help="Path to a .tlfs file.", type=str)
 
-    # type of combination
-    parser.add_argument('--parallel', dest='parallel', type=bool, nargs='?', const=True, default=False)
-    parser.add_argument('--trig_rep', dest='trig_rep', type=bool, nargs='?', const=True, default=False)
-    parser.add_argument('--trig_seq', dest='trig_seq', type=bool, nargs='?', const=True, default=False)
-
     # how to connect to strix (default just assume `strix' is in path)
     parser.add_argument('--strix_server', dest='server', type=str)
     parser.add_argument('--strix_docker', dest='docker', type=str)
@@ -39,11 +34,6 @@ def main():
     date = string_to_program(date_file)
 
     if args.translate:
-        try:
-            date = string_to_flagging_monitor(date_file)
-        except:
-            date = string_to_monitor(date_file)
-
         if args.to_nuxmv:
             print(date.to_nuXmv())
         else:
@@ -52,19 +42,7 @@ def main():
         if args.ltl is None and args.tlsf is None:
             raise Exception("No property specified.")
 
-        if args.trig_rep:
-            date = string_to_flagging_monitor(date_file)
-            (realiz, date) = synthesize_seq_rep(date, args.ltl, args.server, args.docker)
-        elif args.trig_seq:
-            date = string_to_flagging_monitor(date_file)
-
-            (realiz, date) = synthesize_seq(date, args.ltl, args.server, args.docker)
-        elif args.parallel:
-            date = string_to_monitor(date_file)
-
-            (realiz, date) = synthesize(date, args.ltl, args.tlsf, args.server, args.docker)
-        else:
-            raise NotImplementedError("Synthesis method not specified.")
+        (realiz, date) = synthesize(date, args.ltl, args.tlsf, args.server, args.docker)
 
         if realiz:
             print(str(date))
