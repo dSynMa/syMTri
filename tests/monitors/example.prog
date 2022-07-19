@@ -1,4 +1,4 @@
-monitor eventually__allow_grant {
+program eventually__allow_grant {
     STATES {
         0 : init, 1, 2
     }
