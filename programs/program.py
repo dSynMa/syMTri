@@ -37,7 +37,7 @@ class Program:
                        biop.right.variablesin()):
                 raise Exception("Actions in environment transitions can only refer to environment or"
                                 "local/internal variables: " + str(transition) + ".")
-            if not all(v in mon_events for v in transition.output):
+            if not all(v.left in mon_events for v in transition.output):
                 raise Exception("Outputs of environment transitions can only refer to monitor output variables: " + str(
                     transition) + ".")
 
@@ -63,14 +63,15 @@ class Program:
         self.con_events = con_events
         self.mon_events = mon_events
 
-    def add_env_transition(self, src, condition: Formula, action: Formula, output: [Variable], tgt):
-        assert output.issubset(self.mon_events)
-        self.env_transitions.append(Transition(src, condition, action, output, tgt))
+    def add_env_transition(self, src, condition: Formula, action: [BiOp], output: [BiOp], tgt):
+        assert {x.left for x in output}.issubset(self.mon_events)
+        self.env_transitions.append(Transition(src, condition, action, tgt))
         self.states.add(src)
         self.states.add(tgt)
 
-    def add_con_transition(self, src, condition: Formula, action: Formula, tgt):
-        self.con_transitions.append(Transition(src, condition, action, [], tgt))
+    def add_con_transition(self, src, condition: Formula, action: Formula, output: [BiOp], tgt):
+        assert {x.left for x in output}.issubset(self.mon_events)
+        self.con_transitions.append(Transition(src, condition, action, output, tgt))
         self.states.add(src)
         self.states.add(tgt)
 
