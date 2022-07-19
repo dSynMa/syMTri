@@ -1,5 +1,6 @@
 import re
 
+from pysmt.shortcuts import Solver
 from prop_lang.atom import Atom
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
@@ -253,3 +254,7 @@ def project(prop: Formula, events: [Atom]) -> Formula:
         return project(conjunct(true(), nnf_prop.formula), events)
     else:
         return nnf_prop
+
+
+def sat(formula: Formula, symbol_table : dict, solver: Solver) -> bool:
+    return solver.is_sat(formula.to_smt(symbol_table))
