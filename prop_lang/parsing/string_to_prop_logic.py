@@ -18,7 +18,7 @@ def prop_logic_expression():
 
 @generate
 def unit_prop_logic_expression():
-    expr = yield try_choice(boolean_math_bi_expression, try_choice(variable, try_choice(boolean_val, try_choice(uni_expression,
+    expr = yield try_choice(boolean_math_bi_expression, try_choice(boolean_val, try_choice(variable, try_choice(uni_expression,
                                                                                                         bracketed_expression))))
     yield spaces()
     return expr
