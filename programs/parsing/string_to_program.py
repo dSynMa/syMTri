@@ -6,8 +6,8 @@ from prop_lang.parsing.string_to_prop_logic import prop_logic_expression, number
 from prop_lang.util import true
 from prop_lang.variable import Variable
 
-nameRegex = r'[_a-zA-Z][_a-zA-Z0-9$@\_\-]*'
-name = regex(nameRegex)
+name_regex = r'[_a-zA-Z][_a-zA-Z0-9$@\_\-]*'
+name = regex(name_regex)
 state = regex(r'[a-zA-Z0-9@$_-]+')
 
 
@@ -18,7 +18,11 @@ def program_parser():
     yield string("{") >> spaces()
     (states, initial_state) = yield state_parser
     yield spaces()
-    (env, con, mon) = yield event_parser
+    env = yield string("ENVIRONMENT EVENTS") >> event_parser
+    yield spaces()
+    con = yield string("CONTROLLER EVENTS") >> event_parser
+    yield spaces()
+    mon = yield string("PROGRAM EVENTS") >> event_parser
     yield spaces()
     initial_vals = yield initial_val_parser
     yield spaces()
@@ -34,23 +38,13 @@ def program_parser():
 
 @generate
 def event_parser():
-    yield string("EVENTS") >> spaces() >> string("{") >> spaces()
-    tagged_events = yield sepBy(tagged_event_parser << spaces(), regex("(,|;)") << spaces())
+    yield spaces() >> string("{") >> spaces()
+    events = yield sepBy(name << spaces(), regex("(,|;)") << spaces())
     yield optional(regex("(,|;)"))
     yield spaces()
     yield string("}")
     yield spaces()
-    env = [Variable(s) for (s, tag) in tagged_events if tag.startswith("env")]
-    con = [Variable(s) for (s, tag) in tagged_events if tag.startswith("con")]
-    mon = [Variable(s) for (s, tag) in tagged_events if tag.startswith("mon")]
-    return env, con, mon
-
-
-@generate
-def tagged_event_parser():
-    event_name = yield name << spaces()
-    event_label = yield optional(string(":") >> spaces() >> regex("(con|mon|env)"), "")
-    return (event_name, event_label)
+    return [Variable(s) for s in events]
 
 
 @generate
@@ -72,7 +66,7 @@ def state_parser():
 def tagged_state_parser():
     state_name = yield state << spaces()
     state_label = yield optional(string(":") >> spaces() >> regex("(init|flag)"), "")
-    return (state_name, state_label)
+    return state_name, state_label
 
 
 @generate
@@ -92,9 +86,9 @@ def flagging_states_parser():
 
 
 @generate
-def bool_val_parser():
+def bool_decl_parser():
     var = yield name << spaces() << string(":") << spaces()
-    type = yield regex("boolean") << spaces()
+    type = yield regex("bool(ean)?") << spaces()
     yield spaces()
     yield string(":=") << spaces()
     value = yield prop_logic_expression << spaces()
@@ -102,9 +96,9 @@ def bool_val_parser():
 
 
 @generate
-def num_val_parser():
+def num_decl_parser():
     var = yield name << spaces() << string(":") << spaces()
-    type = yield regex("(integer|real|([0-9]+|" + nameRegex + ")+\.\.([0-9]+|" + nameRegex + "))") << spaces()
+    type = yield regex("(int(eger)?|real|([0-9]+|" + name_regex + ")+\.\.([0-9]+|" + name_regex + "))") << spaces()
     yield spaces()
     yield string(":=") << spaces()
     value = yield math_expression << spaces()
@@ -114,7 +108,7 @@ def num_val_parser():
 @generate
 def initial_val_parser():
     yield string("VALUATION") >> spaces() >> string("{") >> spaces()
-    vals = yield sepBy(try_choice(bool_val_parser, num_val_parser), regex("(,|;)") << spaces())
+    vals = yield sepBy(try_choice(bool_decl_parser, num_decl_parser), regex("(,|;)") << spaces())
     yield spaces()
     yield optional(regex("(,|;)"))
     yield spaces() >> string("}")
@@ -130,9 +124,9 @@ def transition_parser():
     yield string("[") >> spaces()
     cond = yield optional(prop_logic_expression, [])
     yield spaces()
-    act = yield optional(string("$") >> spaces() >> assignments << spaces(), [])
+    act = yield optional(string("$") >> spaces() >> assignments, [])
     yield spaces()
-    events = yield optional(string(">>") >> spaces() >> sepBy(variable, regex(",")), [])
+    events = yield optional(string(">>") >> spaces() >> assignments, [])
     yield spaces()
     yield string("]") >> spaces()
     if not cond:
