@@ -7,7 +7,7 @@ from prop_lang.variable import Variable
 from hoa.parsers import HOAParser, HOA
 
 
-def strix(ltl: str, in_act: [Variable], out_act: [Variable], end_act: Variable, docker: str) -> Tuple[bool, FlaggingMonitor]:
+def strix(ltl: str, in_act: [Variable], out_act: [Variable], end_act: Variable, docker: str) -> Tuple[bool, Program]:
     in_act_string = ",".join([str(a).lower() for a in in_act])
     out_act_string = ",".join([str(a).lower() for a in out_act])
     ltl_string = ltl
@@ -40,13 +40,12 @@ def strix(ltl: str, in_act: [Variable], out_act: [Variable], end_act: Variable, 
             ][0].strip().split()[1:])
             ctrl_aps = set(int(i) for i in ctrl_aps)
 
-            mon = Monitor(
+            mon = Program(
                 name="",
                 # sts=hoa.body.state2edges.keys(),
                 sts=[],
                 init_st=next(iter(hoa.header.start_states)),
                 init_val=[],
-                flag_sts=[end_act],
                 transitions=[],
                 input_events=[
                     ap for i, ap in enumerate(hoa.header.propositions)
