@@ -1,4 +1,4 @@
-from monitors.typed_valuation import TypedValuation
+from programs.typed_valuation import TypedValuation
 from prop_lang.formula import Formula
 from prop_lang.variable import Variable
 

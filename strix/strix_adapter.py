@@ -1,7 +1,7 @@
 import subprocess
 from typing import Tuple
 
-from monitors.flaggingmonitor import FlaggingMonitor
+from programs.program import Program
 from prop_lang.variable import Variable
 
 from hoa.parsers import HOAParser, HOA

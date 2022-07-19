@@ -9,7 +9,7 @@ from pysmt.factory import SolverRedefinitionError
 from pysmt.logics import QF_UFLRA
 from pysmt.shortcuts import Solver, Symbol, get_env
 
-from monitors.typed_valuation import TypedValuation
+from programs.typed_valuation import TypedValuation
 
 
 class TestSmt(TestCase):

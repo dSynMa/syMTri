@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from monitors.typed_valuation import TypedValuation
+from programs.typed_valuation import TypedValuation
 
 
 class Formula(ABC):

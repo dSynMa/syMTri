@@ -1,15 +1,14 @@
 import argparse
 
-from monitors.parsing.string_to_flagging_monitor import string_to_flagging_monitor
-from monitors.parsing.string_to_monitor import string_to_monitor
-from synthesis.synthesis import synthesize_seq_rep, synthesize_seq, synthesize
+from programs.parsing.string_to_program import string_to_program
+from synthesis.synthesis import synthesize
 
 
 # inputs: date_file ltl_file
 def main():
     parser = argparse.ArgumentParser()
     # input monitor
-    parser.add_argument('--m', dest='monitor', help="Path to a .mon file.", type=str)
+    parser.add_argument('--p', dest='program', help="Path to a .prog file.", type=str)
 
     parser.add_argument('--translate', dest='translate', help="Translation workflow.", type=bool)
 
@@ -32,10 +31,12 @@ def main():
 
     args = parser.parse_args()
 
-    if args.monitor is None:
-        raise Exception("Monitor path not specified.")
+    if args.program is None:
+        raise Exception("Program path not specified.")
 
-    date_file = open(args.monitor, "r").read()
+    date_file = open(args.program, "r").read()
+
+    date = string_to_program(date_file)
 
     if args.translate:
         try:

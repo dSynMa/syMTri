@@ -1,32 +1,32 @@
 import unittest
 import os
 
-from monitors.parsing.string_to_monitor import string_to_monitor
+from programs.parsing.string_to_program import string_to_program
 
 
 class MyTestCase(unittest.TestCase):
     def test_example(self):
-        with open('./example.mon') as f:
+        with open('example.prog') as f:
             lines = f.readlines()
-            monitor = string_to_monitor("\n".join(lines))
+            monitor = string_to_program("\n".join(lines))
             print(monitor)
             if monitor is None:
                 self.fail()
         self.assertEqual(True, True)
 
     def test_abstract_into_ltl(self):
-        with open('./example.mon') as f:
+        with open('example.prog') as f:
             lines = f.readlines()
-            monitor = string_to_monitor("\n".join(lines))
+            monitor = string_to_program("\n".join(lines))
             print(monitor.abstract_into_ltl())
             if monitor is None:
                 self.fail()
         self.assertEqual(True, True)
 
     def test_verify_abstract_into_ltl(self):
-        with open('./example.mon') as f:
+        with open('example.prog') as f:
             lines = f.readlines()
-            monitor = string_to_monitor("\n".join(lines))
+            monitor = string_to_program("\n".join(lines))
             ltl = monitor.abstract_into_ltl()
             nuxmv = monitor.to_nuXmv()
             nuxmv += "\nLTLSPEC " + str(ltl)

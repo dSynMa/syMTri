@@ -1,4 +1,4 @@
-from monitors.typed_valuation import TypedValuation
+from programs.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
 from pysmt.shortcuts import Symbol, INT, BOOL
 

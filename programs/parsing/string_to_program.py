@@ -1,6 +1,6 @@
-from monitors.monitor import Monitor
-from monitors.transition import Transition
-from monitors.typed_valuation import TypedValuation
+from programs.program import Program
+from programs.transition import Transition
+from programs.typed_valuation import TypedValuation
 from prop_lang.parsing.string_to_assignments import *
 from prop_lang.parsing.string_to_prop_logic import prop_logic_expression, number_val
 from prop_lang.util import true
@@ -12,9 +12,9 @@ state = regex(r'[a-zA-Z0-9@$_-]+')
 
 
 @generate
-def monitor_parser():
-    yield string("monitor") >> spaces()
-    monitor_name = yield name << spaces()
+def program_parser():
+    yield string("program") >> spaces()
+    program_name = yield name << spaces()
     yield string("{") >> spaces()
     (states, initial_state) = yield state_parser
     yield spaces()
@@ -27,9 +27,9 @@ def monitor_parser():
     con_transitions = yield con_transitions_parser
     yield spaces() >> string("}") >> spaces()
 
-    monitor = Monitor(monitor_name, states, initial_state, initial_vals, env_transitions, con_transitions, env, con, mon)
+    program = Program(program_name, states, initial_state, initial_vals, env_transitions, con_transitions, env, con, mon)
 
-    return monitor
+    return program
 
 
 @generate
@@ -157,9 +157,9 @@ def con_transitions_parser():
     return transitions
 
 
-parser = monitor_parser
+parser = program_parser
 
 
-def string_to_monitor(input: str) -> Monitor:
-    monitor = (parser << parsec.eof()).parse(input)
-    return monitor
+def string_to_program(input: str) -> Program:
+    program = (parser << parsec.eof()).parse(input)
+    return program

@@ -3,8 +3,8 @@ from typing import Set
 
 from graphviz import Digraph
 
-from monitors.transition import Transition
-from monitors.typed_valuation import TypedValuation
+from programs.transition import Transition
+from programs.typed_valuation import TypedValuation
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.util import project, conjunct, neg, disjunct, G, implies, X, true
@@ -12,7 +12,7 @@ from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 
-class Monitor:
+class Program:
 
     def __init__(self, name, sts, init_st, init_val: [TypedValuation],
                  env_transitions: [Transition], con_transitions: [Transition],
