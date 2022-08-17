@@ -1,6 +1,8 @@
 import re
 
 from pysmt.shortcuts import Solver
+
+from programs.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
@@ -33,7 +35,25 @@ def conjunct(left: Formula, right: Formula):
         if right.is_false():
             return right
 
-    return BiOp(left, "&", right);
+    return BiOp(left, "&", right)
+
+
+def conjunct_formula_set(s) -> Formula:
+    if len(s) == 0:
+        return true()
+    ret = true()
+    for f in s:
+        ret = conjunct(ret, f)
+    return ret
+
+
+def conjunct_typed_valuation_set(s: set[TypedValuation]) -> Formula:
+    if len(s)== 0:
+        return true()
+    ret = true()
+    for f in s:
+        ret = conjunct(ret, BiOp(f.name, "=", f.value))
+    return ret
 
 
 def disjunct(left: Formula, right: Formula):
@@ -52,6 +72,15 @@ def disjunct(left: Formula, right: Formula):
             return right
 
     return BiOp(left, "|", right);
+
+
+def disjunct_formula_set(s) -> Formula:
+    if len(s)== 0:
+        return true()
+    ret = true()
+    for f in s:
+        ret = disjunct(ret, f)
+    return ret
 
 
 def implies(left: Formula, right: Formula):
@@ -84,6 +113,7 @@ def F(ltl: Formula):
 
 def X(ltl: Formula):
     return UniOp("X", ltl);
+
 
 def tighten_ltl(ltl: Formula):
     end_act = Variable("END")
@@ -193,7 +223,7 @@ def nnf(prop: Formula) -> Formula:
             return conjunct(nnf(prop.left), nnf(prop.right))
         elif re.match("\|\|?", prop.op):
             return disjunct(nnf(prop.left), nnf(prop.right))
-        else: #math expression
+        else:  # math expression
             return prop
     else:
         return NotImplemented
@@ -226,10 +256,10 @@ def project(prop: Formula, events: [Atom]) -> Formula:
         nnf_left = project(nnf(nnf_prop.left), events)
         nnf_right = project(nnf(nnf_prop.right), events)
         if re.match("&&?", nnf_prop.op):
-            #this handles the case that the left hand side is a math expression
+            # this handles the case that the left hand side is a math expression
             if nnf_left is nnf_prop.left and isinstance(nnf_left, MathExpr):
                 return nnf_right
-            #this handles the case that the right hand side is a math expression
+            # this handles the case that the right hand side is a math expression
             elif nnf_right is nnf_prop.right and not isinstance(nnf_right, Atom):
                 return nnf_left
             else:
@@ -256,5 +286,22 @@ def project(prop: Formula, events: [Atom]) -> Formula:
         return nnf_prop
 
 
-def sat(formula: Formula, symbol_table : dict, solver: Solver) -> bool:
+def sat(formula: Formula, symbol_table: dict, solver: Solver) -> bool:
     return solver.is_sat(formula.to_smt(symbol_table))
+
+
+def negation_closed(predicates: [Formula]):
+    for p in predicates:
+        if neg(p) not in predicates:
+            return False
+    return True
+
+
+def prime_action(acts: [BiOp]) -> Formula:
+    if len(acts)== 0:
+        return acts
+    else:
+        primed_acts = []
+        for act in acts:
+            primed_acts.append(BiOp(Atom(act.left.name + "_next"), "=", act.right))
+    return conjunct_formula_set(primed_acts)
