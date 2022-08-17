@@ -38,7 +38,12 @@ class Value(Atom):
         return self
 
     def to_nuxmv(self):
-        return self
+        if self.is_true():
+            return Value("TRUE")
+        elif self.is_false():
+            return Value("FALSE")
+        else:
+            return self
 
     def to_smt(self, _):
         if self.is_true():
