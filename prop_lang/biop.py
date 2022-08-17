@@ -44,6 +44,7 @@ class BiOp(Formula):
             "||": Or,
             "->": Implies,
             "==": EqualsOrIff,
+            "=": EqualsOrIff,
             "!=": NotEquals,
             "<->": EqualsOrIff,
             ">": GT,
