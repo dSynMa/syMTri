@@ -39,13 +39,18 @@ class BiOp(Formula):
 
     def to_nuxmv(self):
         if self.op == "%":
-            return UniOp("toint", BiOp(UniOp("unsigned word[8]", self.left.to_nuxmv()), "mod", UniOp("unsigned word[8]", self.right.to_nuxmv())))
+            return UniOp("toint", BiOp(UniOp("unsigned word[8]", self.left.to_nuxmv()), "mod",
+                                       UniOp("unsigned word[8]", self.right.to_nuxmv())))
+        elif self.op == "=>":
+            return BiOp(self.left.to_nuxmv(), '->', self.right.to_nuxmv())
         else:
             return BiOp(self.left.to_nuxmv(), self.op, self.right.to_nuxmv())
 
     def to_smt(self, symbol_table):
         ops = {
+            "&": And,
             "&&": And,
+            "|": Or,
             "||": Or,
             "->": Implies,
             "==": EqualsOrIff,
