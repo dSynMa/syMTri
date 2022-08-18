@@ -42,9 +42,9 @@ class Variable(Atom):
     def to_smt(self, symbol_table):
         typed_val = symbol_table[self.name]
 
-        if typed_val.type == "int":
+        if typed_val.type == "int" or typed_val.type == "integer":
             return Symbol(self.name, INT)
-        elif typed_val.type == "bool":
+        elif typed_val.type == "bool" or typed_val.type == "boolean":
             return Symbol(self.name, BOOL)
         else:
             raise NotImplementedError(f"Type {typed_val.type} unsupported.")
