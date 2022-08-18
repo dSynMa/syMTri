@@ -31,7 +31,7 @@ class BiOp(Formula):
     def variablesin(self) -> [Variable]:
         return self.left.variablesin() + self.right.variablesin()
 
-    def ground(self, context : [TypedValuation]):
+    def ground(self, context: [TypedValuation]):
         return BiOp(self.left.ground(context), self.op, self.right.ground(context))
 
     def replace(self, context):
@@ -69,6 +69,7 @@ class BiOp(Formula):
         }
         try:
             op = ops[self.op]
-            return op(self.left.to_smt(symbol_table), self.right.to_smt(symbol_table))
         except KeyError:
             raise NotImplementedError(f"{self.op} unsupported")
+        else:
+            return op(self.left.to_smt(symbol_table), self.right.to_smt(symbol_table))
