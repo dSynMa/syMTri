@@ -10,8 +10,10 @@ from pysmt.shortcuts import (
 
 class BiOp(Formula):
     def __init__(self, left: Formula, op: str, right: Formula):
+        assert isinstance(left, Formula)
         self.left = left
-        self.op = op
+        self.op = op.strip()
+        assert isinstance(right, Formula)
         self.right = right
 
     def __str__(self):
