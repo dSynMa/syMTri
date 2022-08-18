@@ -39,8 +39,6 @@ def conjunct(left: Formula, right: Formula):
 
 
 def conjunct_formula_set(s) -> Formula:
-    if len(s) == 0:
-        return true()
     ret = true()
     for f in s:
         ret = conjunct(ret, f)
@@ -48,8 +46,6 @@ def conjunct_formula_set(s) -> Formula:
 
 
 def conjunct_typed_valuation_set(s: set[TypedValuation]) -> Formula:
-    if len(s)== 0:
-        return true()
     ret = true()
     for f in s:
         ret = conjunct(ret, BiOp(f.name, "=", f.value))
@@ -75,9 +71,7 @@ def disjunct(left: Formula, right: Formula):
 
 
 def disjunct_formula_set(s) -> Formula:
-    if len(s)== 0:
-        return true()
-    ret = true()
+    ret = false()
     for f in s:
         ret = disjunct(ret, f)
     return ret
