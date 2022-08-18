@@ -1,6 +1,7 @@
 import os
 import shutil
 from pysmt.factory import SolverRedefinitionError
+from pysmt.fnode import FNode
 from pysmt.logics import QF_UFLRA
 from pysmt.shortcuts import Solver, Symbol, get_env
 
@@ -33,12 +34,7 @@ class SMTChecker:
     def __init__(self) -> None:
         _add_solver(self.SOLVER_NAME, "mathsat")
 
+    def check(self, smt: FNode):
         _check_os()
-        with Solver(name=self.SOLVER_NAME) as s:
-            self.assertTrue(s.is_sat(Symbol("x")))
-
-    def check(self, f: Formula, symbol_table: dict):
-        _check_os()
-        smt = f.to_smt(symbol_table)
         with Solver(name=self.SOLVER_NAME) as s:
             return s.is_sat(smt)
