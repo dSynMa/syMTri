@@ -19,6 +19,9 @@ class UniOp(Formula):
         else:
             return NotImplemented
 
+    def __hash__(self):
+        return hash((self.op, self.right))
+
     def variablesin(self) -> [Variable]:
         return self.right.variablesin()
 

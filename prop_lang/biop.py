@@ -25,6 +25,9 @@ class BiOp(Formula):
             return self.op == other.op and self.right == other.right and self.left == other.left
         return NotImplemented
 
+    def __hash__(self):
+        return hash((self.left, self.op, self.right))
+
     def variablesin(self) -> [Variable]:
         return self.left.variablesin() + self.right.variablesin()
 

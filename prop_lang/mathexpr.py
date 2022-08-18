@@ -12,7 +12,7 @@ class MathExpr(Formula):
         return str(self.formula)
 
     def __hash__(self):
-        return self.name.__hash__()
+        return self.formula.__hash__()
 
     def __eq__(self, other):
         if isinstance(other, MathExpr):
