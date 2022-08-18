@@ -48,7 +48,7 @@ def conjunct_formula_set(s) -> Formula:
 def conjunct_typed_valuation_set(s: set[TypedValuation]) -> Formula:
     ret = true()
     for f in s:
-        ret = conjunct(ret, BiOp(f.name, "=", f.value))
+        ret = conjunct(ret, BiOp(Variable(f.name), "=", Value(f.value)))
     return ret
 
 
