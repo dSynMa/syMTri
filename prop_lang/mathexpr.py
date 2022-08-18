@@ -16,7 +16,7 @@ class MathExpr(Formula):
 
     def __eq__(self, other):
         if isinstance(other, MathExpr):
-            return self.f == other.formula
+            return self.formula == other.formula
         else:
             return False
 
