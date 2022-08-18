@@ -31,7 +31,7 @@ class Variable(Atom):
 
     def replace(self, context):
         for val in context:
-            if (val.op == "=" or val.op == ":=") and val.name == self.name:
+            if (val.op == "=" or val.op == ":=") and val.left == self.name:
                 return val.value
 
         return self
