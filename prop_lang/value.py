@@ -5,7 +5,7 @@ from pysmt.shortcuts import Int, TRUE, FALSE
 
 class Value(Atom):
     def __init__(self, name: str):
-        self.name = name
+        self.name = str(name)
 
     def __str__(self):
         return str(self.name)
@@ -47,8 +47,8 @@ class Value(Atom):
 
     def to_smt(self, _):
         if self.is_true():
-            return TRUE
+            return TRUE()
         elif self.is_false():
-            return FALSE
+            return FALSE()
         else:
             return Int(int(self.name))
