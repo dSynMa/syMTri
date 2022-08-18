@@ -6,6 +6,7 @@ from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
+from prop_lang.util import neg, disjunct_formula_set
 from prop_lang.variable import Variable
 
 
@@ -186,6 +187,24 @@ class Program:
             if other != state:
                 only_this_state += " & !next(" + str(other) + ")"
         return only_this_state
+
+    def complete_transitions(self):
+        complete_env = []
+        complete_con = []
+
+        for s in self.states:
+            env_from_s = [t for t in self.env_transitions if t.src == s]
+            conds_env = [t.condition for t in env_from_s]
+            env_from_s += [Transition(s, neg(disjunct_formula_set(conds_env)), [], [], s)]
+            complete_env += env_from_s
+
+            con_from_s = [t for t in self.con_transitions if t.src == s]
+            conds_con = [t.condition for t in con_from_s]
+            con_from_s += [Transition(s, neg(disjunct_formula_set(conds_con)), [], [], s)]
+            complete_con += con_from_s
+
+        return complete_env, complete_con
+
 
     def complete_action_set(self, actions: [BiOp]):
         non_updated_vars = [tv.name for tv in self.valuation if tv.name not in [str(act.left) for act in actions]]
