@@ -3,6 +3,8 @@ import re
 import subprocess
 from tempfile import NamedTemporaryFile
 
+from programs.analysis.util import parse_nuxmv_ce_output
+
 
 class ModelChecker:
     def check(self, nuxmv_script: str, ltl_spec):
@@ -12,7 +14,6 @@ class ModelChecker:
             model.close()
 
             commands.write("go_msat\n")
-            # commands.write("build_boolean_model\n")
             commands.write('check_ltlspec_ic3 -i -p "' + str(ltl_spec) + '"\n')
             commands.write('quit')
             commands.close()
@@ -23,11 +24,9 @@ class ModelChecker:
                 if "is true" in out:
                     return True, None
                 elif "is false" in out:
-                    ce = out.split("Counterexample")[1].strip()
-                    ce = re.sub("[^\n] *(act|guard)\_[0-9]+ = [^\n]+\n", "", ce)
-                    ce = re.sub("[^\n] *(identity)_[^\n]+\n", "", ce)
-                    return False, ce
+                    return False, parse_nuxmv_ce_output(out)
                 else:
+                    # TODO
                     return NotImplemented
             except subprocess.CalledProcessError as err:
                 self.fail(err.output)
