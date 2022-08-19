@@ -105,4 +105,4 @@ parser = prop_logic_expression
 
 def string_to_pl(text: str):
     out = (parser << parsec.eof()).parse(text)
-    print(out)
+    return out

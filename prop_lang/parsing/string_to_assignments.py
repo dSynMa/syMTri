@@ -29,4 +29,4 @@ parser = assignments
 
 def string_to_assignments(text: str):
     out = (parser << parsec.eof()).parse(text)
-    print(out)
+    return out
