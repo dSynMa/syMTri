@@ -1,8 +1,7 @@
 from unittest import TestCase
 
 from programs.analysis.model_checker import ModelChecker
-from programs.analysis.predicate_abstraction import abstraction_to_ltl_with_turns, predicate_abstraction, \
-    abstraction_to_ltl
+from programs.analysis.predicate_abstraction import abstraction_to_ltl_with_turns, predicate_abstraction
 from programs.analysis.util import create_nuxmv_model, symbol_table_from_program
 from programs.parsing.string_to_program import string_to_program
 
