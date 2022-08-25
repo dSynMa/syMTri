@@ -11,7 +11,7 @@ from prop_lang.value import Value
 @generate
 def prop_logic_expression():
     yield spaces()
-    expr = yield try_choice(boolean_bi_expression, unit_prop_logic_expression)
+    expr = yield try_choice(bracketed_expression, try_choice(boolean_bi_expression, unit_prop_logic_expression))
     yield spaces()
     return expr
 
@@ -65,7 +65,7 @@ def math_bi_expression():
 
 @generate
 def variable():
-    var = yield regex("\_?[a-zA-Z][a-zA-Z0-9\_]*")
+    var = yield regex("\_?[a-zA-Z][a-zA-Z0-9\_\-]*")
     return Variable(var)
 
 
