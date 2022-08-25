@@ -80,7 +80,11 @@ def predicate_abstraction(program: Program, predicates: [Formula], symbol_table)
                     next_preds = {p for p in predicates if smt_checker.check(conjunct(p, next_valuation), symbol_table)}
                     next_state = (t.tgt, frozenset(next_preds))
                     current_states.add(next_state)
-                    env_transitions.add(Transition(init_st, events, [], [], next_state))
+
+                    new_output = set(t.output)
+                    new_output |= {neg(o) for o in program.out_events if o not in t.output}
+                    new_output = list(new_output)
+                    env_transitions.add(Transition(init_st, events, [], new_output, next_state))
 
     con_turn_flag = True
     for_renaming = [BiOp(Variable(v), ":=", Variable(v + "_prev")) for v in [tv.name for tv in program.valuation]]
@@ -123,7 +127,11 @@ def predicate_abstraction(program: Program, predicates: [Formula], symbol_table)
                                 next_states.add(next_state)
                             elif not con_turn_flag and next_state not in done_states_con:
                                 next_states.add(next_state)
-                            new_transitions.add(Transition((q, P), context_Evs, [], [], next_state))
+
+                            new_output = set(t.output)
+                            new_output |= {neg(o) for o in program.out_events if o not in t.output}
+                            new_output = list(new_output)
+                            new_transitions.add(Transition((q, P), context_Evs, [], new_output, next_state))
 
         if con_turn_flag:
             done_states_con.update(current_states)
@@ -139,52 +147,23 @@ def predicate_abstraction(program: Program, predicates: [Formula], symbol_table)
     return Program("pred_abst_" + program.name, done_states_env | done_states_con, program.initial_state, [],
                    env_transitions,
                    con_transitions, program.env_events,
-                   program.con_events, program.mon_events)
-
-
-# def abstraction_to_ltl(pred_abstraction: Program):
-#     init_transitions = [t for t in pred_abstraction.env_transitions]
-#     init_cond = disjunct_formula_set(
-#         [conjunct_formula_set({Variable(t.src), t.condition, t.tgt[1]}) for t in init_transitions])
-#
-#     at_least_one_state = UniOp("G", disjunct_formula_set([Variable(q[0]) for q in pred_abstraction.states]))
-#
-#     at_most_one_state = UniOp("G", conjunct_formula_set([BiOp(Variable(q[0]), "=>", conjunct_formula_set([neg(r[0])
-#                                                                                                           for r in
-#                                                                                                           pred_abstraction.states
-#                                                                                                           if
-#                                                                                                           r[0] != q[
-#                                                                                                               0]]))
-#                                                          for q in pred_abstraction.states]))
-#
-#     matching_pairs = [(ct, et)
-#                       for ct in pred_abstraction.con_transitions
-#                       for et in pred_abstraction.env_transitions
-#                       if ct.tgt == et.src]
-#
-#     con_env_transitions = disjunct_formula_set([conjunct_formula_set([Variable(ct.src[0]),
-#                                                                       conjunct_formula_set(ct.src[1]),
-#                                                                       ct.condition,
-#                                                                       UniOp("X",
-#                                                                             conjunct_formula_set([Variable(et.tgt[0]),
-#                                                                                                   et.condition,
-#                                                                                                   conjunct_formula_set(
-#                                                                                                       et.tgt[1])]))])
-#                                                 for (ct, et) in matching_pairs])
-#
-#     transition_cond = UniOp("G", con_env_transitions)
-#
-#     return conjunct_formula_set([init_cond, at_least_one_state, at_most_one_state, transition_cond])
+                   program.con_events, program.out_events)
 
 
 # Use this for testing
 def abstraction_to_ltl_with_turns(pred_abstraction: Program):
     init_transitions = [t for t in pred_abstraction.env_transitions if t.src == pred_abstraction.initial_state]
     init_cond = disjunct_formula_set(
-        [conjunct_formula_set({Variable(t.src), t.condition} | t.tgt[1]) for t in init_transitions]).to_nuxmv()
+        [conjunct_formula_set({Variable(pred_abstraction.initial_state), t.condition} # the target state of transition, and the environment proposition guard
+                              | {UniOp("X", out) for out in t.output}
+                              | {UniOp("X", p) for p in t.tgt[1]} # the predicate set associate with target state
+                              | {UniOp("X", Variable(t.tgt[0]))}) # the monitor props associated with transition
+         for t in init_transitions]).to_nuxmv()
 
-    states = [Variable(s[0]) for s in pred_abstraction.states if s != pred_abstraction.initial_state] + [
-        Variable(pred_abstraction.initial_state)]
+    # wrapping states in Variable object
+    states = [Variable(s[0]) for s in pred_abstraction.states if s != pred_abstraction.initial_state] \
+             + [Variable(pred_abstraction.initial_state)]
+
     at_least_one_state = UniOp("G", disjunct_formula_set([q for q in states])).to_nuxmv()
 
     at_most_one_state = UniOp("G", conjunct_formula_set([BiOp(q, "=>", conjunct_formula_set([neg(r) for r in
@@ -193,34 +172,40 @@ def abstraction_to_ltl_with_turns(pred_abstraction: Program):
                                                                                              r != q]))
                                                          for q in states])).to_nuxmv()
 
+    # the non initial transitions
     not_init_env_transitions = [t for t in pred_abstraction.env_transitions if t.src != pred_abstraction.initial_state]
 
     not_init_con_transitions = [t for t in pred_abstraction.con_transitions if t.src != pred_abstraction.initial_state]
 
-    con_transitions = conjunct(neg(Variable("env")), disjunct_formula_set([conjunct_formula_set(ct.src[1] |
-                                                                                                {Variable(ct.src[0]),
-                                                                                                 ct.condition,
-                                                                                                 UniOp("X",
-                                                                                                       conjunct_formula_set(
-                                                                                                           {Variable(
-                                                                                                               ct.tgt[
-                                                                                                                   0])} |
-                                                                                                           ct.tgt[1]))})
-                                                                           for ct in not_init_con_transitions]))
+    # if it's the controller's turn, then the monitor observes what the controller did, and moves in the next step
+    con_transitions = conjunct(BiOp(Variable("turn"), "=", Variable("con")),
+                               disjunct_formula_set([conjunct_formula_set(ct.src[1] # are these predicates true
+                                                                          | {Variable(ct.src[0]), # am i in this state
+                                                                             ct.condition, # did the controller do this
+                                                                             UniOp("X", # then i move in the next state like thi
+                                                                                   conjunct_formula_set({Variable(ct.tgt[0])}
+                                                                                                        | ct.tgt[1]))})
+                                                     for ct in not_init_con_transitions]))
 
-    env_transitions = conjunct(Variable("env"), disjunct_formula_set([conjunct_formula_set(et.src[1] |
-                                                                                           {Variable(et.src[0]),
-                                                                                            et.condition,
-                                                                                            UniOp("X",
-                                                                                                  conjunct_formula_set({
-                                                                                                                           Variable(
-                                                                                                                               et.tgt[
-                                                                                                                                   0])} |
-                                                                                                                       et.tgt[
-                                                                                                                           1]))})
+    # if it's the environment's turn, then the monitor observes what the environment did, and moves in the next step
+    env_transitions = conjunct(BiOp(Variable("turn"), "=", Variable("env")),
+                               disjunct_formula_set(
+                                   [conjunct_formula_set(et.src[1]
+                                                         | {Variable(et.src[0]),
+                                                            et.condition,
+                                                            UniOp("X",
+                                                                  conjunct_formula_set({Variable(et.tgt[0])}
+                                                                                       | et.tgt[1]))}
+                                                         | {UniOp("X", out) for out in et.output})
                                                                       for et in not_init_env_transitions]))
 
-    transition_cond = UniOp("G", disjunct(con_transitions, env_transitions)).to_nuxmv()
+    predicates = [p for s in pred_abstraction.states for p in s[1] if s is not pred_abstraction.initial_state]
+
+    mon_transition = conjunct(BiOp(Variable("turn"), "=", Variable("mon")),
+                              conjunct_formula_set({BiOp(s, "<->", UniOp("X", s)) for s in states}
+                                                              | {BiOp(p, "<->", UniOp("X", p)) for p in predicates}))
+
+    transition_cond = UniOp("G", disjunct_formula_set([con_transitions, env_transitions, mon_transition])).to_nuxmv()
 
     return conjunct_formula_set([init_cond, at_least_one_state, at_most_one_state, transition_cond])
 
@@ -228,10 +213,14 @@ def abstraction_to_ltl_with_turns(pred_abstraction: Program):
 def abstraction_to_ltl(pred_abstraction: Program):
     init_transitions = [t for t in pred_abstraction.env_transitions if t.src == pred_abstraction.initial_state]
     init_cond = disjunct_formula_set(
-        [conjunct_formula_set({Variable(t.src), t.condition} | t.tgt[1]) for t in init_transitions]).to_nuxmv()
+        {conjunct_formula_set({Variable(t.tgt[0]), t.condition}
+                              | t.tgt[1]
+                              | set(t.output)) for t in init_transitions}
+    ).to_nuxmv()
 
     states = [Variable(s[0]) for s in pred_abstraction.states if s != pred_abstraction.initial_state] + [
         Variable(pred_abstraction.initial_state)]
+
     at_least_one_state = UniOp("G", disjunct_formula_set([q for q in states])).to_nuxmv()
 
     at_most_one_state = UniOp("G", conjunct_formula_set([BiOp(q, "=>", conjunct_formula_set([neg(r) for r in
@@ -252,8 +241,10 @@ def abstraction_to_ltl(pred_abstraction: Program):
     con_env_transitions = disjunct_formula_set([
         conjunct_formula_set(ct.src[1]
                              | {Variable(ct.src[0]), ct.condition}
-                             | {UniOp("X", conjunct_formula_set(et.tgt[1]
-                                                               | {Variable(et.tgt[0]), et.condition}))})
+                             | {UniOp("X",
+                                      conjunct_formula_set(et.tgt[1]
+                                                           | {Variable(et.tgt[0]), et.condition}
+                                                           | {out for out in et.output}))})
         for (ct, et) in matching_pairs])
 
     transition_cond = UniOp("G", con_env_transitions).to_nuxmv()
