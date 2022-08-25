@@ -126,7 +126,7 @@ def transition_parser():
     yield spaces()
     act = yield optional(string("$") >> spaces() >> assignments, [])
     yield spaces()
-    events = yield optional(string(">>") >> spaces() >> assignments, [])
+    events = yield optional(string(">>") >> spaces() >> sepBy(variable << spaces(), string(',') >> spaces()), [])
     yield spaces()
     yield string("]") >> spaces()
     if not cond:

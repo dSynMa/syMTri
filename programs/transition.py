@@ -5,7 +5,7 @@ from prop_lang.variable import Variable
 
 
 class Transition:
-    def __init__(self, src, condition: Formula, action: [BiOp], output: [BiOp], tgt):
+    def __init__(self, src, condition: Formula, action: [BiOp], output: [Variable], tgt):
         self.src = src
         self.condition = true() if condition is None else condition
         self.action = [] if action is None else action
