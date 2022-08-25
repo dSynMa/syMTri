@@ -44,7 +44,7 @@ def strix(ltl: str, in_act: [Variable], out_act: [Variable], docker: str) -> Tup
             mon = parse_hoa(output)
             return True, mon
         else:
-            raise Exception("Strix not returning appropriate value.")
+            raise Exception("Strix not returning appropriate value.\n" + output)
     except Exception as err:
         raise err
     pass
