@@ -3,6 +3,7 @@ from prop_lang.atom import Atom
 from prop_lang.variable import Variable
 from pysmt.shortcuts import Int, TRUE, FALSE
 
+
 class Value(Atom):
     def __init__(self, name: str):
         self.name = str(name)
@@ -23,7 +24,6 @@ class Value(Atom):
         lower = self.name.lower()
         return lower == "true" or lower == "tt"
 
-
     def is_false(self):
         lower = self.name.lower()
         return lower == "false" or lower == "ff"
@@ -31,8 +31,14 @@ class Value(Atom):
     def variablesin(self) -> [Variable]:
         return []
 
-    def ground(self, context : [TypedValuation]):
+    def ground(self, context: [TypedValuation]):
         return self
+
+    def simplified(self):
+        return self
+
+    def ops_used(self):
+        return []
 
     def replace(self, context):
         return self

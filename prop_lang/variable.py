@@ -29,10 +29,16 @@ class Variable(Atom):
 
         return self
 
+    def simplified(self):
+        return self
+
+    def ops_used(self):
+        return []
+
     def replace(self, context):
         for val in context:
-            if (val.op == "=" or val.op == ":=") and val.left == self.name:
-                return val.value
+            if (val.op == "=" or val.op == ":=") and (str(val.left.name) == self.name):
+                return val.right
 
         return self
 

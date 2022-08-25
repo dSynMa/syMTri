@@ -18,6 +18,14 @@ class Formula(ABC):
     def ground(self, context: [TypedValuation]):
         pass
 
+    @abstractmethod
+    def simplified(self):
+        pass
+
+    @abstractmethod
+    def ops_used(self):
+        pass
+
     # contexts assumed to be a list of assignments
     @abstractmethod
     def replace(self, context):

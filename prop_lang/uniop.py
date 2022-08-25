@@ -1,8 +1,10 @@
 from programs.typed_valuation import TypedValuation
 from prop_lang.formula import Formula
+from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 from pysmt.shortcuts import Not, Minus, Int
+
 
 class UniOp(Formula):
     def __init__(self, op: str, right: Formula):
@@ -25,8 +27,22 @@ class UniOp(Formula):
     def variablesin(self) -> [Variable]:
         return self.right.variablesin()
 
-    def ground(self, context : [TypedValuation]):
+    def ground(self, context: [TypedValuation]):
         return UniOp(self.op, self.right.ground(context))
+
+    def simplified(self):
+        right = self.right.simplified()
+        if self.op in ["!"]:
+            if isinstance(right, UniOp) and right.op == "!":
+                return right.right
+            elif isinstance(right, Value) and right.is_true():
+                return Value("False")
+            elif isinstance(right, Value) and right.is_false():
+                return Value("True")
+        return UniOp(self.op, right)
+
+    def ops_used(self):
+        return [self.op] + self.right.ops_used()
 
     def replace(self, context):
         return UniOp(self.op, self.right.replace(context))

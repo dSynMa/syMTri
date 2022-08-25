@@ -26,6 +26,12 @@ class MathExpr(Formula):
     def ground(self, context):
         return self.formula.ground(context)
 
+    def simplified(self):
+        return self
+
+    def ops_used(self):
+        return []
+
     def replace(self, context):
         return self.formula.replace(context)
 

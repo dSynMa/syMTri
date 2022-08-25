@@ -1,6 +1,7 @@
 from programs.typed_valuation import TypedValuation
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
+from prop_lang.value import Value
 from prop_lang.variable import Variable
 from pysmt.shortcuts import And, Or, Implies
 from pysmt.shortcuts import (
@@ -33,6 +34,50 @@ class BiOp(Formula):
 
     def ground(self, context: [TypedValuation]):
         return BiOp(self.left.ground(context), self.op, self.right.ground(context))
+
+    def simplified(self):
+        left = self.left.simplified()
+        right = self.right.simplified()
+        if self.op in ["&", "&&"]:
+            if isinstance(left, Value) and left.is_true():
+                return right
+            elif isinstance(left, Value) and left.is_false():
+                return left
+            elif isinstance(right, Value) and right.is_true():
+                return left
+            elif isinstance(right, Value) and right.is_false():
+                return right
+        elif self.op in ["|", "||"]:
+            if isinstance(left, Value) and left.is_true():
+                return left
+            elif isinstance(left, Value) and left.is_false():
+                return right
+            elif isinstance(right, Value) and right.is_true():
+                return right
+            elif isinstance(right, Value) and right.is_false():
+                return left
+        elif self.op in ["->", "=>"]:
+            if isinstance(left, Value) and left.is_true():
+                return right
+            elif isinstance(left, Value) and left.is_false():
+                return Value("True")
+            elif isinstance(right, Value) and right.is_true():
+                return Value("True")
+            elif isinstance(right, Value) and right.is_false():
+                return UniOp("!", left)
+        elif self.op in ["<->", "<=>"]:
+            if isinstance(left, Value) and left.is_true():
+                return right
+            elif isinstance(left, Value) and left.is_false():
+                return UniOp("!", right).simplified()
+            elif isinstance(right, Value) and right.is_true():
+                return left
+            elif isinstance(right, Value) and right.is_false():
+                return UniOp("!", left).simplified()
+        return BiOp(left, self.op, right)
+
+    def ops_used(self):
+        return [self.op] + self.left.ops_used() + self.right.ops_used()
 
     def replace(self, context):
         return BiOp(self.left.replace(context), self.op, self.right.replace(context))
