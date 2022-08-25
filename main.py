@@ -21,8 +21,7 @@ def main():
     parser.add_argument('--tlsf', dest='tlsf', help="Path to a .tlfs file.", type=str)
 
     # how to connect to strix (default just assume `strix' is in path)
-    parser.add_argument('--strix_server', dest='server', type=str)
-    parser.add_argument('--strix_docker', dest='docker', type=str)
+    parser.add_argument('--strix_docker', dest='docker', type=str, nargs='?', const=False)
 
     args = parser.parse_args()
 
@@ -42,12 +41,14 @@ def main():
         if args.ltl is None and args.tlsf is None:
             raise Exception("No property specified.")
 
-        (realiz, date) = synthesize(date, args.ltl, args.tlsf, args.server, args.docker)
+        (realiz, mm) = synthesize(date, args.ltl, args.tlsf, args.docker)
 
         if realiz:
-            print(str(date))
+            print('Realizable.')
+            print(str(mm.to_dot()))
         else:
             print('Unrealizable.')
+            print(str(mm.to_dot()))
     else:
         raise Exception("Specify either --translate or --synthesise.")
 

@@ -12,7 +12,7 @@ from strix import strix_adapter
 from strix.strix_adapter import syfco_ltl, syfco_ltl_in, syfco_ltl_out
 
 
-def synthesize(aut: Program, ltl_text: str, tlsf_path: str, server: str, docker: str) -> Tuple[bool, Program]:
+def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tuple[bool, Program]:
     if tlsf_path is not None:
         ltl_text = syfco_ltl(tlsf_path)
         ltl_text = ltl_text.replace('"', "")
@@ -24,16 +24,17 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, server: str, docker:
     in_acts = [e for e in aut.env_events + aut.mon_events] + [e for e in aut.states]
     out_acts = [e for e in aut.con_events]
     # TODO validate in_acts, out_acts against those from TLSF
-    return abstract_synthesis_loop(aut, ltl, in_acts, out_acts, server, docker)
+    return abstract_synthesis_loop(aut, ltl, in_acts, out_acts, docker)
 
 
-def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable], out_acts: [Variable], server: str,
-                            docker: str) -> \
-        Tuple[bool, Program]:
-    abstract_monitor = program.abstract_into_ltl();
-    abstract_problem = implies(abstract_monitor, ltl)
+def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable], out_acts: [Variable], docker: str) -> \
+        Tuple[bool, MealyMachine]:
+    abstract_monitor = predicate_abstraction(program, [], symbol_table_from_program(program))
+    abstraction = abstraction_to_ltl(abstract_monitor)
+    print(abstraction)
+    abstract_problem = implies(abstraction, ltl)
 
-    (real, mm) = strix_adapter.strix(abstract_problem, in_acts, out_acts, None, docker)
+    (real, mm) = strix_adapter.strix(abstract_problem, in_acts, out_acts, docker)
 
     if real:
         return mm
