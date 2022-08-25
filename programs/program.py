@@ -2,6 +2,7 @@ from typing import Set
 
 from graphviz import Digraph
 
+from programs.analysis.nuxmv_model import NuXmvModel
 from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
 from prop_lang.biop import BiOp
@@ -106,29 +107,29 @@ class Program:
         guards = []
         acts = []
         for env_transition in self.env_transitions:
-            guard = "env & " + env_transition.src + " & " \
+            guard = "turn = env & " + env_transition.src + " & " \
                     + str(env_transition.condition.to_nuxmv())
 
-            act = self.only_this_state_next(env_transition.tgt) \
+            act = "next(" + env_transition.tgt + ")" \
                   + "".join([" & next(" + str(act.left) + ") = " + str(act.right.to_nuxmv()) for act in
                              self.complete_action_set(env_transition.action)]) \
-                  + "".join([" & next(" + str(assignment.left) + ") = " + str(assignment.right.to_nuxmv()) for assignment in
+                  + "".join([" & next(" + str(assignment) + ")" for assignment in
                              env_transition.output]) \
-                  + "".join([" & !next(" + str(event) + ")" for event in self.mon_events
-                             if event not in [out.left for out in env_transition.output]])
+                  + "".join([" & !next(" + str(event) + ")" for event in self.out_events
+                             if event not in env_transition.output])
             guards.append(guard)
             acts.append(act)
 
         for con_transition in self.con_transitions:
-            guard = "!env & " + con_transition.src + " & " \
+            guard = "turn = con & " + con_transition.src + " & " \
                     + str(con_transition.condition.to_nuxmv())
 
             # updated_variables = [str(act.left) for act in con_transition.action]
-            act = self.only_this_state_next(con_transition.tgt) \
+            act = "next(" + con_transition.tgt + ")" \
                   + "".join([" & next(" + str(act.left) + ") = " + str(act.right.to_nuxmv()) for act in
                              self.complete_action_set(con_transition.action)]) \
                   + "".join([" & !next(" + str(event) + ")"
-                             for event in self.mon_events])
+                             for event in self.out_events])
             guards.append(guard)
             acts.append(act)
 
@@ -138,52 +139,41 @@ class Program:
         i = 0
         while i < len(guards):
             define += ["guard_" + str(i) + " := " + guards[i]]
-            define += ["act_" + str(i) + " := next(env) = !env & " + acts[i]]
+            define += ["act_" + str(i) + " := " + acts[i]]
             transitions.append("(guard_" + str(i) + " & " + "act_" + str(i) + ")")
             guard_ids.append("guard_" + str(i))
             i += 1
 
-        identity = ["next(env) = !env"]
+        identity = []
         for typed_val in self.valuation:
             identity.append("next(" + str(typed_val.name) + ") = " + str(typed_val.name))
         for st in self.states:
             identity.append("next(" + str(st) + ") = " + str(st))
 
-        identity += ["!next(" + str(event) + ")" for event in self.mon_events]
+        identity += ["!next(" + str(event) + ")" for event in self.out_events]
 
         define += ["identity_" + self.name + " := " + " & ".join(identity)]
 
         # if no guard holds, then keep the same state and output no monitor events
-        transitions.append("!(" + " | ".join(guard_ids) + ") & identity_" + self.name)
+        transitions.append("(!(" + " | ".join(guard_ids) + ") & identity_" + self.name + ")")
 
-        vars = ["env : boolean"]
+        vars = ["turn : {env, mon, con}"]
         vars += [str(st) + " : boolean" for st in self.states]
         vars += [str(val.name) + " : " + str(val.type) for val in self.valuation]
         vars += [str(var) + " : boolean" for var in self.env_events]
         vars += [str(var) + " : boolean" for var in self.con_events]
-        vars += [str(var) + " : boolean" for var in self.mon_events]
+        vars += [str(var) + " : boolean" for var in self.out_events]
 
-        init = [self.only_this_state(self.initial_state)]
+        init = [self.initial_state]
         init += [str(val.name) + " = " + str(val.value) for val in self.valuation]
-        init += ["!" + str(event) for event in self.mon_events]
-        init += ["env"]
+        init += ["!" + str(event) for event in self.out_events]
         trans = ["\n\t|\t".join(transitions)]
 
-        return self.name, vars, define, init, trans
+        invar = [s + " -> " + str(conjunct_formula_set([neg(ss) for ss in self.states if ss != s])) for s in
+                 self.states]
+        invar += [str(disjunct_formula_set([Variable(s) for s in self.states]))]
 
-    def only_this_state(self, state):
-        only_this_state = str(state)
-        for other in self.states:
-            if other != state:
-                only_this_state += " & !(" + str(other) + ")"
-        return only_this_state
-
-    def only_this_state_next(self, state):
-        only_this_state = "next(" + str(state) + ")"
-        for other in self.states:
-            if other != state:
-                only_this_state += " & !next(" + str(other) + ")"
-        return only_this_state
+        return NuXmvModel(self.name, vars, define, init, invar, trans)
 
     def complete_transitions(self):
         complete_env = []
@@ -201,7 +191,6 @@ class Program:
             complete_con += con_from_s
 
         return complete_env, complete_con
-
 
     def complete_action_set(self, actions: [BiOp]):
         non_updated_vars = [tv.name for tv in self.valuation if tv.name not in [str(act.left) for act in actions]]
