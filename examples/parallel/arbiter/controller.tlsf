@@ -32,7 +32,7 @@ MAIN {
   }
 
   GUARANTEES {
-    G F(request -> F grant);
+    G (request -> F grant);
     G (grant -> allow_grant);
   }
   
