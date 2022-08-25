@@ -28,5 +28,9 @@ parser = assignments
 
 
 def string_to_assignments(text: str):
-    out = (parser << parsec.eof()).parse(text)
+    try:
+        out = (parser << parsec.eof()).parse(text)
+    except Exception as exp:
+        print(text)
+        raise exp
     return out
