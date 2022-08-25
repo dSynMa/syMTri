@@ -120,3 +120,12 @@ def only_this_state_next(states, state):
         if other != state:
             only_this_state += " & !next(" + str(other) + ")"
     return only_this_state
+
+
+def use_liveness_abstraction(ce: [dict]):
+    assert len(ce) > 0
+    cs_states = [s for s in ce[0].keys() if s.startswith("st_")]
+    for i in range(0, len(ce) - 1):
+        if len([s for s in cs_states if ce[i][s] == "TRUE" and ce[len(ce) - 1] == "TRUE"]) > 0:
+            return True
+    return False
