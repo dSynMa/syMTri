@@ -1,20 +1,22 @@
 import os
-import re
 import subprocess
 from tempfile import NamedTemporaryFile
 
-from programs.analysis.util import parse_nuxmv_ce_output
+from programs.util import parse_nuxmv_ce_output_finite
 
 
 class ModelChecker:
-    def check(self, nuxmv_script: str, ltl_spec):
+    def check(self, nuxmv_script: str, ltl_spec, bound):
         with NamedTemporaryFile('w', suffix='.smv', delete=False) as model, \
                 NamedTemporaryFile('w', suffix='.txt', delete=False) as commands:
             model.write(nuxmv_script)
             model.close()
 
             commands.write("go_msat\n")
-            commands.write('check_ltlspec_ic3 -i -p "' + str(ltl_spec) + '"\n')
+            if bound is None:
+                commands.write('check_ltlspec_ic3 -i -p "' + str(ltl_spec) + '"\n')
+            else:
+                commands.write('check_ltlspec_ic3 -i -k ' + str(bound) + ' -p "' + str(ltl_spec) + '"\n')
             commands.write('quit')
             commands.close()
             try:
@@ -24,7 +26,9 @@ class ModelChecker:
                 if "is true" in out:
                     return True, None
                 elif "is false" in out:
-                    return False, parse_nuxmv_ce_output(out)
+                    return False, parse_nuxmv_ce_output_finite(out)
+                elif "Maximum bound reached" in out:
+                    return False, None
                 else:
                     # TODO
                     return NotImplemented
