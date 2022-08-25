@@ -6,7 +6,8 @@ from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from prop_lang.util import neg, disjunct_formula_set
+from prop_lang.uniop import UniOp
+from prop_lang.util import neg, disjunct_formula_set, conjunct_formula_set
 from prop_lang.variable import Variable
 
 
@@ -14,7 +15,7 @@ class Program:
 
     def __init__(self, name, sts, init_st, init_val: [TypedValuation],
                  env_transitions: [Transition], con_transitions: [Transition],
-                 env_events: [Variable], con_events: [Variable], mon_events: [Variable]):
+                 env_events: [Variable], con_events: [Variable], out_events: [Variable]):
         self.name = name
         self.initial_state = init_st
         self.states: Set = set(sts)
@@ -35,7 +36,7 @@ class Program:
                        biop.right.variablesin()):
                 raise Exception("Actions in environment transitions can only refer to environment or "
                                 "local/internal variables: " + str(transition) + ".")
-            if not all(v.left in mon_events for v in transition.output):
+            if not all(v in out_events or (isinstance(v, UniOp) and v.simplified().right in out_events) for v in transition.output):
                 raise Exception("Outputs of environment transitions can only refer to monitor output variables: " + str(
                     transition) + ".")
 
@@ -56,17 +57,16 @@ class Program:
         self.valuation = init_val
         self.env_events = env_events
         self.con_events = con_events
-        self.mon_events = mon_events
+        self.out_events = out_events
 
     def add_env_transition(self, src, condition: Formula, action: [BiOp], output: [BiOp], tgt):
-        assert {x.left for x in output}.issubset(self.mon_events)
-        self.env_transitions.append(Transition(src, condition, action, tgt))
+        assert len({x for x in output if x not in self.out_events}) == 0
+        self.env_transitions.append(Transition(src, condition, action, output, tgt))
         self.states.add(src)
         self.states.add(tgt)
 
-    def add_con_transition(self, src, condition: Formula, action: Formula, output: [BiOp], tgt):
-        assert {x.left for x in output}.issubset(self.mon_events)
-        self.con_transitions.append(Transition(src, condition, action, output, tgt))
+    def add_con_transition(self, src, condition: Formula, action: Formula, tgt):
+        self.con_transitions.append(Transition(src, condition, action, [], tgt))
         self.states.add(src)
         self.states.add(tgt)
 
@@ -86,22 +86,19 @@ class Program:
         dot.edge("init", str(self.initial_state), style="solid")
 
         for t in self.env_transitions:
-            if t.output is None:
-                outputs = ""
-            else:
-                outputs = str(t.output)
 
-            label = str(t.condition) + "\n>> " + str(t.action) + "\n>> " + outputs
+            label = str(t.condition)
+            if t.action is not None and len(t.action) > 0:
+                label = label + " $ " + str(t.action)
+            if t.output is not None and len(t.output) > 0:
+                label = label + " >> " + str(t.output)
             dot.edge(str(t.src), str(t.tgt), label)
 
         for t in self.con_transitions:
-            if t.output is None:
-                outputs = ""
-            else:
-                outputs = str(t.output)
-
-            label = str(t.condition) + "\n>> " + str(t.action) + "\n>> " + outputs
-            dot.edge(str(t.src), str(t.tgt), label, "style=dotted")
+            label = str(t.condition)
+            if len(t.action) > 0:
+                label + " $ " + str(t.action)
+            dot.edge(str(t.src), str(t.tgt), label, style="dotted")
 
         return dot
 
