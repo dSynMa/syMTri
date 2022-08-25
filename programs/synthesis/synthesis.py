@@ -10,7 +10,7 @@ from prop_lang.util import implies
 from prop_lang.variable import Variable
 from strix import strix_adapter
 from strix.strix_adapter import syfco_ltl, syfco_ltl_in, syfco_ltl_out
-from synthesis.mealy_machine import MealyMachine
+from programs.synthesis.mealy_machine import MealyMachine
 
 
 def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tuple[bool, Program]:

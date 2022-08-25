@@ -1,7 +1,7 @@
 import argparse
 
 from programs.parsing.string_to_program import string_to_program
-from synthesis.synthesis import synthesize
+from programs.synthesis.synthesis import synthesize
 
 
 # inputs: date_file ltl_file

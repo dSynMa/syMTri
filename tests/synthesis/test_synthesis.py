@@ -3,8 +3,7 @@ from unittest import TestCase
 from programs.parsing.string_to_program import string_to_program
 from prop_lang.uniop import UniOp
 from prop_lang.value import Value
-from prop_lang.variable import Variable
-from synthesis.synthesis import abstract_synthesis_loop
+from programs.synthesis.synthesis import abstract_synthesis_loop
 
 
 class Test(TestCase):
