@@ -2,7 +2,9 @@ from typing import Tuple
 
 from programs.analysis.model_checker import ModelChecker
 from programs.analysis.predicate_abstraction import predicate_abstraction, abstraction_to_ltl
-from programs.util import symbol_table_from_program, create_nuxmv_model_for_compatibility_checking
+from programs.analysis.refinement import safety_abstraction
+from programs.util import symbol_table_from_program, create_nuxmv_model_for_compatibility_checking, \
+    use_liveness_abstraction
 from programs.program import Program
 from prop_lang.formula import Formula
 from prop_lang.parsing.string_to_ltl import string_to_ltl
@@ -30,37 +32,55 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
 
 def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable], out_acts: [Variable], docker: str) -> \
         Tuple[bool, MealyMachine]:
-    abstract_monitor = predicate_abstraction(program, [], symbol_table_from_program(program))
-    abstraction = abstraction_to_ltl(abstract_monitor)
-    print(abstraction)
-    abstract_problem = implies(abstraction, ltl)
+    symbol_table = symbol_table_from_program(program)
 
-    (real, mm) = strix_adapter.strix(abstract_problem, in_acts, out_acts, docker)
+    preds = set()
 
-    if real:
-        return (real, mm)
-    else:
-        program_nuxmv_model = program.to_nuXmv_with_turns()
-        mon_events = program.out_events \
-                     + [Variable(s) for s in program.states] \
-                     + [p for s in abstract_monitor.states if s != abstract_monitor.initial_state for p in s[1]]
-        mealy = mm.to_nuXmv_with_turns(mon_events)
-        print(mm.to_dot())
+    while True:
+        pred_list = list(preds)
+        abstract_monitor = predicate_abstraction(program, pred_list, symbol_table)
+        abstraction = abstraction_to_ltl(abstract_monitor, pred_list)
+        print(abstraction)
+        abstract_problem = implies(abstraction, ltl)
 
-        system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events)
+        pred_acts = [Variable("pred_" + str(i)) for i in range(0, len(preds))]
 
-        print(system)
+        (real, mm) = strix_adapter.strix(abstract_problem, in_acts + pred_acts, out_acts, docker)
 
-        model_checker = ModelChecker()
-        # Sanity check
-        result, ce = model_checker.check(system, "F FALSE", 50)
-        assert not result
-
-        result, ce = model_checker.check(system, "G !mismatch", None)
-        if result:
-            # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
-            return False, mm
+        if real:
+            return (real, mm)
         else:
-            print(ce)
-            # TODO refinement of abstraction
-            raise NotImplementedError()
+            program_nuxmv_model = program.to_nuXmv_with_turns()
+            mon_events = program.out_events \
+                         + [Variable(s) for s in program.states] \
+                         + [p for s in abstract_monitor.states if s != abstract_monitor.initial_state for p in s[1]]
+            mealy = mm.to_nuXmv_with_turns(mon_events)
+            print(mm.to_dot())
+
+            system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events)
+
+            print(system)
+            model_checker = ModelChecker()
+            # Sanity check
+            result, ce = model_checker.check(system, "G !FALSE", 50)
+            assert result
+
+            result, (ce, transition_indices) = model_checker.check(system, "G !mismatch", None)
+            if result:
+                # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
+                return False, mm
+            else:
+                if use_liveness_abstraction(ce):
+                    raise NotImplementedError()
+                else:
+                    transitions = program.env_transitions + program.con_transitions
+                    transition_indices.remove("-1")
+                    transitions_without_stutter = [transitions[int(t)] for t in transition_indices]
+
+                    new_preds = safety_abstraction(ce, transitions_without_stutter, symbol_table)
+                    print(new_preds)
+
+                    if new_preds.issubset(preds):
+                        raise Exception("New predicates are subset of previous, use liveness instead?")
+
+                    preds |= new_preds
