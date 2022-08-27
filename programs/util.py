@@ -1,11 +1,20 @@
 import re
+import os
+import shutil
+from pysmt.factory import SolverRedefinitionError
+from pysmt.fnode import FNode
+from pysmt.logics import QF_UFLRA
+from pysmt.shortcuts import get_env
 
 from programs.analysis.nuxmv_model import NuXmvModel
 from programs.program import Program
 from programs.typed_valuation import TypedValuation
 from prop_lang.biop import BiOp
+from prop_lang.formula import Formula
+from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct_formula_set
+from prop_lang.util import conjunct_formula_set, conjunct, neg
+from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 
@@ -66,26 +75,40 @@ def symbol_table_from_program(program: Program):
 
 
 def parse_nuxmv_ce_output_finite(out: str):
-    prefix, _ = parse_nuxmv_ce_output(out)
-    return prefix.pop(len(prefix) - 1)
+    prefix, _ = get_ce_from_nuxmv_output(out)
+
+    prefix = prefix[:-1]
+
+    monitor_transitions = []
+    for dic in prefix:
+        if dic["turn"] != "mon":
+            transition = "-1"
+            for (key,value) in dic.items():
+                if key.startswith("guard_") and value == "TRUE":
+                    if dic[key.replace("guard_", "act_")] == "TRUE":
+                        transition = key.replace("guard_", "")
+                        break
+            monitor_transitions.append(transition)
+
+    return prefix, monitor_transitions
 
 
-def parse_nuxmv_ce_output(out: str):
+def get_ce_from_nuxmv_output(out: str):
     ce = out.split("Counterexample")[1].strip()
-    ce = re.sub("[^\n]*(act|guard)\_[0-9]+ = [^\n]+", "", ce)
+    # ce = re.sub("[^\n]*(act|guard)\_[0-9]+ = [^\n]+", "", ce)
     ce = re.sub("[^\n]*(identity)_[^\n]+", "", ce)
     prefix_and_loop = re.split("-- Loop starts here", ce)
     prefix = prefix_and_loop[0].strip()
     loop = prefix_and_loop[1].strip()
 
     prefix = re.split("[^\n]*\->[^<]*<\-", prefix)
-    prefix.remove('')
-    prefix = [re.split("\n", t.strip()) for t in prefix]
+    prefix = [[p.strip() for p in re.split("\n", t) if "=" in p] for t in prefix]
+    prefix.remove([])
     prefix = [dict([(s.split("=")[0].strip(), s.split("=")[1].strip()) for s in t]) for t in prefix]
 
     loop = re.split("[^\n]*\->[^<]*<\-", loop.strip())
-    loop.remove('')
-    loop = [re.split("\n", t.strip()) for t in loop]
+    loop = [[p.strip() for p in re.split("\n", t)  if "=" in p] for t in loop]
+    loop.remove([])
     loop = [dict([(s.split("=")[0].strip(), s.split("=")[1].strip()) for s in t if len(s.strip()) > 0]) for t in loop]
 
     return complete_ce(prefix, loop)
@@ -127,5 +150,101 @@ def use_liveness_abstraction(ce: [dict]):
     cs_states = [s for s in ce[0].keys() if s.startswith("st_")]
     for i in range(0, len(ce) - 1):
         if len([s for s in cs_states if ce[i][s] == "TRUE" and ce[len(ce) - 1] == "TRUE"]) > 0:
+            # TODO would it be useful to check if the states in question in the monitor involve different values of
+            #  an infinite-state variable? if they don't probably safety would suffice, but a liveness abstraction
+            #  could give us a more succinct condition to eliminate the environment beliefs about the monitor
             return True
     return False
+
+
+def fnode_to_formula(fnode: FNode) -> Formula:
+    if fnode.is_constant():
+        return Value(fnode.constant_value())
+    elif fnode.is_symbol():
+        return Variable(fnode.symbol_name())
+    else:
+        args = [fnode_to_formula(x) for x in fnode.args()]
+        if fnode.is_le():
+            return MathExpr(BiOp(args[0], "<=", args[1]))
+        elif fnode.is_lt():
+            return MathExpr(BiOp(args[0], "<", args[1]))
+        elif fnode.is_plus():
+            return MathExpr(BiOp(args[0], "+", args[1]))
+        elif fnode.is_minus():
+            return MathExpr(BiOp(args[0], "-", args[1]))
+        elif fnode.is_div():
+            return MathExpr(BiOp(args[0], "/", args[1]))
+        elif fnode.is_times():
+            return MathExpr(BiOp(args[0], "*", args[1]))
+        elif fnode.is_not():
+            return UniOp("!", args[0])
+        else:
+            if fnode.is_equals():
+                op = "="
+            elif fnode.is_and():
+                op = "&"
+            elif fnode.is_or():
+                op = "|"
+            elif fnode.is_implies():
+                op = "<->"
+            elif fnode.is_iff():
+                op = "<->"
+            else:
+                raise NotImplementedError(str(fnode) + " cannot be represented as a Formula.")
+
+            if len(args) < 2:
+                raise Exception("Expected equality to have more that 1 sub-formula.")
+
+            formula = BiOp(args[0], op, args[1])
+            for i in range(2, len(args)):
+                formula = conjunct(formula, BiOp(args[i - 1], op, args[i]))
+            return formula
+
+
+
+def _check_os():
+    if os.name not in ("posix", "nt"):
+        raise Exception(f"This test does not support OS '{os.name}'.")
+
+
+def _add_solver(description, command, args=[], logics=None):
+    _check_os()
+    logics = logics or [QF_UFLRA]
+
+    path = shutil.which(command)
+
+    # Add the solver to the environment
+    env = get_env()
+    try:
+        env.factory.add_generic_solver(description, [path, *args], logics)
+    except SolverRedefinitionError:
+        # Solver has already been registered, skip
+        pass
+
+
+def ce_state_to_formula(state: dict, symbol_table: dict) -> Formula:
+    formula = None
+    for key, value in state.items():
+        if key not in symbol_table.keys():
+            continue
+        conjunctt = BiOp(Variable(key), "=", Value(value))
+        if formula is None:
+            formula = conjunctt
+        else:
+            formula = conjunct(formula, conjunctt)
+    return formula
+
+
+def label_pred_according_to_index(p, _list_for_indexing):
+    if p in _list_for_indexing:
+        return Variable("pred_" + str(_list_for_indexing.index(p)))
+    elif isinstance(p, UniOp) and p.op == "!":
+        return neg(Variable("pred_" + str(_list_for_indexing.index(p.right))))
+    elif not(isinstance(p, UniOp) and p.op == "!"):
+        return neg(Variable("pred_" + str(_list_for_indexing.index(neg(p)))))
+    else:
+        raise NotImplementedError("Cannot find " + str(p) + " in " + ", ".join([str(q) for q in _list_for_indexing]) + ".")
+
+
+def label_preds_according_to_index(ps, _list_for_indexing):
+    return {label_pred_according_to_index(p, _list_for_indexing) for p in ps}

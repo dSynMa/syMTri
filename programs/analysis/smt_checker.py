@@ -1,40 +1,27 @@
-import os
-import shutil
-from pysmt.factory import SolverRedefinitionError
+
 from pysmt.fnode import FNode
-from pysmt.logics import QF_UFLRA
-from pysmt.shortcuts import Solver, Symbol, get_env
+from pysmt.shortcuts import Solver, binary_interpolant, sequence_interpolant, Interpolator, get_env
 
-from prop_lang.formula import Formula
-
-
-def _check_os():
-    if os.name not in ("posix", "nt"):
-        raise Exception(f"This test does not support OS '{os.name}'.")
-
-
-def _add_solver(description, command, args=[], logics=None):
-    _check_os()
-    logics = logics or [QF_UFLRA]
-
-    path = shutil.which(command)
-
-    # Add the solver to the environment
-    env = get_env()
-    try:
-        env.factory.add_generic_solver(description, [path, *args], logics)
-    except SolverRedefinitionError:
-        # Solver has already been registered, skip
-        pass
+from programs.util import _add_solver, _check_os
 
 
 class SMTChecker:
-    SOLVER_NAME = "mathsat-smtlib"
+    SOLVER_NAME = "msat"
+    # SOLVER_NAME = "mathsat-smtlib"
 
     def __init__(self) -> None:
-        _add_solver(self.SOLVER_NAME, "mathsat")
+        pass
+        get_env().factory._get_available_solvers()
+        # _add_solver(self.SOLVER_NAME, "msat")
 
     def check(self, smt: FNode):
-        _check_os()
         with Solver(name=self.SOLVER_NAME) as s:
             return s.is_sat(smt)
+
+    def binary_interpolant(self, A: FNode, B: FNode, logic) -> FNode:
+        with Interpolator(name="msat", logic="QF_UFLRA") as s:
+            return s.binary_interpolant(A, B)
+
+    def sequence_interpolant(self, A: FNode, B: FNode, logic) -> FNode:
+        # TODO
+        pass
