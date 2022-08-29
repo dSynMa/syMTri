@@ -10,7 +10,7 @@ from prop_lang.util import conjunct, conjunct_formula_set, neg, G, F, implies
 from prop_lang.variable import Variable
 
 
-def safety_abstraction(ce: [dict], prefix: [Transition], symbol_table, program) -> [FNode]:
+def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -> [FNode]:
     logic = "QF_UFLRA"  # TODO what to put here?
 
     smt_checker = SMTChecker()
@@ -75,7 +75,7 @@ def safety_abstraction(ce: [dict], prefix: [Transition], symbol_table, program) 
     return Cs
 
 
-def liveness_abstraction(program_nuxmv_model, mismatch_mon_transition):
+def liveness_refinement(program_nuxmv_model, mismatch_mon_transition):
     # get all the states in the monitor loop, model check if for all paths the monitor eventually
     # settles in these states or not
 

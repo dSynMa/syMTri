@@ -1,7 +1,7 @@
 from typing import Tuple
 
 from programs.analysis.predicate_abstraction import predicate_abstraction, abstraction_to_ltl
-from programs.analysis.refinement import safety_abstraction, liveness_abstraction
+from programs.analysis.refinement import safety_refinement, liveness_refinement
 from programs.util import symbol_table_from_program, create_nuxmv_model_for_compatibility_checking, \
     use_liveness_abstraction, label_pred_according_to_index, create_nuxmv_model, mismatch_between_monitor_strategy, \
     parse_nuxmv_ce_output_finite
@@ -75,14 +75,14 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
                 transitions_without_stutter = [transitions[int(t)] for t in transition_indices if t != '-1']
 
                 if use_liveness_abstraction(ce, symbol_table):
-                    success, new_formula = liveness_abstraction(create_nuxmv_model(program_nuxmv_model), transitions_without_stutter[len(transitions_without_stutter) - 1])
+                    success, new_formula = liveness_refinement(create_nuxmv_model(program_nuxmv_model), transitions_without_stutter[len(transitions_without_stutter) - 1])
                     if not success:
                         raise NotImplementedError("Counterstrategy is trying to stay in a loop in a monitor that involves an infinite-state variable. "
                                                   "This requires liveness abstraction, which has not been implemented yet.")
                     else:
                         liveness_assumptions.append(new_formula)
                 else:
-                    new_preds = safety_abstraction(ce, transitions_without_stutter, symbol_table, program)
+                    new_preds = safety_refinement(ce, transitions_without_stutter, symbol_table, program)
                     print(new_preds)
 
                     if new_preds == []:
