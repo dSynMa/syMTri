@@ -57,11 +57,11 @@ class Variable(Atom):
         elif typed_val.type == "bool" or typed_val.type == "boolean":
             return Symbol(self.name, BOOL), TRUE()
         elif typed_val.type == "nat" or typed_val.type == "natural":
-            return Symbol(self.name, INT), GE(Int(0), Symbol(self.name, INT))
+            return Symbol(self.name, INT), GE(Symbol(self.name, INT), Int(0))
         elif re.match("[0-9]+..+[0-9]+", typed_val.type):
             split = re.split("..+", typed_val.type)
             lower = split[0]
             upper = split[1]
-            return Symbol(self.name, INT), And(GE(Int(lower), Symbol(self.name, INT)), LE(Int(upper), Symbol(self.name, INT)))
+            return Symbol(self.name, INT), And(GE(Symbol(self.name, INT), Int(lower)), LE(Symbol(self.name, INT), Int(upper)))
         else:
             raise NotImplementedError(f"Type {typed_val.type} unsupported.")
