@@ -81,26 +81,28 @@ class Program:
                       engine='dot',
                       format='svg')
 
+        to_str = lambda x: str(x) if type(x) != tuple or type(x[1]) != frozenset else str(x[0]) + ", " +  ', '.join(map(to_str, list(x[1])))
+
         dot.node("init", "", [("shape", "point")])
         for s in self.states:
-            dot.node(str(s))
+            dot.node(to_str(s))
 
-        dot.edge("init", str(self.initial_state), style="solid")
+        dot.edge("init", to_str(self.initial_state), style="solid")
 
         for t in self.env_transitions:
 
             label = str(t.condition)
             if t.action is not None and len(t.action) > 0:
-                label = label + " $ " + str(t.action)
+                label = label + " $ " + ', '.join(map(str, t.action))
             if t.output is not None and len(t.output) > 0:
-                label = label + " >> " + str(t.output)
-            dot.edge(str(t.src), str(t.tgt), label)
+                label = label + " >> " + ', '.join(map(str, t.output))
+            dot.edge(to_str(t.src), to_str(t.tgt), label)
 
         for t in self.con_transitions:
             label = str(t.condition)
             if len(t.action) > 0:
-                label + " $ " + str(t.action)
-            dot.edge(str(t.src), str(t.tgt), label, style="dotted")
+                label + " $ " + ', '.join(map(str, t.action))
+            dot.edge(to_str(t.src), to_str(t.tgt), label, style="dotted")
 
         return dot
 
