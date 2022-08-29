@@ -20,11 +20,20 @@ def meaning_within(f: Formula, predicates: [Formula], symbol_table):
     Ps = set()
     Ps.add(frozenset())
 
+    # remove negations from set
+    predicates_without_negs = []
     for p in predicates:
+        if neg(p) not in predicates_without_negs:
+            predicates_without_negs.append(p)
+
+    for p in predicates_without_negs:
         Pss = set()
         for ps in Ps:
             if smt_checker.check(And(*conjunct_formula_set(ps | {f, p}).to_smt(symbol_table))):
                 Pss.add(frozenset(ps | {p}))
+
+                if smt_checker.check(And(*conjunct_formula_set(ps | {f, neg(p)}).to_smt(symbol_table))):
+                    Pss.add(frozenset(ps | {neg(p)}))
             else:
                 Pss.add(frozenset(ps | {neg(p)}))
         Ps = Pss
@@ -32,12 +41,14 @@ def meaning_within(f: Formula, predicates: [Formula], symbol_table):
     return Ps
 
 
-def meaning_within_incremental(f: Formula, previous_preds: [[Formula]], new_pred: Formula, symbol_table):
+def meaning_within_incremental_one_step(f: Formula, previous_preds: [[Formula]], new_pred: Formula, predicates: [Formula], symbol_table):
     Ps = set()
 
     for ps in previous_preds:
         if smt_checker.check(And(*conjunct_formula_set(ps | {f, new_pred}).to_smt(symbol_table))):
             Ps.add(ps | {new_pred})
+            if smt_checker.check(And(*conjunct_formula_set(ps | {f, neg(new_pred)}).to_smt(symbol_table))):
+                Ps.add(ps | {neg(new_pred)})
         else:
             Ps.add(ps | {neg(new_pred)})
 
