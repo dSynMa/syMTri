@@ -233,13 +233,20 @@ def abstraction_to_ltl_with_turns(pred_abstraction: Program):
     return conjunct_formula_set([init_cond, at_least_one_state, at_most_one_state, transition_cond])
 
 
+def complete_and_label_pred_sets(pred_set, full_preds):
+    X = label_preds_according_to_index(pred_set, full_preds)
+    Y = {neg(label_pred_according_to_index(p, full_preds)) for p in full_preds if p not in set(pred_set)}
+    return X | Y
+
+
 def abstraction_to_ltl(pred_abstraction: Program, predicates: [Formula]):
     init_transitions = [t for t in pred_abstraction.env_transitions if t.src == pred_abstraction.initial_state]
-    init_cond = disjunct_formula_set(
+    init_cond_formula = disjunct_formula_set(
         {conjunct_formula_set({Variable(t.tgt[0]), t.condition}
-                              | label_preds_according_to_index(t.tgt[1], predicates)
+                              | complete_and_label_pred_sets(t.tgt[1], predicates)
                               | set(t.output)) for t in init_transitions}
-    ).to_nuxmv()
+    )
+    init_cond = init_cond_formula.to_nuxmv()
 
     states = [Variable(s[0]) for s in pred_abstraction.states if s != pred_abstraction.initial_state] + [
         Variable(pred_abstraction.initial_state)]
@@ -262,10 +269,10 @@ def abstraction_to_ltl(pred_abstraction: Program, predicates: [Formula]):
                       if ct.tgt == et.src]
 
     con_env_transitions = disjunct_formula_set([
-        conjunct_formula_set(label_preds_according_to_index(ct.src[1], predicates)
+        conjunct_formula_set(complete_and_label_pred_sets(ct.src[1], predicates)
                              | {Variable(ct.src[0]), ct.condition}
                              | {UniOp("X",
-                                      conjunct_formula_set(label_preds_according_to_index(et.tgt[1], predicates)
+                                      conjunct_formula_set(complete_and_label_pred_sets(et.tgt[1], predicates)
                                                            | {Variable(et.tgt[0]), et.condition}
                                                            | {out for out in et.output}))})
         for (ct, et) in matching_pairs])
