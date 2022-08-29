@@ -26,7 +26,7 @@ class MathExpr(Formula):
     def ground(self, context):
         return self.formula.ground(context)
 
-    def simplified(self):
+    def simplify(self):
         return self
 
     def ops_used(self):

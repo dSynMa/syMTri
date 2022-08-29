@@ -24,8 +24,8 @@ class MealyMachine:
         new_tgt = "st_" + str(tgt)
         new_intermed = "st_" + str(self.counter)
 
-        env_cond = (env_behaviour.simplified()).to_nuxmv()
-        con_cond = (con_behaviour.simplified()).to_nuxmv()
+        env_cond = (env_behaviour.simplify()).to_nuxmv()
+        con_cond = (con_behaviour.simplify()).to_nuxmv()
 
         if new_src in self.env_transitions.keys():
             self.env_transitions[new_src].append((env_cond, new_intermed))

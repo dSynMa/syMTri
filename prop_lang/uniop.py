@@ -1,3 +1,5 @@
+from pysmt.fnode import FNode
+
 from programs.typed_valuation import TypedValuation
 from prop_lang.formula import Formula
 from prop_lang.value import Value
@@ -30,8 +32,8 @@ class UniOp(Formula):
     def ground(self, context: [TypedValuation]):
         return UniOp(self.op, self.right.ground(context))
 
-    def simplified(self):
-        right = self.right.simplified()
+    def simplify(self):
+        right = self.right.simplify()
         if self.op in ["!"]:
             if isinstance(right, UniOp) and right.op == "!":
                 return right.right
@@ -50,10 +52,11 @@ class UniOp(Formula):
     def to_nuxmv(self):
         return UniOp(self.op, self.right.to_nuxmv())
 
-    def to_smt(self, symbol_table):
+    def to_smt(self, symbol_table) -> (FNode, FNode):
+        expr, invar = self.right.to_smt(symbol_table)
         if self.op == "!":
-            return Not(self.right.to_smt(symbol_table))
+            return Not(expr), invar
         elif self.op == "-":
-            return Minus(Int(0), self.right.to_smt(symbol_table))
+            return Minus(Int(0), expr), invar
         else:
             raise NotImplementedError(f"{self.op} unsupported")

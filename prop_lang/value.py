@@ -1,3 +1,5 @@
+from pysmt.fnode import FNode
+
 from programs.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
 from prop_lang.variable import Variable
@@ -34,7 +36,7 @@ class Value(Atom):
     def ground(self, context: [TypedValuation]):
         return self
 
-    def simplified(self):
+    def simplify(self):
         return self
 
     def ops_used(self):
@@ -51,10 +53,10 @@ class Value(Atom):
         else:
             return self
 
-    def to_smt(self, _):
+    def to_smt(self, _) -> (FNode, FNode):
         if self.is_true():
-            return TRUE()
+            return TRUE(), TRUE()
         elif self.is_false():
-            return FALSE()
+            return FALSE(), TRUE()
         else:
-            return Int(int(self.name))
+            return Int(int(self.name)), TRUE()

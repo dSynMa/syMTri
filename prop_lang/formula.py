@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
+from pysmt.fnode import FNode
+
 from programs.typed_valuation import TypedValuation
 
 
@@ -19,7 +21,7 @@ class Formula(ABC):
         pass
 
     @abstractmethod
-    def simplified(self):
+    def simplify(self):
         pass
 
     @abstractmethod
@@ -36,5 +38,5 @@ class Formula(ABC):
         pass
 
     @abstractmethod
-    def to_smt(self, symbol_table: Any):
+    def to_smt(self, symbol_table: Any) -> (FNode, FNode):
         pass

@@ -16,7 +16,7 @@ program eventually__allow_grant {
     }
 
     VALUATION {
-        cnt : integer := 0;
+        cnt : natural := 0;
     }
 
     ENVIRONMENT TRANSITIONS {

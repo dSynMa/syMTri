@@ -1,3 +1,5 @@
+from pysmt.fnode import FNode
+
 from programs.typed_valuation import TypedValuation
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
@@ -35,9 +37,9 @@ class BiOp(Formula):
     def ground(self, context: [TypedValuation]):
         return BiOp(self.left.ground(context), self.op, self.right.ground(context))
 
-    def simplified(self):
-        left = self.left.simplified()
-        right = self.right.simplified()
+    def simplify(self):
+        left = self.left.simplify()
+        right = self.right.simplify()
         if self.op in ["&", "&&"]:
             if isinstance(left, Value) and left.is_true():
                 return right
@@ -69,11 +71,11 @@ class BiOp(Formula):
             if isinstance(left, Value) and left.is_true():
                 return right
             elif isinstance(left, Value) and left.is_false():
-                return UniOp("!", right).simplified()
+                return UniOp("!", right).simplify()
             elif isinstance(right, Value) and right.is_true():
                 return left
             elif isinstance(right, Value) and right.is_false():
-                return UniOp("!", left).simplified()
+                return UniOp("!", left).simplify()
         return BiOp(left, self.op, right)
 
     def ops_used(self):
@@ -91,7 +93,7 @@ class BiOp(Formula):
         else:
             return BiOp(self.left.to_nuxmv(), self.op, self.right.to_nuxmv())
 
-    def to_smt(self, symbol_table):
+    def to_smt(self, symbol_table) -> (FNode, FNode):
         ops = {
             "&": And,
             "&&": And,
@@ -112,9 +114,12 @@ class BiOp(Formula):
             "/": Div,
             "%": BVSRem
         }
+        left_expr, left_invar = self.left.to_smt(symbol_table)
+        right_expr, right_invar = self.right.to_smt(symbol_table)
+
         try:
             op = ops[self.op]
         except KeyError:
             raise NotImplementedError(f"{self.op} unsupported")
         else:
-            return op(self.left.to_smt(symbol_table), self.right.to_smt(symbol_table))
+            return op(left_expr, right_expr), And(left_invar, right_invar)

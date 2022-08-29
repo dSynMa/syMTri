@@ -37,7 +37,8 @@ class Program:
                        biop.right.variablesin()):
                 raise Exception("Actions in environment transitions can only refer to environment or "
                                 "local/internal variables: " + str(transition) + ".")
-            if not all(v in out_events or (isinstance(v, UniOp) and v.simplified().right in out_events) for v in transition.output):
+            if not all(v in out_events or (isinstance(v, UniOp) and v.simplify().right in out_events) for v in
+                       transition.output):
                 raise Exception("Outputs of environment transitions can only refer to monitor output variables: " + str(
                     transition) + ".")
 
@@ -159,7 +160,8 @@ class Program:
 
         vars = ["turn : {env, mon, con}"]
         vars += [str(st) + " : boolean" for st in self.states]
-        vars += [str(val.name) + " : " + str(val.type) for val in self.valuation]
+        vars += [str(var.name) + " : " + str(var.type) for var in self.valuation if not (var.type == "nat" or var.type == "natural")]
+        vars += [str(var.name) + " : integer" for var in self.valuation if (var.type == "nat" or var.type == "natural")]
         vars += [str(var) + " : boolean" for var in self.env_events]
         vars += [str(var) + " : boolean" for var in self.con_events]
         vars += [str(var) + " : boolean" for var in self.out_events]
@@ -172,6 +174,7 @@ class Program:
         invar = [s + " -> " + str(conjunct_formula_set([neg(ss) for ss in self.states if ss != s])) for s in
                  self.states]
         invar += [str(disjunct_formula_set([Variable(s) for s in self.states]))]
+        invar += [str(val.name) + " >= 0" for val in self.valuation if (val.type == "nat" or val.type == "natural")]
 
         return NuXmvModel(self.name, vars, define, init, invar, trans)
 

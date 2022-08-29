@@ -1,6 +1,10 @@
+import re
+
+from pysmt.fnode import FNode
+
 from programs.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
-from pysmt.shortcuts import Symbol, INT, BOOL
+from pysmt.shortcuts import Symbol, INT, BOOL, GE, LE, And, Int, TRUE
 
 
 class Variable(Atom):
@@ -29,7 +33,7 @@ class Variable(Atom):
 
         return self
 
-    def simplified(self):
+    def simplify(self):
         return self
 
     def ops_used(self):
@@ -45,12 +49,19 @@ class Variable(Atom):
     def to_nuxmv(self):
         return self
     
-    def to_smt(self, symbol_table):
+    def to_smt(self, symbol_table) -> (FNode, FNode):
         typed_val = symbol_table[self.name]
 
         if typed_val.type == "int" or typed_val.type == "integer":
-            return Symbol(self.name, INT)
+            return Symbol(self.name, INT), TRUE()
         elif typed_val.type == "bool" or typed_val.type == "boolean":
-            return Symbol(self.name, BOOL)
+            return Symbol(self.name, BOOL), TRUE()
+        elif typed_val.type == "nat" or typed_val.type == "natural":
+            return Symbol(self.name, INT), GE(Int(0), Symbol(self.name, INT))
+        elif re.match("[0-9]+..+[0-9]+", typed_val.type):
+            split = re.split("..+", typed_val.type)
+            lower = split[0]
+            upper = split[1]
+            return Symbol(self.name, INT), And(GE(Int(lower), Symbol(self.name, INT)), LE(Int(upper), Symbol(self.name, INT)))
         else:
             raise NotImplementedError(f"Type {typed_val.type} unsupported.")
