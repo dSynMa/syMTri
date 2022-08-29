@@ -6,6 +6,7 @@ from pysmt.fnode import FNode
 from pysmt.logics import QF_UFLRA
 from pysmt.shortcuts import get_env
 
+from programs.analysis.model_checker import ModelChecker
 from programs.analysis.nuxmv_model import NuXmvModel
 from programs.program import Program
 from programs.typed_valuation import TypedValuation
@@ -248,3 +249,13 @@ def label_pred_according_to_index(p, _list_for_indexing):
 
 def label_preds_according_to_index(ps, _list_for_indexing):
     return {label_pred_according_to_index(p, _list_for_indexing) for p in ps}
+
+
+def mismatch_between_monitor_strategy(system):
+    print(system)
+    model_checker = ModelChecker()
+    # Sanity check
+    result, ce = model_checker.check(system, "F FALSE", 50)
+    assert not result
+
+    return model_checker.check(system, "G !mismatch", None)
