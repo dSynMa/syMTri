@@ -262,10 +262,6 @@ def ce_state_to_formula(state: dict, symbol_table: dict) -> Formula:
 def label_pred_according_to_index(p, _list_for_indexing):
     if p in _list_for_indexing:
         return Variable("pred_" + str(_list_for_indexing.index(p)))
-    elif isinstance(p, UniOp) and p.op == "!":
-        return neg(Variable("pred_" + str(_list_for_indexing.index(p.right))))
-    elif not(isinstance(p, UniOp) and p.op == "!"):
-        return neg(Variable("pred_" + str(_list_for_indexing.index(neg(p)))))
     else:
         raise NotImplementedError("Cannot find " + str(p) + " in " + ", ".join([str(q) for q in _list_for_indexing]) + ".")
 
