@@ -113,8 +113,7 @@ class MealyMachine:
 
         define += ["identity_" + self.name + " := " + " & ".join(identity)]
 
-        # if no guard holds, then keep the same state and output no monitor events
-        transitions.append("!(" + " | ".join(guard_ids) + ") & identity_" + self.name)
+        # transitions.append("!(" + " | ".join(guard_ids) + ") & identity_" + self.name + "& next(mismatch)")
 
         vars = ["turn : {env, mon, con}"]
         vars += [str(st) + " : boolean" for st in self.states]
