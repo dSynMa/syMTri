@@ -22,7 +22,7 @@ class MealyMachine:
     def add_transition(self, src: int, env_behaviour: Formula, con_behaviour: Formula, tgt: int):
         new_src = "st_" + str(src)
         new_tgt = "st_" + str(tgt)
-        new_intermed = "st_" + str(self.counter)
+        new_intermed = "st_" + str(self.counter) + "_" + str(src) + "_" + str(tgt)
 
         env_cond = (env_behaviour.simplify()).to_nuxmv()
         con_cond = (con_behaviour.simplify()).to_nuxmv()
