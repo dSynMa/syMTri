@@ -19,14 +19,15 @@ from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 
-def create_nuxmv_model_for_compatibility_checking(model1: NuXmvModel, model2: NuXmvModel, mon_events):
+def create_nuxmv_model_for_compatibility_checking(model1: NuXmvModel, model2: NuXmvModel, mon_events, pred_list):
     text = "MODULE main\n"
-    text += "VAR\n" + "\t" + ";\n\t".join(set(model1.vars + model2.vars + ["mismatch: boolean"])) + ";\n"
+    text += "VAR\n" + "\t" + ";\n\t".join(set(model1.vars + model2.vars + ["mismatch : boolean"])) + ";\n"
     text += "DEFINE\n" + "\t" + ";\n\t".join(model1.define + model2.define) + ";\n"
     text += "\tcompatible := !(turn = mon) | (" + str(conjunct_formula_set([BiOp(m, ' = ', Variable("mon_" + m.name)) for m in mon_events])) + ");\n"
 
     text += "INIT\n" + "\t(" + ")\n\t& (".join(model1.init + model2.init + ["turn = env", "mismatch = FALSE"]) + ")\n"
-    text += "INVAR\n" + "\t((" + ")\n\t& (".join(model1.invar + model2.invar) + "))\n"
+    text += "INVAR\n" + "\t((" + ")\n\t& (".join(model1.invar + model2.invar
+                                                 + ["turn = mon -> (pred_" + str(i) + " <-> " + str(pred_list[i]) + ")" for i in range(0, len(pred_list))]) + "))\n"
 
     turn_logic = ["(turn = con -> next(turn) = env)"]
     turn_logic += ["(turn = env -> next(turn) = mon)"]
