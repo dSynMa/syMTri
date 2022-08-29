@@ -1,3 +1,5 @@
+from pysmt.shortcuts import And
+
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
@@ -21,7 +23,7 @@ def meaning_within(f: Formula, predicates: [Formula], symbol_table):
     for p in predicates:
         Pss = set()
         for ps in Ps:
-            if smt_checker.check(conjunct_formula_set(ps | {f, p}).to_smt(symbol_table)):
+            if smt_checker.check(And(*conjunct_formula_set(ps | {f, p}).to_smt(symbol_table))):
                 Pss.add(frozenset(ps | {p}))
             else:
                 Pss.add(frozenset(ps | {neg(p)}))
@@ -34,7 +36,7 @@ def meaning_within_incremental(f: Formula, previous_preds: [[Formula]], new_pred
     Ps = set()
 
     for ps in previous_preds:
-        if smt_checker.check(conjunct_formula_set(ps | {f, new_pred}).to_smt(symbol_table)):
+        if smt_checker.check(And(*conjunct_formula_set(ps | {f, new_pred}).to_smt(symbol_table))):
             Ps.add(ps | {new_pred})
         else:
             Ps.add(ps | {neg(new_pred)})
@@ -77,13 +79,13 @@ def predicate_abstraction(program: Program, predicates: [Formula], symbol_table)
                 events = conjunct_formula_set(E)
                 state = conjunct(init_conf, events)
                 guarded = conjunct(state, t.condition)
-                smt = guarded.to_smt(symbol_table)
+                smt = And(*guarded.to_smt(symbol_table))
                 if smt_checker.check(smt):
                     relabelled_actions = [BiOp(b.left, "=", b.right.replace(for_renaming)) for b in t.action]
                     action_formula = conjunct_formula_set(relabelled_actions)
                     next_valuation = conjunct(action_formula, init_conf)
                     next_preds = {p for p in predicates if
-                                  smt_checker.check(conjunct(p, next_valuation).to_smt(symbol_table_with_prev_vars))}
+                                  smt_checker.check(And(*conjunct(p, next_valuation).to_smt(symbol_table_with_prev_vars)))}
                     next_state = (t.tgt, frozenset(next_preds))
                     current_states.add(next_state)
 
@@ -119,7 +121,7 @@ def predicate_abstraction(program: Program, predicates: [Formula], symbol_table)
                 context_Evs = conjunct_formula_set(Evs)
                 context = conjunct(context_P, context_Evs)
                 for t in q_transitions:
-                    guard_in_context = conjunct(t.condition, context).to_smt(symbol_table)
+                    guard_in_context = And(*conjunct(t.condition, context).to_smt(symbol_table))
                     if smt_checker.check(guard_in_context):
                         prev_condition = t.condition.replace(for_renaming)
                         prev_action = [BiOp(act.left, "=", act.right.replace(for_renaming)) for act in t.action]

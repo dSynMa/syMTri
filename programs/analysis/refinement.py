@@ -48,8 +48,8 @@ def safety_abstraction(ce: [dict], prefix: [Transition], symbol_table) -> [FNode
                                         act.right.replace(ith_vars(i))) for act in prefix[i].action]
         path_formula_B = conjunct_formula_set(path_formula_set_B)
 
-        Aj = path_formula_A.to_smt(new_symbol_table)
-        Bj = conjunct(B, path_formula_B).to_smt(new_symbol_table)
+        Aj = And(*path_formula_A.to_smt(new_symbol_table))
+        Bj = And(*conjunct(B, path_formula_B).to_smt(new_symbol_table))
         Cj = smt_checker.binary_interpolant(Aj, Bj, logic)
         if Cj is None:
             raise Exception("Interpolation being checked against formulas that are not contradictory: \n" +
