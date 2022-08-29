@@ -122,8 +122,8 @@ class MealyMachine:
         vars += ["mon_" + str(var) + " : boolean" for var in mon_events]
 
         init = [str(init_cond)]
+        transitions += ["turn != con & (identity_" + self.name + " & " + str(conjunct_formula_set([BiOp(UniOp("next", "mon_" + e.name), "=", Variable("mon_" + e.name)) for e in mon_events])) + ")"]
         trans = ["(" + ")\n\t|\t(".join(transitions) + ")"]
-        trans += ["turn != con -> (identity_" + self.name + " & " + str(conjunct_formula_set([BiOp(UniOp("next", "mon_" + e.name), "=", Variable("mon_" + e.name)) for e in mon_events])) + ")"]
         invar = [str(s) + " -> " + str(conjunct_formula_set([neg(ss) for ss in self.states if ss != s])) for s in self.states]
         invar += [str(disjunct_formula_set([Variable(str(s)) for s in self.states]))]
 
