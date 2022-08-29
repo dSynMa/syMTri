@@ -2,8 +2,6 @@ import os
 import subprocess
 from tempfile import NamedTemporaryFile
 
-from programs.util import parse_nuxmv_ce_output_finite
-
 
 class ModelChecker:
     def check(self, nuxmv_script: str, ltl_spec, bound):
@@ -26,7 +24,7 @@ class ModelChecker:
                 if "is true" in out:
                     return True, None
                 elif "is false" in out:
-                    return False, parse_nuxmv_ce_output_finite(out)
+                    return False, out
                 elif "Maximum bound reached" in out:
                     return False, None
                 else:
