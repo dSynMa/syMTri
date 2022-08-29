@@ -1,10 +1,12 @@
 from pysmt.fnode import FNode
+from pysmt.shortcuts import And
 
+from programs.analysis.model_checker import ModelChecker
 from programs.analysis.smt_checker import SMTChecker
 from programs.transition import Transition
 from programs.util import ce_state_to_formula, fnode_to_formula
 from prop_lang.biop import BiOp
-from prop_lang.util import conjunct, conjunct_formula_set, neg
+from prop_lang.util import conjunct, conjunct_formula_set, neg, G, F, implies
 from prop_lang.variable import Variable
 
 
@@ -73,5 +75,18 @@ def safety_abstraction(ce: [dict], prefix: [Transition], symbol_table, program) 
     return Cs
 
 
-def liveness_abstraction(program, ce: [BiOp]):
-    pass
+def liveness_abstraction(program_nuxmv_model, mismatch_mon_transition):
+    # get all the states in the monitor loop, model check if for all paths the monitor eventually
+    # settles in these states or not
+
+    formula = neg(implies(G(F(Variable(mismatch_mon_transition.src))), G(F(Variable(mismatch_mon_transition.tgt)))))
+
+    model_checker = ModelChecker()
+    result, ce = model_checker.check(program_nuxmv_model, formula, None)
+
+    # if it is true that the monitor eventually always settles in these states
+    if not result:
+        return True, formula.right # remove the negation, since proved false
+    else:
+        return False, ce
+
