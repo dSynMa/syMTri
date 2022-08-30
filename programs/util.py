@@ -4,10 +4,11 @@ import shutil
 from pysmt.factory import SolverRedefinitionError
 from pysmt.fnode import FNode
 from pysmt.logics import QF_UFLRA
-from pysmt.shortcuts import get_env
+from pysmt.shortcuts import get_env, And, Not
 
 from programs.analysis.model_checker import ModelChecker
 from programs.analysis.nuxmv_model import NuXmvModel
+from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.typed_valuation import TypedValuation
 from prop_lang.biop import BiOp
@@ -259,6 +260,13 @@ def ce_state_to_formula(state: dict, symbol_table: dict) -> Formula:
     return formula
 
 
+def ground_formula_on_ce_state_with_index(formula: Formula, state: dict, i) -> Formula:
+    to_replace_with = []
+    for key, value in state.items():
+        to_replace_with.append(BiOp(Variable(key + "_" + str(i)), ":=", Value(value)))
+    return formula.replace(to_replace_with)
+
+
 def label_pred_according_to_index(p, _list_for_indexing):
     if p in _list_for_indexing:
         return Variable("pred_" + str(_list_for_indexing.index(p)))
@@ -278,3 +286,39 @@ def mismatch_between_monitor_strategy(system):
     assert not result
 
     return model_checker.check(system, "G !mismatch", None)
+
+
+def reduce_up_to_iff(old_preds, new_preds, symbol_table):
+    if len(new_preds) == 0:
+        return old_preds
+    if len(old_preds) == 0:
+        return new_preds
+
+    keep_these = set()
+    remove_these = set()
+
+    for p in new_preds:
+        if p and neg(p) not in keep_these and p and neg(p) not in remove_these and \
+                not has_equiv_pred(p, set(old_preds) | keep_these, symbol_table):
+            keep_these.add(p)
+            keep_these.add(neg(p))
+        else:
+            remove_these.add(p)
+            remove_these.add(neg(p))
+
+
+    return keep_these | set(old_preds)
+
+
+def has_equiv_pred(p, preds, symbol_table):
+    smt_checker = SMTChecker()
+    for pp in preds:
+        if p is pp:
+            return True
+        elif not (smt_checker.check(And(Not(And(*p.to_smt(symbol_table))), And(*pp.to_smt(symbol_table)))) or
+              smt_checker.check(And(Not(And(*pp.to_smt(symbol_table))), And(*p.to_smt(symbol_table))))):
+            return True
+    return False
+
+def project_ce_state_onto_ev(state: dict, events):
+    return {k: v for k, v in state.items() if Variable(k) in events}
