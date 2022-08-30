@@ -76,7 +76,7 @@ class Program:
         dot = Digraph(name=self.name,
                       graph_attr=[("overlap", "scalexy"), ("splines", "true"), ("rankdir", "LR"), ("ranksep", "0.8"),
                                   ("nodesep", "0.5")],
-                      node_attr=[("shape", "circle")],
+                      node_attr=[("shape", "rectangle")],
                       edge_attr=[("fontname", "mono")],
                       engine='dot',
                       format='svg')
