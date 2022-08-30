@@ -3,7 +3,7 @@ from typing import Tuple
 from programs.analysis.predicate_abstraction import predicate_abstraction, abstraction_to_ltl
 from programs.analysis.refinement import safety_refinement, liveness_refinement
 from programs.util import symbol_table_from_program, create_nuxmv_model_for_compatibility_checking, \
-    use_liveness_abstraction, label_pred_according_to_index, create_nuxmv_model, mismatch_between_monitor_strategy, \
+    use_liveness_refinement, label_pred_according_to_index, create_nuxmv_model, mismatch_between_monitor_strategy, \
     parse_nuxmv_ce_output_finite, reduce_up_to_iff
 from programs.program import Program
 from prop_lang.formula import Formula
@@ -74,7 +74,7 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
                 transitions = program.env_transitions + program.con_transitions
                 transitions_without_stutter = [transitions[int(t)] for t in transition_indices if t != '-1']
 
-                use_liveness = use_liveness_abstraction(ce, symbol_table)
+                use_liveness = use_liveness_refinement(ce, symbol_table)
                 force_liveness = False
 
                 if not use_liveness:

@@ -148,7 +148,7 @@ def only_this_state_next(states, state):
     return only_this_state
 
 
-def use_liveness_abstraction(ce: [dict], symbol_table):
+def use_liveness_refinement(ce: [dict], symbol_table):
     assert len(ce) > 0
 
     counterstrategy_states_con = [key for dict in ce for key, value in dict.items()
