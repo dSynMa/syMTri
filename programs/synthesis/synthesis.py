@@ -4,7 +4,7 @@ from programs.analysis.predicate_abstraction import predicate_abstraction, abstr
 from programs.analysis.refinement import safety_refinement, liveness_refinement
 from programs.util import symbol_table_from_program, create_nuxmv_model_for_compatibility_checking, \
     use_liveness_abstraction, label_pred_according_to_index, create_nuxmv_model, mismatch_between_monitor_strategy, \
-    parse_nuxmv_ce_output_finite
+    parse_nuxmv_ce_output_finite, reduce_up_to_iff
 from programs.program import Program
 from prop_lang.formula import Formula
 from prop_lang.parsing.string_to_ltl import string_to_ltl
@@ -74,20 +74,29 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
                 transitions = program.env_transitions + program.con_transitions
                 transitions_without_stutter = [transitions[int(t)] for t in transition_indices if t != '-1']
 
-                if use_liveness_abstraction(ce, symbol_table):
+                use_liveness = use_liveness_abstraction(ce, symbol_table)
+                force_liveness = False
+
+                if not use_liveness:
+                    new_preds = safety_refinement(ce, transitions_without_stutter, symbol_table, program)
+                    print(new_preds)
+                    if new_preds == []:
+                        raise Exception("No predicates identified, use liveness instead?")
+
+                    new_all_preds = {x.simplify() for x in new_preds}
+                    new_all_preds = reduce_up_to_iff(preds, list(new_all_preds), symbol_table)
+
+                    if len(new_all_preds) == len(preds):
+                        print("New predicates (" + ", ".join([str(p) for p in new_preds]) + ") are subset of "
+                                                           "previous predicates, attempting liveness instead.")
+                        force_liveness = True
+
+                    preds = new_all_preds
+
+                if use_liveness or force_liveness:
                     success, new_formula = liveness_refinement(create_nuxmv_model(program_nuxmv_model), transitions_without_stutter[len(transitions_without_stutter) - 1])
                     if not success:
                         raise NotImplementedError("Counterstrategy is trying to stay in a loop in a monitor that involves an infinite-state variable. "
-                                                  "This requires liveness abstraction, which has not been implemented yet.")
+                                                  "The current heuristics are not enough to prove this impossible.")
                     else:
                         liveness_assumptions.append(new_formula)
-                else:
-                    new_preds = safety_refinement(ce, transitions_without_stutter, symbol_table, program)
-                    print(new_preds)
-
-                    if new_preds == []:
-                        raise Exception("No predicates identified, use liveness instead?")
-                    elif new_preds.issubset(preds):
-                        raise Exception("New predicates (" + ", ".join([str(p) for p in new_preds]) + ") are subset of previous, use liveness instead?")
-
-                    preds |= {x.simplify() for x in new_preds}
