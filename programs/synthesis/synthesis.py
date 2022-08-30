@@ -66,11 +66,11 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
 
             return (real, mm)
         else:
-            ce, transition_indices = parse_nuxmv_ce_output_finite(out)
             if there_is_a_mismatch:
                 # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
                 return False, mm
             else:
+                ce, transition_indices = parse_nuxmv_ce_output_finite(out)
                 transitions = program.env_transitions + program.con_transitions
                 transitions_without_stutter = [transitions[int(t)] for t in transition_indices if t != '-1']
 
