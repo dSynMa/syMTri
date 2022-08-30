@@ -4,8 +4,8 @@ from parsec import *
 from prop_lang.biop import BiOp
 from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
-from prop_lang.variable import Variable
 from prop_lang.value import Value
+from prop_lang.variable import Variable
 
 
 @generate
@@ -18,8 +18,9 @@ def prop_logic_expression():
 
 @generate
 def unit_prop_logic_expression():
-    expr = yield try_choice(boolean_math_bi_expression, try_choice(boolean_val, try_choice(variable, try_choice(uni_expression,
-                                                                                                        bracketed_expression))))
+    expr = yield try_choice(boolean_math_bi_expression,
+                            try_choice(boolean_val, try_choice(variable, try_choice(uni_expression,
+                                                                                    bracketed_expression))))
     yield spaces()
     return expr
 

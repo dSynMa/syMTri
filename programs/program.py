@@ -81,7 +81,8 @@ class Program:
                       engine='dot',
                       format='svg')
 
-        to_str = lambda x: str(x) if type(x) != tuple or type(x[1]) != frozenset else str(x[0]) + ", " +  ', '.join(map(to_str, list(x[1])))
+        to_str = lambda x: str(x) if type(x) != tuple or type(x[1]) != frozenset else str(x[0]) + ", " + ', '.join(
+            map(to_str, list(x[1])))
 
         dot.node("init", "", [("shape", "point")])
         for s in self.states:
@@ -162,7 +163,8 @@ class Program:
 
         vars = ["turn : {env, mon, con}"]
         vars += [str(st) + " : boolean" for st in self.states]
-        vars += [str(var.name) + " : " + str(var.type) for var in self.valuation if not (var.type == "nat" or var.type == "natural")]
+        vars += [str(var.name) + " : " + str(var.type) for var in self.valuation if
+                 not (var.type == "nat" or var.type == "natural")]
         vars += [str(var.name) + " : integer" for var in self.valuation if (var.type == "nat" or var.type == "natural")]
         vars += [str(var) + " : boolean" for var in self.env_events]
         vars += [str(var) + " : boolean" for var in self.con_events]

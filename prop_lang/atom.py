@@ -1,5 +1,6 @@
-from prop_lang.formula import Formula
 from abc import ABC, abstractmethod
+
+from prop_lang.formula import Formula
 
 
 class Atom(Formula, ABC):

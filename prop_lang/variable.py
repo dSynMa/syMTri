@@ -1,10 +1,10 @@
 import re
 
 from pysmt.fnode import FNode
+from pysmt.shortcuts import Symbol, INT, BOOL, GE, LE, And, Int, TRUE
 
 from programs.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
-from pysmt.shortcuts import Symbol, INT, BOOL, GE, LE, And, Int, TRUE
 
 
 class Variable(Atom):
@@ -26,7 +26,7 @@ class Variable(Atom):
     def variablesin(self):
         return [self]
 
-    def ground(self, context : [TypedValuation]):
+    def ground(self, context: [TypedValuation]):
         for val in context:
             if val.name == self.name:
                 return val.value
@@ -48,7 +48,7 @@ class Variable(Atom):
 
     def to_nuxmv(self):
         return self
-    
+
     def to_smt(self, symbol_table) -> (FNode, FNode):
         typed_val = symbol_table[self.name]
 
@@ -62,6 +62,7 @@ class Variable(Atom):
             split = re.split("..+", typed_val.type)
             lower = split[0]
             upper = split[1]
-            return Symbol(self.name, INT), And(GE(Symbol(self.name, INT), Int(lower)), LE(Symbol(self.name, INT), Int(upper)))
+            return Symbol(self.name, INT), And(GE(Symbol(self.name, INT), Int(lower)),
+                                               LE(Symbol(self.name, INT), Int(upper)))
         else:
             raise NotImplementedError(f"Type {typed_val.type} unsupported.")

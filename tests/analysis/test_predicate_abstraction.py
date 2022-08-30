@@ -1,10 +1,9 @@
 from unittest import TestCase
 
 from programs.analysis.model_checker import ModelChecker
-from programs.analysis.predicate_abstraction import abstraction_to_ltl_with_turns, predicate_abstraction, \
-    abstraction_to_ltl
-from programs.util import create_nuxmv_model, symbol_table_from_program
+from programs.analysis.predicate_abstraction import abstraction_to_ltl_with_turns, predicate_abstraction
 from programs.parsing.string_to_program import string_to_program
+from programs.util import create_nuxmv_model, symbol_table_from_program
 
 
 class Test(TestCase):
@@ -20,4 +19,4 @@ class Test(TestCase):
             out = model_checker.check(nuxmv_model, str(ltl_abstraction))
             if not out[0]:
                 print(out[1])
-            assert(out[0] is True)
+            assert (out[0] is True)

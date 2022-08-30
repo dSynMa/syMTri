@@ -1,12 +1,10 @@
-
 from pysmt.fnode import FNode
-from pysmt.shortcuts import Solver, binary_interpolant, sequence_interpolant, Interpolator, get_env
-
-from programs.util import _add_solver, _check_os
+from pysmt.shortcuts import Solver, Interpolator, get_env
 
 
 class SMTChecker:
     SOLVER_NAME = "msat"
+
     # SOLVER_NAME = "mathsat-smtlib"
 
     def __init__(self) -> None:

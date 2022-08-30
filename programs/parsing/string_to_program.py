@@ -2,7 +2,7 @@ from programs.program import Program
 from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
 from prop_lang.parsing.string_to_assignments import *
-from prop_lang.parsing.string_to_prop_logic import prop_logic_expression, number_val
+from prop_lang.parsing.string_to_prop_logic import prop_logic_expression
 from prop_lang.util import true
 from prop_lang.variable import Variable
 
@@ -31,7 +31,8 @@ def program_parser():
     con_transitions = yield con_transitions_parser
     yield spaces() >> string("}") >> spaces()
 
-    program = Program(program_name, states, initial_state, initial_vals, env_transitions, con_transitions, env, con, mon)
+    program = Program(program_name, states, initial_state, initial_vals, env_transitions, con_transitions, env, con,
+                      mon)
 
     return program
 
@@ -98,7 +99,8 @@ def bool_decl_parser():
 @generate
 def num_decl_parser():
     var = yield name << spaces() << string(":") << spaces()
-    type = yield regex("(int(eger)?|nat(ural)?|real|([0-9]+|" + name_regex + ")+\.\.([0-9]+|" + name_regex + "))") << spaces()
+    type = yield regex(
+        "(int(eger)?|nat(ural)?|real|([0-9]+|" + name_regex + ")+\.\.([0-9]+|" + name_regex + "))") << spaces()
     yield spaces()
     yield string(":=") << spaces()
     value = yield math_expression << spaces()
@@ -140,7 +142,6 @@ def env_transitions_parser():
     transitions = yield sepBy(transition_parser, spaces() << regex("(,|;)") << spaces())
     yield spaces() >> string("}")
     return transitions
-
 
 
 @generate

@@ -1,6 +1,7 @@
-import re
 import os
+import re
 import shutil
+
 from pysmt.factory import SolverRedefinitionError
 from pysmt.fnode import FNode
 from pysmt.logics import QF_UFLRA
@@ -24,17 +25,20 @@ def create_nuxmv_model_for_compatibility_checking(model1: NuXmvModel, model2: Nu
     text = "MODULE main\n"
     text += "VAR\n" + "\t" + ";\n\t".join(set(model1.vars + model2.vars + ["mismatch : boolean"])) + ";\n"
     text += "DEFINE\n" + "\t" + ";\n\t".join(model1.define + model2.define) + ";\n"
-    text += "\tcompatible := !(turn = mon) | (" + str(conjunct_formula_set([BiOp(m, ' = ', Variable("mon_" + m.name)) for m in mon_events])) + ");\n"
+    text += "\tcompatible := !(turn = mon) | (" + str(
+        conjunct_formula_set([BiOp(m, ' = ', Variable("mon_" + m.name)) for m in mon_events])) + ");\n"
 
     text += "INIT\n" + "\t(" + ")\n\t& (".join(model1.init + model2.init + ["turn = env", "mismatch = FALSE"]) + ")\n"
     text += "INVAR\n" + "\t((" + ")\n\t& (".join(model1.invar + model2.invar
-                                                 + ["turn = mon -> (pred_" + str(i) + " <-> " + str(pred_list[i]) + ")" for i in range(0, len(pred_list))]) + "))\n"
+                                                 + ["turn = mon -> (pred_" + str(i) + " <-> " + str(pred_list[i]) + ")"
+                                                    for i in range(0, len(pred_list))]) + "))\n"
 
     turn_logic = ["(turn = con -> next(turn) = env)"]
     turn_logic += ["(turn = env -> next(turn) = mon)"]
     turn_logic += ["(turn = mon -> next(turn) = con)"]
 
-    maintain_mon_vars = str(conjunct_formula_set([BiOp(UniOp("next", Variable("mon_" + m.name)), ' = ', Variable("mon_" + m.name)) for m in mon_events]))
+    maintain_mon_vars = str(conjunct_formula_set(
+        [BiOp(UniOp("next", Variable("mon_" + m.name)), ' = ', Variable("mon_" + m.name)) for m in mon_events]))
     new_trans = ["compatible", "!next(mismatch)"] + model1.trans + model2.trans + turn_logic
     normal_trans = "\t((" + ")\n\t& (".join(new_trans) + "))\n"
 
@@ -86,7 +90,7 @@ def parse_nuxmv_ce_output_finite(out: str):
     for dic in prefix:
         if dic["turn"] != "mon":
             transition = "-1"
-            for (key,value) in dic.items():
+            for (key, value) in dic.items():
                 if key.startswith("guard_") and value == "TRUE":
                     if dic[key.replace("guard_", "act_")] == "TRUE":
                         transition = key.replace("guard_", "")
@@ -110,7 +114,7 @@ def get_ce_from_nuxmv_output(out: str):
     prefix = [dict([(s.split("=")[0].strip(), s.split("=")[1].strip()) for s in t]) for t in prefix]
 
     loop = re.split("[^\n]*\->[^<]*<\-", loop.strip())
-    loop = [[p.strip() for p in re.split("\n", t)  if "=" in p] for t in loop]
+    loop = [[p.strip() for p in re.split("\n", t) if "=" in p] for t in loop]
     loop.remove([])
     loop = [dict([(s.split("=")[0].strip(), s.split("=")[1].strip()) for s in t if len(s.strip()) > 0]) for t in loop]
 
@@ -128,7 +132,7 @@ def complete_ce(prefix, loop):
 
 
 def complete_ce_state(state, next_state):
-    missing = dict([(k,state[k]) for k in state.keys() if k not in next_state.keys()])
+    missing = dict([(k, state[k]) for k in state.keys() if k not in next_state.keys()])
     next_state.update(missing)
 
 
@@ -152,7 +156,7 @@ def use_liveness_refinement(ce: [dict], symbol_table):
     assert len(ce) > 0
 
     counterstrategy_states_con = [key for dict in ce for key, value in dict.items()
-                                if dict["turn"] == "env" and key.startswith("st_") and value == "TRUE"]
+                                  if dict["turn"] == "env" and key.startswith("st_") and value == "TRUE"]
     # counterstrategy_states = ["st_0"] \
     #                          + ["st_" + re.split("_", key)[3] for dict in ce for key, value in dict.items()
     #                             if dict["turn"] == "env" and key.startswith("st_") and value == "TRUE"]
@@ -162,15 +166,16 @@ def use_liveness_refinement(ce: [dict], symbol_table):
     #  could give us a more succinct condition to eliminate the environment beliefs about the monitor
 
     # TODO, do we need to show that at the same time there is a loop in the monitor?
-    last_state = counterstrategy_states_con[len(counterstrategy_states_con)-1]
+    last_state = counterstrategy_states_con[len(counterstrategy_states_con) - 1]
     if last_state in counterstrategy_states_con[:-1]:
         indices_of_prev_visits = [i for i, x in enumerate(counterstrategy_states_con[:-1]) if x == last_state]
-        corresponding_ce_state = [ce[(3*i) + 1] for i in indices_of_prev_visits]
+        corresponding_ce_state = [ce[(3 * i) + 1] for i in indices_of_prev_visits]
         var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
                            for i in range(0, len(corresponding_ce_state) - 1)]
         var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in var_differences]
         var_differences = [[v for v in vs if v in symbol_table.keys()] for vs in var_differences]
-        if any([x for xs in var_differences for x in xs if re.match("(int(eger)?|nat(ural)?|real)", symbol_table[x].type)]):
+        if any([x for xs in var_differences for x in xs if
+                re.match("(int(eger)?|nat(ural)?|real)", symbol_table[x].type)]):
             return True
         else:
             return False
@@ -226,7 +231,6 @@ def fnode_to_formula(fnode: FNode) -> Formula:
             return formula
 
 
-
 def _check_os():
     if os.name not in ("posix", "nt"):
         raise Exception(f"This test does not support OS '{os.name}'.")
@@ -271,7 +275,8 @@ def label_pred_according_to_index(p, _list_for_indexing):
     if p in _list_for_indexing:
         return Variable("pred_" + str(_list_for_indexing.index(p)))
     else:
-        raise NotImplementedError("Cannot find " + str(p) + " in " + ", ".join([str(q) for q in _list_for_indexing]) + ".")
+        raise NotImplementedError(
+            "Cannot find " + str(p) + " in " + ", ".join([str(q) for q in _list_for_indexing]) + ".")
 
 
 def label_preds_according_to_index(ps, _list_for_indexing):
@@ -306,7 +311,6 @@ def reduce_up_to_iff(old_preds, new_preds, symbol_table):
             remove_these.add(p)
             remove_these.add(neg(p))
 
-
     return keep_these | set(old_preds)
 
 
@@ -316,9 +320,10 @@ def has_equiv_pred(p, preds, symbol_table):
         if p is pp:
             return True
         elif not (smt_checker.check(And(Not(And(*p.to_smt(symbol_table))), And(*pp.to_smt(symbol_table)))) or
-              smt_checker.check(And(Not(And(*pp.to_smt(symbol_table))), And(*p.to_smt(symbol_table))))):
+                  smt_checker.check(And(Not(And(*pp.to_smt(symbol_table))), And(*p.to_smt(symbol_table))))):
             return True
     return False
+
 
 def project_ce_state_onto_ev(state: dict, events):
     return {k: v for k, v in state.items() if Variable(k) in events}

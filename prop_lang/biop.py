@@ -1,14 +1,14 @@
 from pysmt.fnode import FNode
+from pysmt.shortcuts import And, Or, Implies
+from pysmt.shortcuts import (
+    Plus, Minus, Times, Div, BVSRem, EqualsOrIff, LE, LT, GT, GE, NotEquals
+)
 
 from programs.typed_valuation import TypedValuation
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
 from prop_lang.value import Value
 from prop_lang.variable import Variable
-from pysmt.shortcuts import And, Or, Implies
-from pysmt.shortcuts import (
-    Plus, Minus, Times, Div, BVSRem, EqualsOrIff, LE, LT, GT, GE, NotEquals
-)
 
 
 class BiOp(Formula):

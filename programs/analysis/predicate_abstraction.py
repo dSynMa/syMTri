@@ -1,3 +1,5 @@
+from itertools import chain, combinations
+
 from pysmt.shortcuts import And
 
 from programs.analysis.smt_checker import SMTChecker
@@ -7,10 +9,7 @@ from programs.util import label_preds_according_to_index, label_pred_according_t
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct, neg, conjunct_formula_set, conjunct_typed_valuation_set, disjunct_formula_set, \
-    disjunct
-from itertools import chain, combinations
-
+from prop_lang.util import conjunct, neg, conjunct_formula_set, conjunct_typed_valuation_set, disjunct_formula_set
 from prop_lang.variable import Variable
 
 smt_checker = SMTChecker()
@@ -41,7 +40,8 @@ def meaning_within(f: Formula, predicates: [Formula], symbol_table):
     return Ps
 
 
-def meaning_within_incremental_one_step(f: Formula, previous_preds: [[Formula]], new_pred: Formula, predicates: [Formula], symbol_table):
+def meaning_within_incremental_one_step(f: Formula, previous_preds: [[Formula]], new_pred: Formula,
+                                        predicates: [Formula], symbol_table):
     Ps = set()
 
     for ps in previous_preds:
@@ -97,7 +97,8 @@ def predicate_abstraction(program: Program, predicates: [Formula], symbol_table)
                     action_formula = conjunct_formula_set(relabelled_actions)
                     next_valuation = conjunct(action_formula, init_conf.replace(for_renaming))
                     next_preds = {p for p in predicates if
-                                  smt_checker.check(And(*conjunct(p, next_valuation).to_smt(symbol_table_with_prev_vars)))}
+                                  smt_checker.check(
+                                      And(*conjunct(p, next_valuation).to_smt(symbol_table_with_prev_vars)))}
                     next_state = (t.tgt, frozenset(next_preds))
                     current_states.add(next_state)
 

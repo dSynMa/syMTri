@@ -1,5 +1,4 @@
 import unittest
-import os
 
 from programs.parsing.string_to_program import string_to_program
 

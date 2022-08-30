@@ -1,11 +1,10 @@
 from pysmt.fnode import FNode
+from pysmt.shortcuts import Not, Minus, Int
 
 from programs.typed_valuation import TypedValuation
 from prop_lang.formula import Formula
 from prop_lang.value import Value
 from prop_lang.variable import Variable
-
-from pysmt.shortcuts import Not, Minus, Int
 
 
 class UniOp(Formula):

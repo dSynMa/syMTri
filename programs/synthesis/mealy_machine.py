@@ -4,7 +4,7 @@ from programs.analysis.nuxmv_model import NuXmvModel
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct_formula_set, disjunct_formula_set, neg, push_negation
+from prop_lang.util import conjunct_formula_set, disjunct_formula_set, neg
 from prop_lang.variable import Variable
 
 
@@ -93,7 +93,6 @@ class MealyMachine:
                     guards.append(guard)
                     acts.append(str(act))
 
-
         define = []
         transitions = []
         guard_ids = []
@@ -122,9 +121,11 @@ class MealyMachine:
         vars += ["mon_" + str(var) + " : boolean" for var in mon_events]
 
         init = [str(init_cond)]
-        transitions += ["turn != con & (identity_" + self.name + " & " + str(conjunct_formula_set([BiOp(UniOp("next", "mon_" + e.name), "=", Variable("mon_" + e.name)) for e in mon_events])) + ")"]
+        transitions += ["turn != con & (identity_" + self.name + " & " + str(conjunct_formula_set(
+            [BiOp(UniOp("next", "mon_" + e.name), "=", Variable("mon_" + e.name)) for e in mon_events])) + ")"]
         trans = ["(" + ")\n\t|\t(".join(transitions) + ")"]
-        invar = [str(s) + " -> " + str(conjunct_formula_set([neg(ss) for ss in self.states if ss != s])) for s in self.states]
+        invar = [str(s) + " -> " + str(conjunct_formula_set([neg(ss) for ss in self.states if ss != s])) for s in
+                 self.states]
         invar += [str(disjunct_formula_set([Variable(str(s)) for s in self.states]))]
 
         return NuXmvModel(self.name, vars, define, init, invar, trans)

@@ -25,7 +25,8 @@ def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -
         new_symbol_table.update({key + "_" + str(i): value for key, value in symbol_table.items()})
 
     # this will be used to generalise the interpolants references to intermediate variables to the original variable name
-    reset_vars = [BiOp(Variable(v + "_" + str(i)), ":=", Variable(v)) for v in symbol_table.keys() for i in range(0, len(prefix))]
+    reset_vars = [BiOp(Variable(v + "_" + str(i)), ":=", Variable(v)) for v in symbol_table.keys() for i in
+                  range(0, len(prefix))]
 
     # we collect interpolants in this set
     Cs = set()
@@ -49,21 +50,23 @@ def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -
             path_formula_set_A += [prefix[i].condition.replace(ith_vars(i))] + \
                                   [BiOp(Variable(act.left.name + "_" + str(i + 1)),
                                         "=",
-                                        act.right.replace(ith_vars(i))) for act in program.complete_action_set(prefix[i].action)]
+                                        act.right.replace(ith_vars(i))) for act in
+                                   program.complete_action_set(prefix[i].action)]
 
         path_formula_A = conjunct_formula_set(path_formula_set_A)
 
         projected_condition = prefix[j].condition.replace(ith_vars(j))
-        grounded_condition = ground_formula_on_ce_state_with_index(projected_condition, project_ce_state_onto_ev(ce[j], program.env_events + program.con_events), j)
+        grounded_condition = ground_formula_on_ce_state_with_index(projected_condition, project_ce_state_onto_ev(ce[j],
+                                                                                                                 program.env_events + program.con_events),
+                                                                   j)
 
-        path_formula_set_B = [neg(grounded_condition)]\
-                                   + \
-                                  [neg(BiOp(Variable(act.left.name + "_" + str(j + 1)),
-                                        "=",
-                                        act.right.replace(ith_vars(j)))) for act in program.complete_action_set(prefix[j].action)]
+        path_formula_set_B = [neg(grounded_condition)] \
+                             + \
+                             [neg(BiOp(Variable(act.left.name + "_" + str(j + 1)),
+                                       "=",
+                                       act.right.replace(ith_vars(j)))) for act in
+                              program.complete_action_set(prefix[j].action)]
         path_formula_B = conjunct_formula_set(path_formula_set_B)
-
-
 
         A = [And(*conjunct(init_prop, path_formula_A).to_smt(new_symbol_table))] + A
         B = [And(*path_formula_B.to_smt(new_symbol_table))] + B
@@ -73,8 +76,8 @@ def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -
         C = [smt_checker.binary_interpolant(A[0], B[0], logic)] + C
         if C[0] is None:
             print("I think that interpolation is being checked against formulas that are not contradictory: \n" +
-                            "A: " + str(A[0]) +
-                            "\nB: " + str(B[0]))
+                  "A: " + str(A[0]) +
+                  "\nB: " + str(B[0]))
             break
         # if B is itself inconsistent
         if C[0].is_true():
@@ -82,7 +85,8 @@ def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -
         elif C[0].is_false():
             break
 
-        Cj_generalised = ground_formula_on_ce_state_with_index(fnode_to_formula(C[0]), ce[0], 0).replace(reset_vars).simplify()
+        Cj_generalised = ground_formula_on_ce_state_with_index(fnode_to_formula(C[0]), ce[0], 0).replace(
+            reset_vars).simplify()
         Cs |= {Cj_generalised}
         Cs |= {neg(Cj_generalised).simplify()}
 
@@ -100,7 +104,6 @@ def liveness_refinement(program_nuxmv_model, mismatch_mon_transition):
 
     # if it is true that the monitor eventually always settles in these states
     if not result:
-        return True, formula.right # remove the negation, since proved false
+        return True, formula.right  # remove the negation, since proved false
     else:
         return False, ce
-

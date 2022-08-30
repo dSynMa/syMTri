@@ -1,8 +1,8 @@
 from unittest import TestCase
 
 from programs.analysis.model_checker import ModelChecker
-from programs.util import create_nuxmv_model
 from programs.parsing.string_to_program import string_to_program
+from programs.util import create_nuxmv_model
 
 
 class TestModelChecker(TestCase):
@@ -14,4 +14,4 @@ class TestModelChecker(TestCase):
             nuxmv_model = create_nuxmv_model(program.to_nuXmv_with_turns())
             out = model_checker.check(nuxmv_model, "F FALSE")
             print(out[1])
-            assert(out[0] is False)
+            assert (out[0] is False)

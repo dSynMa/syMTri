@@ -2,17 +2,17 @@ from typing import Tuple
 
 from programs.analysis.predicate_abstraction import predicate_abstraction, abstraction_to_ltl
 from programs.analysis.refinement import safety_refinement, liveness_refinement
+from programs.program import Program
+from programs.synthesis.mealy_machine import MealyMachine
 from programs.util import symbol_table_from_program, create_nuxmv_model_for_compatibility_checking, \
     use_liveness_refinement, label_pred_according_to_index, create_nuxmv_model, mismatch_between_monitor_strategy, \
     parse_nuxmv_ce_output_finite, reduce_up_to_iff
-from programs.program import Program
 from prop_lang.formula import Formula
 from prop_lang.parsing.string_to_ltl import string_to_ltl
 from prop_lang.util import implies, conjunct_formula_set
 from prop_lang.variable import Variable
 from strix import strix_adapter
 from strix.strix_adapter import syfco_ltl, syfco_ltl_in, syfco_ltl_out
-from programs.synthesis.mealy_machine import MealyMachine
 
 
 def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tuple[bool, Program]:
@@ -88,15 +88,18 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
 
                     if len(new_all_preds) == len(preds):
                         print("New predicates (" + ", ".join([str(p) for p in new_preds]) + ") are subset of "
-                                                           "previous predicates, attempting liveness instead.")
+                                                                                            "previous predicates, attempting liveness instead.")
                         force_liveness = True
 
                     preds = new_all_preds
 
                 if use_liveness or force_liveness:
-                    success, new_formula = liveness_refinement(create_nuxmv_model(program_nuxmv_model), transitions_without_stutter[len(transitions_without_stutter) - 1])
+                    success, new_formula = liveness_refinement(create_nuxmv_model(program_nuxmv_model),
+                                                               transitions_without_stutter[
+                                                                   len(transitions_without_stutter) - 1])
                     if not success:
-                        raise NotImplementedError("Counterstrategy is trying to stay in a loop in a monitor that involves an infinite-state variable. "
-                                                  "The current heuristics are not enough to prove this impossible.")
+                        raise NotImplementedError(
+                            "Counterstrategy is trying to stay in a loop in a monitor that involves an infinite-state variable. "
+                            "The current heuristics are not enough to prove this impossible.")
                     else:
                         liveness_assumptions.append(new_formula)

@@ -146,7 +146,7 @@ def negation_closed(predicates: [Formula]):
 
 
 def prime_action(acts: [BiOp]) -> Formula:
-    if len(acts)== 0:
+    if len(acts) == 0:
         return acts
     else:
         primed_acts = []
@@ -155,7 +155,7 @@ def prime_action(acts: [BiOp]) -> Formula:
     return conjunct_formula_set(primed_acts)
 
 
-def push_negation(f : Formula):
+def push_negation(f: Formula):
     if isinstance(f, Atom):
         return f
     elif isinstance(f, BiOp):
@@ -182,8 +182,8 @@ def push_negation(f : Formula):
                 elif f.right.op in ["<->", "<=>"]:
                     return BiOp(
                         BiOp(push_negation(f.right.left), "&", push_negation(UniOp("!", f.right.right)),
-                        "|",
-                        BiOp(push_negation(UniOp("!", f.right.left)), "&", push_negation(f.right.right))))
+                             "|",
+                             BiOp(push_negation(UniOp("!", f.right.left)), "&", push_negation(f.right.right))))
                 else:
                     return UniOp(f.op, push_negation(f.right))
     else:

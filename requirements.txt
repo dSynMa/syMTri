@@ -8,7 +8,7 @@ graphviz == 0.17
 parsec ~= 3.13
 
 # syMTri/monitors/parsing/kiss_to_monitor.py: 4
-pip ~= 22.1.1
+# pip ~= 22.1.1
 
 # syMTri/monitors/parsing/kiss_to_monitor.py: 3,5
 ply ~= 3.11

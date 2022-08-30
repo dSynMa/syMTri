@@ -3,8 +3,8 @@ from parsec import *
 
 from prop_lang.biop import BiOp
 from prop_lang.uniop import UniOp
-from prop_lang.variable import Variable
 from prop_lang.value import Value
+from prop_lang.variable import Variable
 
 
 @generate

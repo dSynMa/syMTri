@@ -1,9 +1,9 @@
 from pysmt.fnode import FNode
+from pysmt.shortcuts import Int, TRUE, FALSE
 
 from programs.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
 from prop_lang.variable import Variable
-from pysmt.shortcuts import Int, TRUE, FALSE
 
 
 class Value(Atom):
