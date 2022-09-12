@@ -1,4 +1,3 @@
-
 INFO {
   TITLE:       "Arbiter Case Study"
   DESCRIPTION: ""
@@ -6,34 +5,21 @@ INFO {
   TARGET:      Mealy
 }
 
-GLOBAL {
-  PARAMETERS {
-  }
-
-  DEFINITIONS {
-  } 
-}
 
 MAIN {
 
   INPUTS {
     request;
     allow_grant;
-  } 
+  }
 
   OUTPUTS {
     grant;
-  }
-
-  ASSUMPTIONS {
-  }
-
-  INVARIANTS {
   }
 
   GUARANTEES {
     G (request -> F grant);
     G (grant -> allow_grant);
   }
-  
+
 }
