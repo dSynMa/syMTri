@@ -25,13 +25,15 @@ def create_nuxmv_model_for_compatibility_checking(model1: NuXmvModel, model2: Nu
     text = "MODULE main\n"
     text += "VAR\n" + "\t" + ";\n\t".join(set(model1.vars + model2.vars + ["mismatch : boolean"])) + ";\n"
     text += "DEFINE\n" + "\t" + ";\n\t".join(model1.define + model2.define) + ";\n"
+    env_turn = BiOp(Variable("turn"), "=", Value("env"))
     text += "\tcompatible := !(turn = mon) | (" + str(
-        conjunct_formula_set([BiOp(m, ' = ', Variable("mon_" + m.name)) for m in mon_events])) + ");\n"
+        conjunct_formula_set([BiOp(m, ' = ', Variable("mon_" + m.name)) for m in mon_events] +
+                            [BiOp(conjunct(env_turn, Variable("pred_" + str(i))), "->", Variable(str(pred_list[i])))
+                               for i in range(0, len(pred_list))]
+                              )) +");\n"
 
     text += "INIT\n" + "\t(" + ")\n\t& (".join(model1.init + model2.init + ["turn = env", "mismatch = FALSE"]) + ")\n"
-    text += "INVAR\n" + "\t((" + ")\n\t& (".join(model1.invar + model2.invar
-                                                 + ["turn = mon -> (pred_" + str(i) + " <-> " + str(pred_list[i]) + ")"
-                                                    for i in range(0, len(pred_list))]) + "))\n"
+    text += "INVAR\n" + "\t((" + ")\n\t& (".join(model1.invar + model2.invar) + "))\n"
 
     turn_logic = ["(turn = con -> next(turn) = env)"]
     turn_logic += ["(turn = env -> next(turn) = mon)"]
@@ -157,15 +159,7 @@ def use_liveness_refinement(ce: [dict], symbol_table):
 
     counterstrategy_states_con = [key for dict in ce for key, value in dict.items()
                                   if dict["turn"] == "env" and key.startswith("st_") and value == "TRUE"]
-    # counterstrategy_states = ["st_0"] \
-    #                          + ["st_" + re.split("_", key)[3] for dict in ce for key, value in dict.items()
-    #                             if dict["turn"] == "env" and key.startswith("st_") and value == "TRUE"]
 
-    # TODO would it be useful to check if the repeated states in the counterexample involve different values of
-    #  an infinite-state variable? if they don't probably safety would suffice, but a liveness abstraction
-    #  could give us a more succinct condition to eliminate the environment beliefs about the monitor
-
-    # TODO, do we need to show that at the same time there is a loop in the monitor?
     last_state = counterstrategy_states_con[len(counterstrategy_states_con) - 1]
     if last_state in counterstrategy_states_con[:-1]:
         indices_of_prev_visits = [i for i, x in enumerate(counterstrategy_states_con[:-1]) if x == last_state]
@@ -283,14 +277,15 @@ def label_preds_according_to_index(ps, _list_for_indexing):
     return {label_pred_according_to_index(p, _list_for_indexing) for p in ps}
 
 
-def mismatch_between_monitor_strategy(system):
+def there_is_mismatch_between_monitor_and_strategy(system):
     print(system)
     model_checker = ModelChecker()
     # Sanity check
     result, ce = model_checker.check(system, "F FALSE", 50)
     assert not result
+    there_is_no_mismatch, out = model_checker.check(system, "G !mismatch", None)
 
-    return model_checker.check(system, "G !mismatch", None)
+    return not there_is_no_mismatch, out
 
 
 def reduce_up_to_iff(old_preds, new_preds, symbol_table):
