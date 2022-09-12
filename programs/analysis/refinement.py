@@ -8,6 +8,7 @@ from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_
     project_ce_state_onto_ev
 from prop_lang.biop import BiOp
 from prop_lang.util import conjunct, conjunct_formula_set, neg, G, F, implies
+from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 
@@ -46,32 +47,32 @@ def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -
         # localize jth state
         path_formula_set_A = []
         for i in range(0, j):
-            # TODO maybe add known predicates
-            path_formula_set_A += [prefix[i].condition.replace(ith_vars(i))] + \
-                                  [BiOp(Variable(act.left.name + "_" + str(i + 1)),
+            path_formula_set_A += [BiOp(Variable(act.left.name + "_" + str(i + 1)),
                                         "=",
                                         act.right.replace(ith_vars(i))) for act in
                                    program.complete_action_set(prefix[i].action)]
 
         path_formula_A = conjunct_formula_set(path_formula_set_A)
 
-        projected_condition = prefix[j].condition.replace(ith_vars(j))
-        grounded_condition = ground_formula_on_ce_state_with_index(projected_condition, project_ce_state_onto_ev(ce[j],
-                                                                                                                 program.env_events + program.con_events),
-                                                                   j)
-
-        path_formula_set_B = [neg(grounded_condition)] \
-                             + \
-                             [neg(BiOp(Variable(act.left.name + "_" + str(j + 1)),
+        path_formula_set_B = []
+        for i in range(j, len(prefix) - 1):
+            path_formula_set_B += [BiOp(Variable(act.left.name + "_" + str(i + 1)),
                                        "=",
-                                       act.right.replace(ith_vars(j)))) for act in
-                              program.complete_action_set(prefix[j].action)]
+                                       act.right.replace(ith_vars(i))) for act in
+                                  program.complete_action_set(prefix[i].action)]
+
+        projected_condition = prefix[len(prefix) - 1].condition.replace(ith_vars(len(prefix) - 1))
+        grounded_condition = ground_formula_on_ce_state_with_index(projected_condition,
+                                                                    project_ce_state_onto_ev(ce[len(prefix) - 1],
+                                                                                            program.env_events
+                                                                                            + program.con_events), len(prefix) - 1)
+
+        path_formula_set_B += [neg(grounded_condition)]
+
         path_formula_B = conjunct_formula_set(path_formula_set_B)
 
         A = [And(*conjunct(init_prop, path_formula_A).to_smt(new_symbol_table))] + A
         B = [And(*path_formula_B.to_smt(new_symbol_table))] + B
-        if len(C) > 0:
-            B[0] = And(B[0], C[0])
 
         C = [smt_checker.binary_interpolant(A[0], B[0], logic)] + C
         if C[0] is None:
@@ -85,8 +86,9 @@ def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -
         elif C[0].is_false():
             break
 
-        Cj_generalised = ground_formula_on_ce_state_with_index(fnode_to_formula(C[0]), ce[0], 0).replace(
-            reset_vars).simplify()
+        # Cj_generalised = ground_formula_on_ce_state_with_index(fnode_to_formula(C[0]), ce[0], 0).replace(
+        #     reset_vars).simplify()
+        Cj_generalised = fnode_to_formula(C[0]).replace(reset_vars).simplify()
         Cs |= {Cj_generalised}
         Cs |= {neg(Cj_generalised).simplify()}
 
