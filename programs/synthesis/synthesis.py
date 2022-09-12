@@ -46,13 +46,15 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
         abstract_monitor = predicate_abstraction(program, pred_list, symbol_table)
         print(abstract_monitor.to_dot())
         abstraction = abstraction_to_ltl(abstract_monitor, pred_list)
-        print(abstraction)
-        abstract_problem = implies(conjunct_formula_set([abstraction] + liveness_assumptions), ltl)
+        print(", ".join(map(str, abstraction)))
+
+        assumptions = abstraction
+        assumptions += liveness_assumptions
 
         pred_acts = [Variable("pred_" + str(i)) for i in range(0, len(preds))]
         pred_var_list = [label_pred_according_to_index(p, pred_list) for p in pred_list]
 
-        (real, mm) = strix_adapter.strix(abstract_problem, in_acts + pred_acts, out_acts, docker)
+        (real, mm) = strix_adapter.strix(assumptions, [ltl], in_acts + pred_acts, out_acts, docker)
 
         mealy = mm.to_nuXmv_with_turns(mon_events + pred_var_list)
         print(mm.to_dot())

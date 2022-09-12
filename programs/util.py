@@ -327,3 +327,29 @@ def has_equiv_pred(p, preds, symbol_table):
 
 def project_ce_state_onto_ev(state: dict, events):
     return {k: v for k, v in state.items() if Variable(k) in events}
+
+
+def synthesis_problem_to_TLSF_script(inputs, outputs, assumptions, guarantees):
+    info = "INFO {\n" + \
+           '\tTITLE:       ""\n' + \
+           '\tDESCRIPTION: ""\n' + \
+           "\tSEMANTICS:   Mealy\n" + \
+           "\tTARGET:      Mealy\n" + \
+           "}\n"
+
+    main = "MAIN {\n"
+    main += "\tINPUTS { "
+    main += ";\n".join(map(str, inputs))
+    main += " }\n"
+    main += "\tOUTPUTS { "
+    main += ";\n".join(map(str, outputs))
+    main += " }\n"
+    main += "\tASSUMPTIONS { "
+    main += ";\n".join(map(str, assumptions))
+    main += " }\n"
+    main += "\tGUARANTEES { "
+    main += ";\n".join(map(str, guarantees))
+    main += " }\n"
+    main += "}"
+
+    return info + main
