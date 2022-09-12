@@ -12,9 +12,9 @@ class ModelChecker:
 
             commands.write("go_msat\n")
             if bound is None:
-                commands.write('check_ltlspec_ic3 -i -p "' + str(ltl_spec) + '"\n')
+                commands.write('check_ltlspec_ic3 -i -K 0 -p "' + str(ltl_spec) + '"\n')
             else:
-                commands.write('check_ltlspec_ic3 -i -k ' + str(bound) + ' -p "' + str(ltl_spec) + '"\n')
+                commands.write('check_ltlspec_ic3 -i -K 0 -k ' + str(bound) + ' -p "' + str(ltl_spec) + '"\n')
             commands.write('quit')
             commands.close()
             try:
