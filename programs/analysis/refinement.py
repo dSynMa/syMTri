@@ -96,16 +96,16 @@ def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -
 
 
 def liveness_refinement(program_nuxmv_model, mismatch_mon_transition):
-    # get all the states in the monitor loop, model check if for all paths the monitor eventually
-    # settles in these states or not
-
-    formula = neg(implies(G(F(Variable(mismatch_mon_transition.src))), G(F(Variable(mismatch_mon_transition.tgt)))))
+    # TODO is this always the environment's turn or not?
+    formula = implies(G(F(BiOp(BiOp(Variable("turn"), "=", Value("env")), "&", Variable(mismatch_mon_transition.src)))), G(F(Variable(mismatch_mon_transition.tgt))))
 
     model_checker = ModelChecker()
     result, ce = model_checker.check(program_nuxmv_model, formula, None)
 
-    # if it is true that the monitor eventually always settles in these states
-    if not result:
-        return True, formula.right  # remove the negation, since proved false
+    if result:
+        formula_without_turn = implies(G(F(Variable(mismatch_mon_transition.src))),
+                                       G(F(Variable(mismatch_mon_transition.tgt))))
+
+        return True, formula_without_turn
     else:
         return False, ce
