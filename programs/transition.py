@@ -13,5 +13,8 @@ class Transition:
         self.tgt = tgt
 
     def __str__(self) -> str:
-        return self.src + " -> " + self.tgt + " {" + str(self.condition) + " $ " + "; ".join(
+        to_str = lambda x: str(x) if type(x) != tuple or type(x[1]) != frozenset else str(x[0]) + ", " + ', '.join(
+            map(to_str, list(x[1])))
+
+        return to_str(self.src) + " -> " + to_str(self.tgt) + " {" + str(self.condition) + " $ " + "; ".join(
             [str(x) for x in self.action]) + " >> " + "[" + ", ".join([str(x) for x in self.output]) + "]" + "}"
