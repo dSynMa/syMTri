@@ -9,7 +9,8 @@ from programs.util import label_preds_according_to_index, label_pred_according_t
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct, neg, conjunct_formula_set, conjunct_typed_valuation_set, disjunct_formula_set
+from prop_lang.util import conjunct, neg, conjunct_formula_set, conjunct_typed_valuation_set, disjunct_formula_set, \
+    implies, G
 from prop_lang.variable import Variable
 
 smt_checker = SMTChecker()
@@ -249,8 +250,9 @@ def abstraction_to_ltl(pred_abstraction: Program, predicates: [Formula]):
     )
     init_cond = init_cond_formula.to_nuxmv()
 
-    states = [Variable(s[0]) for s in pred_abstraction.states if s != pred_abstraction.initial_state] + [
-        Variable(pred_abstraction.initial_state)]
+    states = [Variable(s[0]) for s in pred_abstraction.states if s != pred_abstraction.initial_state] + \
+             [Variable(pred_abstraction.initial_state)]
+    states = set(states)
 
     at_least_one_state = UniOp("G", disjunct_formula_set([q for q in states])).to_nuxmv()
 
@@ -264,20 +266,21 @@ def abstraction_to_ltl(pred_abstraction: Program, predicates: [Formula]):
 
     not_init_con_transitions = [t for t in pred_abstraction.con_transitions if t.src != pred_abstraction.initial_state]
 
-    matching_pairs = [(ct, et)
-                      for ct in not_init_con_transitions
-                      for et in not_init_env_transitions
-                      if ct.tgt == et.src]
+    matching_pairs = {ct: [et for et in not_init_env_transitions if ct.tgt == et.src]
+                      for ct in not_init_con_transitions}
 
-    con_env_transitions = disjunct_formula_set([
-        conjunct_formula_set(complete_and_label_pred_sets(ct.src[1], predicates)
-                             | {Variable(ct.src[0]), ct.condition}
-                             | {UniOp("X",
-                                      conjunct_formula_set(complete_and_label_pred_sets(et.tgt[1], predicates)
-                                                           | {Variable(et.tgt[0]), et.condition}
-                                                           | {out for out in et.output}))})
-        for (ct, et) in matching_pairs])
+    con_env_transitions = []
+    for ct, ets in matching_pairs.items():
+        con_env_transitions += [
+            (G(implies(conjunct_formula_set(complete_and_label_pred_sets(ct.src[1], predicates)
+                                             | {Variable(ct.src[0]), ct.condition}),
+                        disjunct_formula_set([UniOp("X",
+                                                    conjunct_formula_set(complete_and_label_pred_sets(et.tgt[1], predicates)
+                                                                         | {Variable(et.tgt[0]), et.condition}
+                                                                         | {out for out in et.output}))
+                                              for et in ets])))).to_nuxmv()
+            ]
 
-    transition_cond = UniOp("G", con_env_transitions).to_nuxmv()
+    transition_cond = con_env_transitions
 
-    return conjunct_formula_set([init_cond, at_least_one_state, at_most_one_state, transition_cond])
+    return [init_cond, at_least_one_state, at_most_one_state] + transition_cond
