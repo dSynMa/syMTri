@@ -5,11 +5,10 @@ from programs.analysis.refinement import safety_refinement, liveness_refinement
 from programs.program import Program
 from programs.synthesis.mealy_machine import MealyMachine
 from programs.util import symbol_table_from_program, create_nuxmv_model_for_compatibility_checking, \
-    use_liveness_refinement, label_pred_according_to_index, create_nuxmv_model, mismatch_between_monitor_strategy, \
+    use_liveness_refinement, label_pred_according_to_index, create_nuxmv_model, there_is_mismatch_between_monitor_and_strategy, \
     parse_nuxmv_ce_output_finite, reduce_up_to_iff
 from prop_lang.formula import Formula
 from prop_lang.parsing.string_to_ltl import string_to_ltl
-from prop_lang.util import implies, conjunct_formula_set
 from prop_lang.variable import Variable
 from strix import strix_adapter
 from strix.strix_adapter import syfco_ltl, syfco_ltl_in, syfco_ltl_out
@@ -45,6 +44,7 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
         pred_list = list(preds)
         abstract_monitor = predicate_abstraction(program, pred_list, symbol_table)
         print(abstract_monitor.to_dot())
+        #TODO add relations between norms to abstraction, e.g. G(p0 -> !p1), if [p0] = cnt = 0 and [p1] = cnt != 0
         abstraction = abstraction_to_ltl(abstract_monitor, pred_list)
         print(", ".join(map(str, abstraction)))
 
@@ -56,19 +56,29 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
 
         (real, mm) = strix_adapter.strix(assumptions, [ltl], in_acts + pred_acts, out_acts, docker)
 
-        mealy = mm.to_nuXmv_with_turns(mon_events + pred_var_list)
-        print(mm.to_dot())
-        system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
-        there_is_a_mismatch, out = mismatch_between_monitor_strategy(system)
-
         if real:
+            mealy = mm.to_nuXmv_with_turns(mon_events + pred_var_list)
+            print(mm.to_dot())
+            mealy.invar += ['compatible']
+
             # sanity check
-            if there_is_a_mismatch:
-                raise Exception("Controller does not conform to monitor.")
+            system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
+            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system)
+
+            if there_is_mismatch:
+                raise Exception("I think there is a bug:"
+                                " Strix declares the problem to be realisable, but gives a controller that does not "
+                                "conform to monitor. \n" + out)
 
             return (real, mm)
         else:
-            if there_is_a_mismatch:
+            mealy = mm.to_nuXmv_with_turns(mon_events + pred_var_list)
+            print(mm.to_dot())
+
+            system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
+            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system)
+
+            if not there_is_mismatch:
                 # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
                 return False, mm
             else:
@@ -81,7 +91,7 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
 
                 if not use_liveness:
                     new_preds = safety_refinement(ce, transitions_without_stutter, symbol_table, program)
-                    print(new_preds)
+                    print(", ".join([str(p) for p in new_preds]))
                     if new_preds == []:
                         raise Exception("No predicates identified, use liveness instead?")
 
