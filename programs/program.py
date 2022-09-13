@@ -51,8 +51,8 @@ class Program:
             if not all(biop.left in self.local_vars for biop in transition.action):
                 raise Exception("Actions in controller transitions can only set "
                                 "local/internal variables: " + str(transition) + ".")
-            if not all(v in con_events + self.local_vars for biop
-                       in transition.action for v in biop.right.variablesin() in self.local_vars):
+            if not all(v in (con_events + self.local_vars)
+                       for biop in transition.action for v in biop.right.variablesin()):
                 raise Exception("Actions in controller transitions can only refer to environment or"
                                 "local/internal variables: " + str(transition) + ".")
 
