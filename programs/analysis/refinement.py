@@ -7,7 +7,7 @@ from programs.transition import Transition
 from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_on_ce_state_with_index, \
     project_ce_state_onto_ev
 from prop_lang.biop import BiOp
-from prop_lang.util import conjunct, conjunct_formula_set, neg, G, F, implies
+from prop_lang.util import conjunct, conjunct_formula_set, neg, G, F, implies, disjunct_formula_set
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
@@ -97,15 +97,26 @@ def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -
 
 def liveness_refinement(program_nuxmv_model, mismatch_mon_transition):
     # TODO is this always the environment's turn or not?
-    formula = implies(G(F(BiOp(BiOp(Variable("turn"), "=", Value("env")), "&", Variable(mismatch_mon_transition.src)))), G(F(Variable(mismatch_mon_transition.tgt))))
+    formula1 = implies(G(F(BiOp(BiOp(Variable("turn"), "=", Value("env")), "&", Variable(mismatch_mon_transition.src)))), G(F(Variable(mismatch_mon_transition.tgt))))
+    formula2 = implies(G(F(BiOp(BiOp(Variable("turn"), "=", Value("con")), "&", Variable(mismatch_mon_transition.src)))), G(F(Variable(mismatch_mon_transition.tgt))))
+    formula3 = implies(G(F(BiOp(BiOp(Variable("turn"), "=", Value("mon")), "&", Variable(mismatch_mon_transition.src)))), G(F(Variable(mismatch_mon_transition.tgt))))
+
+    formula = conjunct_formula_set([formula1, formula2, formula3])
+
+    formula_without_turn = implies(G(F(Variable(mismatch_mon_transition.src))),
+                                   G(F(Variable(mismatch_mon_transition.tgt))))
 
     model_checker = ModelChecker()
     result, ce = model_checker.check(program_nuxmv_model, formula, None)
 
     if result:
-        formula_without_turn = implies(G(F(Variable(mismatch_mon_transition.src))),
-                                       G(F(Variable(mismatch_mon_transition.tgt))))
-
         return True, formula_without_turn
     else:
-        return False, ce
+        # will remain in loop
+        formula = disjunct_formula_set([neg(formula1), neg(formula2), neg(formula3)])
+        result, ce = model_checker.check(program_nuxmv_model, formula, None)
+
+        if result:
+            return True, neg(formula_without_turn)
+        else:
+            return False, ce
