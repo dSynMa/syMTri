@@ -106,12 +106,13 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
                     preds = new_all_preds
 
                 if use_liveness or force_liveness:
-                    success, new_formula = liveness_refinement(create_nuxmv_model(program_nuxmv_model),
-                                                               transitions_without_stutter[
-                                                                   len(transitions_without_stutter) - 1])
-                    if not success:
+                    last_transition = transitions_without_stutter[len(transitions_without_stutter) - 1]
+
+                    success, new_formula_or_ce = liveness_refinement(create_nuxmv_model(program_nuxmv_model),
+                                                                     last_transition)
+                    if success:
+                        liveness_assumptions.append(new_formula_or_ce)
+                    else:
                         raise NotImplementedError(
                             "Counterstrategy is trying to stay in a loop in a monitor that involves an infinite-state variable. "
                             "The current heuristics are not enough to prove this impossible.")
-                    else:
-                        liveness_assumptions.append(new_formula)
