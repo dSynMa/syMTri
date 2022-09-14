@@ -70,7 +70,8 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
                                 " Strix declares the problem to be realisable, but gives a controller that does not "
                                 "conform to monitor. \n" + out)
 
-            return (real, mm)
+            controller_projected_on_program = mm.project_controller_on_program(program, abstract_monitor, pred_list, symbol_table)
+            return (real, controller_projected_on_program)
         else:
             mealy = mm.to_nuXmv_with_turns(mon_events + pred_var_list)
             print(mm.to_dot())
