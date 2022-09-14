@@ -100,6 +100,7 @@ class BiOp(Formula):
             "|": Or,
             "||": Or,
             "->": Implies,
+            "=>": Implies,
             "==": EqualsOrIff,
             "=": EqualsOrIff,
             "!=": NotEquals,
