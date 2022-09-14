@@ -166,7 +166,7 @@ def predicate_abstraction(program: Program, predicates: [Formula], symbol_table)
 
         con_turn_flag = not con_turn_flag
 
-    return Program("pred_abst_" + program.name, done_states_env | done_states_con, program.initial_state, [],
+    return Program("pred_abst_" + program.name, done_states_env | done_states_con | {init_st}, init_st, [],
                    env_transitions,
                    con_transitions, program.env_events,
                    program.con_events, program.out_events)
@@ -266,20 +266,28 @@ def abstraction_to_ltl(pred_abstraction: Program, predicates: [Formula]):
 
     not_init_con_transitions = [t for t in pred_abstraction.con_transitions if t.src != pred_abstraction.initial_state]
 
-    matching_pairs = {ct: [et for et in not_init_env_transitions if ct.tgt == et.src]
-                      for ct in not_init_con_transitions}
+    matching_pairs = {}
+
+    for c in pred_abstraction.states:
+        if c is not pred_abstraction.initial_state:
+            all_con_trans_from_c = [t for t in not_init_con_transitions if t.src == c]
+            all_conds = {t.condition for t in all_con_trans_from_c}
+            # TODO may need to use smt checker to check for equivalence, rather than equality between conditions
+            dst_cond = {cond: [t.tgt for t in not_init_con_transitions if t.src == c and cond == t.condition] for cond in all_conds}
+            matching_pairs.update({(c, cond): [et for et in not_init_env_transitions if et.src in dst_cond[cond]] for cond in dst_cond.keys()})
 
     con_env_transitions = []
-    for ct, ets in matching_pairs.items():
+    for (c_s, cond), ets in matching_pairs.items():
         con_env_transitions += [
-            (G(implies(conjunct_formula_set(complete_and_label_pred_sets(ct.src[1], predicates)
-                                             | {Variable(ct.src[0]), ct.condition}),
-                        disjunct_formula_set([UniOp("X",
-                                                    conjunct_formula_set(complete_and_label_pred_sets(et.tgt[1], predicates)
-                                                                         | {Variable(et.tgt[0]), et.condition}
-                                                                         | {out for out in et.output}))
-                                              for et in ets])))).to_nuxmv()
-            ]
+            (G(implies(conjunct_formula_set(complete_and_label_pred_sets(c_s[1], predicates)
+                                            | {Variable(c_s[0]), cond}),
+                       disjunct_formula_set([UniOp("X",
+                                                   conjunct_formula_set(
+                                                       complete_and_label_pred_sets(et.tgt[1], predicates)
+                                                       | {Variable(et.tgt[0]), et.condition}
+                                                       | {out for out in et.output}))
+                                             for et in ets])))).to_nuxmv()
+        ]
 
     transition_cond = con_env_transitions
 
