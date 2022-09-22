@@ -188,3 +188,7 @@ def push_negation(f: Formula):
                     return UniOp(f.op, push_negation(f.right))
     else:
         return f
+
+
+def append_to_variable_name(formlua, vars_names, suffix):
+    return formlua.replace([BiOp(Variable(v), ":=", Variable(v + suffix)) for v in vars_names])
