@@ -4,6 +4,8 @@ from pysmt.shortcuts import And
 from programs.analysis.nuxmv_model import NuXmvModel
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
+from programs.typed_valuation import TypedValuation
+from programs.util import label_pred
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
@@ -42,7 +44,13 @@ class MealyMachine:
         self.states.add(new_src)
         self.states.add(new_tgt)
 
-    def to_dot(self):
+    def to_dot(self, pred_list: [Formula]):
+        to_replace = []
+        if pred_list is not None:
+            for pred in pred_list:
+                pred_var = label_pred(pred, pred_list)
+                to_replace += [BiOp(pred_var, ":=", pred)]
+
         dot = Digraph(name="MealyMachine",
                       graph_attr=[("overlap", "scalexy"), ("splines", "true"), ("rankdir", "LR"), ("ranksep", "0.8"),
                                   ("nodesep", "0.5")],
@@ -145,7 +153,8 @@ class MealyMachine:
         replace_preds = []
         i = 0
         for p in pred_list:
-            replace_preds.append(BiOp(Variable("pred_" + str(i)), ":=", p))
+            label = label_pred(p, pred_list)
+            replace_preds.append(BiOp(Variable(label), ":=", p))
             i += 1
 
         at_least_one_state = disjunct_formula_set([Variable(q) for q in program.states])

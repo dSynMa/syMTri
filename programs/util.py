@@ -274,16 +274,41 @@ def ground_formula_on_ce_state_with_index(formula: Formula, state: dict, i) -> F
     return formula.replace(to_replace_with)
 
 
-def label_pred_according_to_index(p, _list_for_indexing):
+def label_pred(p, _list_for_indexing):
     if p in _list_for_indexing:
-        return Variable("pred_" + str(_list_for_indexing.index(p)))
+        return Variable(str(p)
+                        .replace(" ", "")
+                        .replace("_", "")
+                        .replace("(", "_")
+                        .replace(")", "_")
+                        .replace("=", "_EQ_")
+                        .replace(">", "_GT_")
+                        .replace("<=", "_LTEQ_")
+                        .replace("<", "_LT_")
+                        .replace(">=", "_GTEQ_")
+                        .replace("-", "_MINUS_")
+                        .replace("+", "_PLUS_")
+                        .replace("/", "_DIV_")
+                        .replace("*", "_MULT_")
+                        .replace("%", "_MOD_")
+                        .replace("!", "_NEG_")
+                        .replace("&&", "_AND_")
+                        .replace("&", "_AND_")
+                        .replace("||", "_OR_")
+                        .replace("|", "_OR_")
+                        .replace("->", "_IMPLIES_")
+                        .replace("=>", "_IMPLIES_")
+                        .replace("<->", "_IFF_")
+                        .replace("<=>", "_IFF_")
+                        )
+        # Variable("pred_" + str(_list_for_indexing.index(p)))
     else:
         raise NotImplementedError(
             "Cannot find " + str(p) + " in " + ", ".join([str(q) for q in _list_for_indexing]) + ".")
 
 
 def label_preds_according_to_index(ps, _list_for_indexing):
-    return {label_pred_according_to_index(p, _list_for_indexing) for p in ps}
+    return {label_pred(p, _list_for_indexing) for p in ps}
 
 
 def there_is_mismatch_between_monitor_and_strategy(system, livenesstosafety: bool):
