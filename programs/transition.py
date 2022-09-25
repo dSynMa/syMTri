@@ -9,7 +9,7 @@ class Transition:
         self.src = src
         self.condition = true() if condition is None else condition
         self.action = [] if action is None else action
-        self.output = output
+        self.output = sorted(output, key = lambda x: str(x))
         self.tgt = tgt
 
     def __str__(self) -> str:
