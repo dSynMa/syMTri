@@ -153,6 +153,9 @@ class MealyMachine:
         return NuXmvModel(self.name, vars, define, init, invar, trans)
 
     def project_controller_on_program(self, program, predicate_abstraction: Program, pred_list, symbol_table):
+        symbol_table |= {tv.name + "_prev": TypedValuation(tv.name + "_prev", tv.type, tv.value) for tv in
+                         program.valuation}
+
         new_env_transitions = []
         new_con_transitions = []
 
@@ -183,7 +186,9 @@ class MealyMachine:
                 for (m_cond, m_tgt) in self.env_transitions[mm_s]:
                     for p_t in predicate_abstraction.env_transitions:
                         if p_t.src == p_s:
-                            formula = conjunct_formula_set([m_cond.replace(replace_preds), p_t.condition, Variable(p_t.tgt[0]), at_least_one_state, at_most_one_state] + list(p_t.tgt[1]) + p_t.output)
+                            formula = conjunct_formula_set(
+                                [m_cond.replace(replace_preds), p_t.condition, Variable(p_t.tgt[0]), at_least_one_state,
+                                 at_most_one_state] + list(p_t.tgt[1]) + p_t.output)
                             formula = And(*formula.to_smt(symbol_table))
                             compatible = smt_checker.check(formula)
                             if compatible:
@@ -202,12 +207,11 @@ class MealyMachine:
                                     new_con_transitions.append(p_t)
 
             done_states += current_states
-            current_states = [x for x in next_states if x not in done_states]
-
+            current_states = set([x for x in next_states if x not in done_states])
 
         predicate_abstraction.new_env_transitions = new_env_transitions
         predicate_abstraction.con_transitions = new_con_transitions
-        return Program(self.name, predicate_abstraction.states, predicate_abstraction.initial_state,
+        return Program("Strategy", predicate_abstraction.states, predicate_abstraction.initial_state,
                        predicate_abstraction.valuation, list(set(new_env_transitions)), list(set(new_con_transitions)),
                        predicate_abstraction.env_events, predicate_abstraction.con_events,
                        predicate_abstraction.out_events)
