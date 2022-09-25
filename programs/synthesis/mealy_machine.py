@@ -9,7 +9,7 @@ from programs.util import label_pred
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct_formula_set, disjunct_formula_set, neg
+from prop_lang.util import conjunct_formula_set, disjunct_formula_set, neg, conjunct
 from prop_lang.variable import Variable
 
 
@@ -56,7 +56,7 @@ class MealyMachine:
         to_replace = []
         if pred_list is not None:
             for pred in pred_list:
-                pred_var = label_pred(pred, pred_list)
+                pred_var = label_pred(pred)
                 to_replace += [BiOp(pred_var, ":=", pred)]
 
         dot = Digraph(name="MealyMachine",
@@ -85,7 +85,11 @@ class MealyMachine:
 
         return dot
 
-    def to_nuXmv_with_turns(self, mon_events, pred_acts):
+    def to_nuXmv_with_turns(self, mon_events, state_pred_list, trans_pred_list):
+        state_pred_acts = [label_pred(p) for p in state_pred_list]
+        trans_pred_acts = [label_pred(p) for p in trans_pred_list]
+        pred_acts = state_pred_acts + trans_pred_acts
+
         new_mon_events = [BiOp(m, ":=", Variable("mon_" + m.name)) for m in mon_events]\
                          + [BiOp(m, ":=", Variable(m.name)) for m in pred_acts]
         init_conds = []
@@ -149,9 +153,18 @@ class MealyMachine:
         invar = [str(s) + " -> " + str(conjunct_formula_set(sorted({neg(Variable(ss)) for ss in (self.states - {s})}, key=lambda x: str(x))).to_nuxmv()) for s in
                  self.states]
         invar += [str(disjunct_formula_set([Variable(str(s)) for s in self.states]))]
+        i = 0
+        while i < len(pred_acts):
+            invar += [str(neg(conjunct(pred_acts[i], pred_acts[i+1])))]
+            i += 2
+        j = 0
+        while j < len(trans_pred_acts):
+            invar += [str(neg(conjunct(trans_pred_acts[j], trans_pred_acts[j+3])))]
+            j += 4
 
         return NuXmvModel(self.name, vars, define, init, invar, trans)
 
+    # TODO this function needs to be optimised
     def project_controller_on_program(self, program, predicate_abstraction: Program, pred_list, symbol_table):
         symbol_table |= {tv.name + "_prev": TypedValuation(tv.name + "_prev", tv.type, tv.value) for tv in
                          program.valuation}
@@ -167,8 +180,9 @@ class MealyMachine:
         replace_preds = []
         i = 0
         for p in pred_list:
-            label = label_pred(p, pred_list)
-            replace_preds.append(BiOp(Variable(label), ":=", p))
+            label = label_pred(p)
+            replace_preds.append(BiOp(Variable(label.name), ":=", p))
+            replace_preds.append(BiOp(Variable(label.name + "_con"), ":=", p))
             i += 1
 
         at_least_one_state = disjunct_formula_set([Variable(q) for q in program.states])

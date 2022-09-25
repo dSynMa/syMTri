@@ -13,7 +13,7 @@ from programs.util import symbol_table_from_program, create_nuxmv_model_for_comp
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.parsing.string_to_ltl import string_to_ltl
-from prop_lang.util import neg, G, F, implies, conjunct
+from prop_lang.util import neg, G, F, implies, conjunct, disjunct_formula_set, X, disjunct
 from prop_lang.variable import Variable
 
 
@@ -56,11 +56,13 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
         print(abstract_program.to_dot())
 
         pred_list = state_predicates + transition_predicates
-        abstraction = abstraction_to_ltl(abstract_program, pred_list)
+        abstraction = abstraction_to_ltl(abstract_program, state_predicates, transition_predicates)
         print(", ".join(map(str, abstraction)))
 
-        pred_name_dict = {p: label_pred(p, pred_list) for p in pred_list}
+        pred_name_dict = {p: label_pred(p) for p in pred_list}
         pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
+
+        con_pred_acts = []
 
         predicate_constraints = []
         i = 0
@@ -74,17 +76,29 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
             not_dec = pred_name_dict[pred_list[i + 1]]
             inc = pred_name_dict[pred_list[i + 2]]
             not_inc = pred_name_dict[pred_list[i + 3]]
-            predicate_constraints += [implies(G(F(dec)), G(F(inc)))]
-            predicate_constraints += [G(neg(conjunct(dec, inc)))]
-            predicate_constraints += [G(neg(conjunct(dec, not_dec)))]
-            predicate_constraints += [G(neg(conjunct(inc, not_inc)))]
+            predicate_constraints += [X(G(neg(conjunct(dec, not_dec))))]
+            predicate_constraints += [X(G(neg(conjunct(inc, not_inc))))]
+            predicate_constraints += [X(G(disjunct_formula_set([conjunct(dec, not_inc), conjunct(inc, not_dec), conjunct(not_dec, not_inc)])))]
+
+            dec_con = Variable(dec.name + "_con")
+            inc_con = Variable(inc.name + "_con")
+            predicate_constraints += [neg(dec_con)]
+            predicate_constraints += [neg(inc_con)]
+
+            con_pred_acts += [dec_con, inc_con]
+
+            predicate_constraints += [implies(G(F(disjunct(dec, dec_con))), G(F(disjunct(inc, inc_con))))]
             i += 4
 
         assumptions = predicate_constraints + abstraction
 
-        (real, mm) = ltl_synthesis.ltl_synthesis(assumptions, [ltl], in_acts + pred_acts, out_acts, docker)
+        (real, mm) = ltl_synthesis.ltl_synthesis(assumptions,
+                                                 [ltl],
+                                                 in_acts + pred_acts + con_pred_acts,
+                                                 out_acts,
+                                                 docker)
 
-        mealy = mm.to_nuXmv_with_turns(mon_events, pred_acts)
+        mealy = mm.to_nuXmv_with_turns(mon_events, state_predicates, transition_predicates)
 
         print(mm.to_dot(pred_list))
         controller_projected_on_program = mm.project_controller_on_program(program, abstract_program, pred_list,
