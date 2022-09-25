@@ -9,7 +9,7 @@ from programs.synthesis.mealy_machine import MealyMachine
 from programs.util import symbol_table_from_program, create_nuxmv_model_for_compatibility_checking, \
     there_is_mismatch_between_monitor_and_strategy, \
     parse_nuxmv_ce_output_finite, reduce_up_to_iff, \
-    concretize_and_ground_transitions, add_pred_suffix, label_pred
+    concretize_and_ground_transitions, add_prev_suffix, label_pred
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.parsing.string_to_ltl import string_to_ltl
@@ -160,10 +160,10 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
                                 [str(invar) for invar in invars]))
 
                     new_transition_predicates = [x for r, _ in rankings for x in
-                                                 [BiOp(add_pred_suffix(program, r), ">", r),
-                                                  neg(BiOp(add_pred_suffix(program, r), ">", r)),
-                                                  BiOp(add_pred_suffix(program, r), "<", r),
-                                                  neg(BiOp(add_pred_suffix(program, r), "<", r))]]
+                                                 [BiOp(add_prev_suffix(program, r), ">", r),
+                                                  neg(BiOp(add_prev_suffix(program, r), ">", r)),
+                                                  BiOp(add_prev_suffix(program, r), "<", r),
+                                                  neg(BiOp(add_prev_suffix(program, r), "<", r))]]
 
                     print(", ".join([str(p) for p in new_transition_predicates]))
                     if new_transition_predicates == []:

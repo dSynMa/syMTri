@@ -5,7 +5,7 @@ from pysmt.shortcuts import And
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
-from programs.util import label_preds_according_to_index, add_pred_suffix
+from programs.util import label_preds_according_to_index, add_prev_suffix
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
@@ -94,9 +94,9 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
                 smt = And(*guarded.to_smt(symbol_table))
                 if smt_checker.check(smt):
                     complete_action = program.complete_action_set(t.action)
-                    relabelled_actions = [BiOp(b.left, "=", add_pred_suffix(program, b.right)) for b in complete_action]
+                    relabelled_actions = [BiOp(b.left, "=", add_prev_suffix(program, b.right)) for b in complete_action]
                     action_formula = conjunct_formula_set(relabelled_actions)
-                    next_valuation = conjunct(action_formula, add_pred_suffix(program, init_conf))
+                    next_valuation = conjunct(action_formula, add_prev_suffix(program, init_conf))
                     next_preds = {p for p in predicates if
                                   smt_checker.check(
                                       And(*conjunct(p, next_valuation).to_smt(symbol_table_with_prev_vars)))}
@@ -138,11 +138,11 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
                     guard_in_context = And(*conjunct(t.condition, context).to_smt(symbol_table_with_prev_vars))
                     if smt_checker.check(guard_in_context):
                         context_P_without_prevs = conjunct_formula_set([p for p in P if [] == [v for v in p.variablesin() if v.name.endswith("_prev")]])
-                        prev_condition = add_pred_suffix(program, t.condition)
+                        prev_condition = add_prev_suffix(program, t.condition)
                         complete_action = program.complete_action_set(t.action)
-                        prev_action = [BiOp(act.left, "=", add_pred_suffix(program, act.right)) for act in complete_action]
+                        prev_action = [BiOp(act.left, "=", add_prev_suffix(program, act.right)) for act in complete_action]
                         f = conjunct_formula_set(
-                            set(prev_action).union({prev_condition, add_pred_suffix(program, context_P_without_prevs), context_Evs}))
+                            set(prev_action).union({prev_condition, add_prev_suffix(program, context_P_without_prevs), context_Evs}))
                         next_Ps = meaning_within(f, predicates, symbol_table_with_prev_vars)
                         for next_P in next_Ps:
                             next_state = (t.tgt, next_P)

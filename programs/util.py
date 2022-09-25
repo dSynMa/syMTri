@@ -394,3 +394,7 @@ def concretize_and_ground_transitions(program, indices_and_state_list):
                                                                 transition.output,
                                                                 transition.tgt)]
     return used_transitions_grounded
+
+
+def add_prev_suffix(program, formula):
+    return append_to_variable_name(formula, [tv.name for tv in program.valuation], "_prev")
