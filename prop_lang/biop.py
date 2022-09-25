@@ -20,7 +20,22 @@ class BiOp(Formula):
         self.right = right
 
     def __str__(self):
-        return "(" + str(self.left) + " " + str(self.op) + " " + str(self.right) + ")"
+        return "(" + (" " + self.op + " ").join([str(c) for c in self.sub_formulas_up_to_associativity()]) + ")"
+
+    def sub_formulas_up_to_associativity(self):
+        if self.op == "&&" or self.op == "&" or self.op == "||" or self.op == "|":
+            sub_formulas = []
+            if not isinstance(self.left, BiOp) or self.left.op != self.op:
+                sub_formulas += [self.left]
+            else:
+                sub_formulas += self.left.sub_formulas_up_to_associativity()
+            if not isinstance(self.right, BiOp) or self.right.op != self.op:
+                sub_formulas += [self.right]
+            else:
+                sub_formulas += self.right.sub_formulas_up_to_associativity()
+        else:
+            sub_formulas = [self.left, self.right]
+        return sub_formulas
 
     def __eq__(self, other):
         """Overrides the default implementation"""
@@ -90,6 +105,10 @@ class BiOp(Formula):
                                        UniOp("unsigned word[8]", self.right.to_nuxmv())))
         elif self.op == "=>":
             return BiOp(self.left.to_nuxmv(), '->', self.right.to_nuxmv())
+        elif self.op == "&&":
+            return BiOp(self.left.to_nuxmv(), '&', self.right.to_nuxmv())
+        elif self.op == "||":
+            return BiOp(self.left.to_nuxmv(), '|', self.right.to_nuxmv())
         else:
             return BiOp(self.left.to_nuxmv(), self.op, self.right.to_nuxmv())
 
