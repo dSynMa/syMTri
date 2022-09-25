@@ -24,7 +24,10 @@ from prop_lang.variable import Variable
 
 def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, strategy_model: NuXmvModel, mon_events, pred_list):
     text = "MODULE main\n"
-    text += "VAR\n" + "\t" + ";\n\t".join(set(program_model.vars + strategy_model.vars + ["mismatch : boolean"])) + ";\n"
+    vars = sorted(program_model.vars)\
+           + sorted([v for v in strategy_model.vars if v not in program_model.vars])\
+           + ["mismatch : boolean"]
+    text += "VAR\n" + "\t" + ";\n\t".join(vars) + ";\n"
     text += "DEFINE\n" + "\t" + ";\n\t".join(program_model.define + strategy_model.define) + ";\n"
     env_turn = BiOp(Variable("turn"), "=", Value("env"))
     text += "\tcompatible := !(turn = mon) | (" + str(

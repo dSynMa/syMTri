@@ -136,7 +136,7 @@ class MealyMachine:
 
         vars = ["turn : {env, mon, con}"]
         vars += [str(st) + " : boolean" for st in self.states]
-        vars += [str(var) + " : boolean" for var in self.env_events]
+        vars += [str(var) + " : boolean" for var in self.env_events if var not in [str(v) for v in (mon_events + pred_acts)]]
         vars += [str(var) + " : boolean" for var in self.con_events]
         vars += ["mon_" + str(var) + " : boolean" for var in mon_events]
         vars += [str(var) + " : boolean" for var in pred_acts]
