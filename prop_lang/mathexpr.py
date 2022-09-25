@@ -1,6 +1,8 @@
 from typing import Any
 
+from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
+from prop_lang.value import Value
 
 
 class MathExpr(Formula):
@@ -27,6 +29,11 @@ class MathExpr(Formula):
         return self.formula.ground(context)
 
     def simplify(self):
+        if isinstance(self.formula, BiOp) and self.formula.op in ["*"]:
+            if isinstance(self.formula.left, Value) and self.formula.left.name == "1":
+                return MathExpr(self.formula.right)
+            elif isinstance(self.formula.right, Value) and self.formula.left.name == "1":
+                return MathExpr(self.formula.left)
         return self
 
     def ops_used(self):
