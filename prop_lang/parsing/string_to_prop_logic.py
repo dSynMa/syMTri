@@ -11,7 +11,8 @@ from prop_lang.variable import Variable
 @generate
 def prop_logic_expression():
     yield spaces()
-    expr = yield try_choice(bracketed_expression, try_choice(boolean_bi_expression, unit_prop_logic_expression))
+    expr = yield try_choice(bracketed_expression, try_choice(boolean_bi_expression,
+                                                  unit_prop_logic_expression))
     yield spaces()
     return expr
 
@@ -58,10 +59,54 @@ def boolean_math_bi_expression():
 
 @generate
 def math_bi_expression():
-    left = yield math_expression << spaces()
+    left = yield math_unit_expression << spaces()
     op = yield regex("(\\+|\\-|%|\\*|\\/)") << spaces()
-    right = yield math_expression << spaces()
+    right = yield math_unit_expression << spaces()
     return MathExpr(BiOp(left, op, right))
+
+
+@generate
+def math_uni_expression():
+    op = yield regex("\\-") << spaces()
+    right = yield math_unit_expression << spaces()
+    return MathExpr(UniOp(op, right))
+
+
+@generate
+def number_val():
+    val = yield regex("[0-9]+(\\.[0-9]+)?")
+    return Value(val)
+
+
+@generate
+def math_basic_expression():
+    return MathExpr((yield try_choice(number_val, variable)))
+
+
+@generate
+def math_bracketed_expression():
+    yield string("(") << spaces()
+    expr = math_expression
+    yield string(")") << spaces()
+    return expr
+
+
+@generate
+def math_expression():
+    yield spaces()
+    expr = yield try_choice(try_choice(math_bi_expression,
+                                       math_unit_expression), math_bracketed_expression)
+    yield spaces()
+    return expr
+
+
+@generate
+def math_unit_expression():
+    expr = yield try_choice(number_val, try_choice(variable,
+                                                    try_choice(math_bracketed_expression,
+                                                               math_uni_expression)))
+    yield spaces()
+    return expr
 
 
 @generate
@@ -75,26 +120,6 @@ def variableFromList(vars: [str]):
     var = yield regex("|".join(vars))
     return Variable(var)
 
-
-@generate
-def number_val():
-    val = yield regex("[0-9]+(\\.[0-9]+)?")
-    return Value(val)
-
-
-@generate
-def math_expression():
-    return MathExpr((yield try_choice(number_val, variable)))
-
-
-@generate
-def math_bracketed_expression():
-    yield string("(") << spaces()
-    expr = math_expression
-    yield string(")") << spaces()
-    return expr
-
-
 @generate
 def boolean_val():
     val = yield regex("(true|false|tt|ff|TRUE|FALSE|True|False|TT|FF)")
@@ -103,7 +128,14 @@ def boolean_val():
 
 parser = prop_logic_expression
 
+math_parser = math_expression
+
 
 def string_to_pl(text: str):
     out = (parser << parsec.eof()).parse(text)
+    return out
+
+
+def string_to_mathexpr(text: str):
+    out = (math_parser << parsec.eof()).parse(text)
     return out
