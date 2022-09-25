@@ -105,6 +105,8 @@ class BiOp(Formula):
                                        UniOp("unsigned word[8]", self.right.to_nuxmv())))
         elif self.op == "=>":
             return BiOp(self.left.to_nuxmv(), '->', self.right.to_nuxmv())
+        elif self.op == "<=>":
+            return BiOp(self.left.to_nuxmv(), '<->', self.right.to_nuxmv())
         elif self.op == "&&":
             return BiOp(self.left.to_nuxmv(), '&', self.right.to_nuxmv())
         elif self.op == "||":
