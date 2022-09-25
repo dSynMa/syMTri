@@ -31,7 +31,7 @@ class Ranker:
                     invars = term_arg[1].replace("Supporting invariants ", "").replace("[", "").replace("]", "").split(",")
                     invars.remove('')
 
-                    return True, string_to_mathexpr(ranking_function), [string_to_pl(invar) for invar in invars]
+                    return True, string_to_mathexpr(ranking_function).simplify(), [string_to_pl(invar) for invar in invars]
                 else:
                     raise Exception("Unexpected result during termination checking of:\n" + main_function)
                     print(out)
