@@ -190,5 +190,5 @@ def push_negation(f: Formula):
         return f
 
 
-def append_to_variable_name(formlua, vars_names, suffix):
-    return formlua.replace([BiOp(Variable(v), ":=", Variable(v + suffix)) for v in vars_names])
+def append_to_variable_name(formula, vars_names, suffix):
+    return formula.replace([BiOp(Variable(v), ":=", Variable(v + suffix)) for v in vars_names])
