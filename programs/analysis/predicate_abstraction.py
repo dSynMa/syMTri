@@ -5,12 +5,12 @@ from pysmt.shortcuts import And
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
-from programs.util import label_preds_according_to_index, label_pred_according_to_index
+from programs.util import label_preds_according_to_index, add_pred_suffix
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
 from prop_lang.util import conjunct, neg, conjunct_formula_set, conjunct_typed_valuation_set, disjunct_formula_set, \
-    implies, G
+    implies, G, X
 from prop_lang.variable import Variable
 
 smt_checker = SMTChecker()
@@ -68,7 +68,7 @@ def powerset(S: set):
     return complete_subsets
 
 
-def predicate_abstraction(program: Program, predicates: [Formula], symbol_table) -> Program:
+def predicate_abstraction(program: Program, state_predicates: [Formula], transition_predicates: [Formula], symbol_table) -> Program:
     env_sublists = powerset(program.env_events)
     con_sublists = powerset(program.con_events)
 
@@ -80,9 +80,9 @@ def predicate_abstraction(program: Program, predicates: [Formula], symbol_table)
 
     orig_env_transitions, orig_con_transitions = program.complete_transitions()
 
-    for_renaming = [BiOp(Variable(v), ":=", Variable(v + "_prev")) for v in [tv.name for tv in program.valuation]]
     symbol_table_with_prev_vars = symbol_table | {key + "_prev": value for key, value in symbol_table.items()}
 
+    predicates = state_predicates + transition_predicates
     # initial transitions rule
     # TODO this should only be computed once, if predicate set updated it can be done incrementally
     for t in orig_env_transitions:
@@ -94,9 +94,9 @@ def predicate_abstraction(program: Program, predicates: [Formula], symbol_table)
                 smt = And(*guarded.to_smt(symbol_table))
                 if smt_checker.check(smt):
                     complete_action = program.complete_action_set(t.action)
-                    relabelled_actions = [BiOp(b.left, "=", b.right.replace(for_renaming)) for b in complete_action]
+                    relabelled_actions = [BiOp(b.left, "=", add_pred_suffix(program, b.right)) for b in complete_action]
                     action_formula = conjunct_formula_set(relabelled_actions)
-                    next_valuation = conjunct(action_formula, init_conf.replace(for_renaming))
+                    next_valuation = conjunct(action_formula, add_pred_suffix(program, init_conf))
                     next_preds = {p for p in predicates if
                                   smt_checker.check(
                                       And(*conjunct(p, next_valuation).to_smt(symbol_table_with_prev_vars)))}
@@ -135,13 +135,14 @@ def predicate_abstraction(program: Program, predicates: [Formula], symbol_table)
                 context_Evs = conjunct_formula_set(Evs)
                 context = conjunct(context_P, context_Evs)
                 for t in q_transitions:
-                    guard_in_context = And(*conjunct(t.condition, context).to_smt(symbol_table))
+                    guard_in_context = And(*conjunct(t.condition, context).to_smt(symbol_table_with_prev_vars))
                     if smt_checker.check(guard_in_context):
-                        prev_condition = t.condition.replace(for_renaming)
+                        context_P_without_prevs = conjunct_formula_set([p for p in P if [] == [v for v in p.variablesin() if v.name.endswith("_prev")]])
+                        prev_condition = add_pred_suffix(program, t.condition)
                         complete_action = program.complete_action_set(t.action)
-                        prev_action = [BiOp(act.left, "=", act.right.replace(for_renaming)) for act in complete_action]
+                        prev_action = [BiOp(act.left, "=", add_pred_suffix(program, act.right)) for act in complete_action]
                         f = conjunct_formula_set(
-                            set(prev_action).union({prev_condition, context_P.replace(for_renaming), context_Evs}))
+                            set(prev_action).union({prev_condition, add_pred_suffix(program, context_P_without_prevs), context_Evs}))
                         next_Ps = meaning_within(f, predicates, symbol_table_with_prev_vars)
                         for next_P in next_Ps:
                             next_state = (t.tgt, next_P)
@@ -237,16 +238,16 @@ def abstraction_to_ltl_with_turns(pred_abstraction: Program):
 
 def complete_and_label_pred_sets(pred_set, full_preds):
     X = label_preds_according_to_index(pred_set, full_preds)
-    Y = {neg(label_pred_according_to_index(p, full_preds)) for p in full_preds if p not in set(pred_set)}
-    return X | Y
+    # Y = {neg(label_pred_according_to_index(p, full_preds)) for p in full_preds if p not in set(pred_set)}
+    return X # | Y
 
 
 def abstraction_to_ltl(pred_abstraction: Program, predicates: [Formula]):
     init_transitions = [t for t in pred_abstraction.env_transitions if t.src == pred_abstraction.initial_state]
     init_cond_formula = disjunct_formula_set(
-        {conjunct_formula_set({Variable(t.tgt[0]), t.condition}
-                              | complete_and_label_pred_sets(t.tgt[1], predicates)
-                              | set(t.output)) for t in init_transitions}
+        {conjunct(conjunct_formula_set([Variable(t.tgt[0]), t.condition] + t.output),
+                  conjunct_formula_set(sorted(complete_and_label_pred_sets(t.tgt[1], predicates), key = lambda x : str(x)))
+                  ) for t in init_transitions}
     )
     init_cond = init_cond_formula.to_nuxmv()
 
@@ -268,27 +269,65 @@ def abstraction_to_ltl(pred_abstraction: Program, predicates: [Formula]):
 
     matching_pairs = {}
 
+    # for every state that is not the initial state
     for c in pred_abstraction.states:
         if c is not pred_abstraction.initial_state:
+            # get all transitions from that state
             all_con_trans_from_c = [t for t in not_init_con_transitions if t.src == c]
+            # get all conditions of those transitions
             all_conds = {t.condition for t in all_con_trans_from_c}
-            # TODO may need to use smt checker to check for equivalence, rather than equality between conditions
+            # given a condition from a state, get all possible destinations of it
             dst_cond = {cond: [t.tgt for t in not_init_con_transitions if t.src == c and cond == t.condition] for cond in all_conds}
             matching_pairs.update({(c, cond): [et for et in not_init_env_transitions if et.src in dst_cond[cond]] for cond in dst_cond.keys()})
 
     con_env_transitions = []
     for (c_s, cond), ets in matching_pairs.items():
-        con_env_transitions += [
-            (G(implies(conjunct_formula_set(complete_and_label_pred_sets(c_s[1], predicates)
-                                            | {Variable(c_s[0]), cond}),
-                       disjunct_formula_set([UniOp("X",
-                                                   conjunct_formula_set(
-                                                       complete_and_label_pred_sets(et.tgt[1], predicates)
-                                                       | {Variable(et.tgt[0]), et.condition}
-                                                       | {out for out in et.output}))
-                                             for et in ets])))).to_nuxmv()
-        ]
+        now = conjunct(conjunct(Variable(c_s[0]),
+                                conjunct_formula_set(sorted(complete_and_label_pred_sets(c_s[1], predicates), key = lambda x: str(x)))),
+                       cond)
+        next = []
+        for et in ets:
+            bookeeping_tran_preds = tran_preds_after_con_env_step(et, predicates)
+            next += [
+                X(conjunct(conjunct_formula_set([Variable(et.tgt[0]), et.condition] + et.output),
+                           conjunct_formula_set(sorted(complete_and_label_pred_sets(bookeeping_tran_preds, predicates), key = lambda x: str(x)))
+                ))]
 
-    transition_cond = con_env_transitions
+        next = sorted(next, key=lambda x : str(x))
+        con_env_transitions += [G(implies(now, disjunct_formula_set(next))).to_nuxmv()]
+
+    transition_cond = sorted(con_env_transitions, key=lambda x : str(x))
 
     return [init_cond, at_least_one_state, at_most_one_state] + transition_cond
+
+
+def tran_preds_after_con_env_step(env_trans : Transition, predicates: [Formula]):
+    src_tran_preds = [p for p in predicates
+                      if p in env_trans.src[1]
+                      if [] != [v for v in p.variablesin() if v.name.endswith("_prev")]]
+    tgt_tran_preds = [p for p in predicates
+                      if p in env_trans.tgt[1]
+                      if [] != [v for v in p.variablesin() if v.name.endswith("_prev")]]
+
+    keep_these = []
+
+    for p in src_tran_preds:
+        if type(p) == BiOp and p.op == "<":
+            if BiOp(p.left, "<", p.right) in tgt_tran_preds:
+                keep_these += [p, neg(BiOp(p.left, ">", p.right))]
+            elif BiOp(p.left, ">", p.right) in tgt_tran_preds:
+                keep_these += [neg(BiOp(p.left, ">", p.right)), neg(BiOp(p.left, ">", p.right))]
+            elif neg(BiOp(p.left, ">", p.right)) in tgt_tran_preds and neg(BiOp(p.left, "<", p.right)) in tgt_tran_preds:
+                keep_these += [p]
+        elif type(p) == BiOp and p.op == ">":
+            if BiOp(p.left, ">", p.right) in tgt_tran_preds:
+                keep_these += [p]
+            elif BiOp(p.left, "<", p.right) in tgt_tran_preds:
+                keep_these += [neg(BiOp(p.left, ">", p.right)), neg(BiOp(p.left, ">", p.right))]
+            elif neg(BiOp(p.left, ">", p.right)) in tgt_tran_preds and neg(BiOp(p.left, "<", p.right)) in tgt_tran_preds:
+                keep_these += [p, neg(BiOp(p.left, "<", p.right))]
+
+    keep_these += [q for q in tgt_tran_preds if neg(q).simplify() not in keep_these]
+
+    return list(set(keep_these)) \
+           + [p for p in env_trans.tgt[1] if p not in tgt_tran_preds]
