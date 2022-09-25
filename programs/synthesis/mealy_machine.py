@@ -24,25 +24,33 @@ class MealyMachine:
         self.con_transitions = {}
         self.counter = -1
 
-    def add_transition(self, src: int, env_behaviour: Formula, con_behaviour: Formula, tgt: int):
-        new_src = "st_" + str(src)
-        new_tgt = "st_" + str(tgt)
-        new_intermed = "st_" + str(self.counter) + "_" + str(src) + "_" + str(tgt)
+    def add_transitions(self, trans_dict: dict):
+        int_st_index = 0
+        for src_index, env_behaviour in trans_dict.keys():
+            new_src = "st_" + str(src_index)
+            new_intermed = "st__" + str(int_st_index)
+            int_st_index += 1
 
-        env_cond = (env_behaviour.simplify()).to_nuxmv()
-        con_cond = (con_behaviour.simplify()).to_nuxmv()
+            env_cond = (env_behaviour.simplify()).to_nuxmv()
+            self.con_transitions[new_intermed] = []
 
-        if new_src in self.env_transitions.keys():
-            self.env_transitions[new_src].append((env_cond, new_intermed))
-        else:
-            self.env_transitions[new_src] = [(env_cond, new_intermed)]
-        assert new_intermed not in self.con_transitions.keys()
-        self.con_transitions[new_intermed] = [(con_cond, new_tgt)]
+            for con_behaviour, tgt_index in trans_dict[(src_index, env_behaviour)]:
+                con_cond = (con_behaviour.simplify()).to_nuxmv()
+                new_tgt = "st_" + str(tgt_index)
 
-        self.states.add(new_intermed)
-        self.counter = self.counter - 1
-        self.states.add(new_src)
-        self.states.add(new_tgt)
+                if new_src not in self.env_transitions.keys():
+                    self.env_transitions[new_src] = []
+
+                if (env_cond, new_intermed) not in self.env_transitions[new_src]:
+                    self.env_transitions[new_src].append((env_cond, new_intermed))
+
+                if (con_cond, new_tgt) not in self.con_transitions[new_intermed]:
+                    self.con_transitions[new_intermed] += [(con_cond, new_tgt)]
+
+                self.states.add(new_intermed)
+                self.counter = self.counter - 1
+                self.states.add(new_src)
+                self.states.add(new_tgt)
 
     def to_dot(self, pred_list: [Formula]):
         to_replace = []

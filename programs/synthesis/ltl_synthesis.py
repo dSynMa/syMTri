@@ -15,12 +15,12 @@ from prop_lang.util import true
 from prop_lang.variable import Variable
 
 
-def strix(assumptions: [Formula], guarantees: [Formula], in_act: [Variable], out_act: [Variable],
-          strix_tlsf_command: str) -> Tuple[
-    bool, Program]:
+def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variable], out_act: [Variable],
+                  strix_tlsf_command: str) -> Tuple[
+    bool, MealyMachine]:
     # prepare for tlsf
-    in_acts_lowered = [str(a).lower() for a in in_act]
-    out_acts_lowered = [str(a).lower() for a in out_act]
+    in_acts_lowered = [str(a) for a in in_act]
+    out_acts_lowered = [str(a) for a in out_act]
 
     assumptions_tlsf = [str(a).replace("TRUE", "true") \
                             .replace("True", "true") \
@@ -42,7 +42,7 @@ def strix(assumptions: [Formula], guarantees: [Formula], in_act: [Variable], out
                                                    out_acts_lowered,
                                                    assumptions_tlsf,
                                                    guarantees_tlsf)
-
+    print(tlsf_script)
     try:
         with NamedTemporaryFile('w', suffix='.tlsf', delete=False) as tmp:
             tmp.write(tlsf_script)
@@ -54,14 +54,14 @@ def strix(assumptions: [Formula], guarantees: [Formula], in_act: [Variable], out
             so = subprocess.getstatusoutput(cmd)
             output: str = so[1]
 
-            if output.startswith("UNREALIZABLE"):
+            if "UNREALIZABLE" in output:
                 mon = parse_hoa(output)
                 return False, mon
-            elif output.startswith("REALIZABLE"):
+            elif "REALIZABLE" in output:
                 mon = parse_hoa(output)
                 return True, mon
             else:
-                raise Exception("Strix not returning appropriate value.\n" + output)
+                raise Exception("Strix not returning appropriate value.\n\n" + cmd + "\n\n" + output + "\n\n" + tlsf_script)
     except Exception as err:
         raise err
     pass
@@ -96,15 +96,15 @@ def parse_hoa(output) -> Program:
 
     mon = MealyMachine("counterstrategy", init_st, env_events, con_events)
 
+    trans = {}
+
     for st, edges in hoa.body.state2edges.items():
         for e in edges:
             if e.label == TrueFormula():
-                mon.add_transition(
-                    src=st.index,
-                    env_behaviour=true(),
-                    con_behaviour=true(),
-                    tgt=e.state_conj[0]
-                )
+                key = (st.index, true())
+                if key not in trans.keys():
+                    trans[(st.index, true())] = []
+                trans[(st.index, true())] += [(true(), e.state_conj[0])]
             else:
                 assert e.label.SYMBOL == '&'
                 var_labels = [BiOp(Variable(i), ":=", Variable(ap)) for i, ap in
@@ -116,12 +116,11 @@ def parse_hoa(output) -> Program:
                 con = hoaparser_label_expression_to_pl(str(e.label.operands[1]))
                 con = con.replace(var_labels)
 
-                mon.add_transition(
-                    src=st.index,
-                    env_behaviour=env,
-                    con_behaviour=con,
-                    tgt=e.state_conj[0]
-                )
+                key = (st.index, env)
+                if key not in trans.keys():
+                    trans[(st.index, env)] = []
+                trans[(st.index, env)] += [(con, e.state_conj[0])]
+    mon.add_transitions(trans)
     return mon
 
 
