@@ -182,7 +182,6 @@ class MealyMachine:
         for p in pred_list:
             label = label_pred(p)
             replace_preds.append(BiOp(Variable(label.name), ":=", p))
-            replace_preds.append(BiOp(Variable(label.name + "_con"), ":=", p))
             i += 1
 
         at_least_one_state = disjunct_formula_set([Variable(q) for q in program.states])

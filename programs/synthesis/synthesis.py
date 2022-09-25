@@ -62,8 +62,6 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
         pred_name_dict = {p: label_pred(p) for p in pred_list}
         pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
 
-        con_pred_acts = []
-
         predicate_constraints = []
         i = 0
         while i < len(state_predicates):
@@ -80,21 +78,14 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
             predicate_constraints += [X(G(neg(conjunct(inc, not_inc))))]
             predicate_constraints += [X(G(disjunct_formula_set([conjunct(dec, not_inc), conjunct(inc, not_dec), conjunct(not_dec, not_inc)])))]
 
-            dec_con = Variable(dec.name + "_con")
-            inc_con = Variable(inc.name + "_con")
-            predicate_constraints += [neg(dec_con)]
-            predicate_constraints += [neg(inc_con)]
-
-            con_pred_acts += [dec_con, inc_con]
-
-            predicate_constraints += [implies(G(F(disjunct(dec, dec_con))), G(F(disjunct(inc, inc_con))))]
+            predicate_constraints += [implies(G(F(dec)), G(F(inc)))]
             i += 4
 
         assumptions = predicate_constraints + abstraction
 
         (real, mm) = ltl_synthesis.ltl_synthesis(assumptions,
                                                  [ltl],
-                                                 in_acts + pred_acts + con_pred_acts,
+                                                 in_acts + pred_acts,
                                                  out_acts,
                                                  docker)
 

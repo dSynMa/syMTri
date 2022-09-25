@@ -256,8 +256,6 @@ def abstraction_to_ltl(pred_abstraction: Program, state_predicates: [Formula], t
              [Variable(pred_abstraction.initial_state)]
     states = set(states)
 
-    # at_least_one_state = UniOp("G", disjunct_formula_set([q for q in states])).to_nuxmv()
-
     at_least_and_at_most_one_state = UniOp("G", conjunct_formula_set([BiOp(q, "<=>", conjunct_formula_set([neg(r) for r in
                                                                                              states
                                                                                              if
@@ -283,12 +281,13 @@ def abstraction_to_ltl(pred_abstraction: Program, state_predicates: [Formula], t
 
     con_env_transitions = []
     for (c_s, cond), ets in matching_pairs.items():
+        now_state_preds = [p for p in c_s[1] if p in state_predicates]
         now = conjunct(conjunct(Variable(c_s[0]),
-                                conjunct_formula_set(sorted(complete_and_label_pred_sets(c_s[1], predicates), key = lambda x: str(x)))),
+                                conjunct_formula_set(sorted(complete_and_label_pred_sets(now_state_preds, predicates), key = lambda x: str(x)))),
                        cond)
         next = []
         for et in ets:
-            bookeeping_tran_preds = tran_preds_after_con_env_step(et, transition_predicates)
+            bookeeping_tran_preds = label_preds_according_to_index(tran_preds_after_con_env_step(et, state_predicates + transition_predicates))
             next += [
                 X(conjunct(conjunct_formula_set([Variable(et.tgt[0]), et.condition] + et.output),
                            conjunct_formula_set(sorted(bookeeping_tran_preds, key = lambda x: str(x)))
@@ -302,13 +301,32 @@ def abstraction_to_ltl(pred_abstraction: Program, state_predicates: [Formula], t
     return [init_cond, at_least_and_at_most_one_state] + transition_cond
 
 
-def tran_preds_after_con_env_step(env_trans : Transition, transition_predicates: [Formula]):
-    positive_transition_predicates = [p for p in transition_predicates if not (isinstance(p, UniOp) and p.op == "!")]
-    con_tran_preds = []
-    for p in env_trans.src[1]:
-        if p in positive_transition_predicates:
-            con_tran_preds.append(p)
-    con_tran_preds = [Variable(q.name + "_con") for q in label_preds_according_to_index(con_tran_preds)]
-    con_tran_preds += [neg(Variable(q.name + "_con")) for q in label_preds_according_to_index([p for p in positive_transition_predicates if p not in con_tran_preds])]
+def tran_preds_after_con_env_step(env_trans : Transition, predicates: [Formula]):
+    src_tran_preds = [p for p in predicates
+                      if p in env_trans.src[1]
+                      if [] != [v for v in p.variablesin() if v.name.endswith("_prev")]]
+    tgt_tran_preds = [p for p in predicates
+                      if p in env_trans.tgt[1]
+                      if [] != [v for v in p.variablesin() if v.name.endswith("_prev")]]
 
-    return label_preds_according_to_index(env_trans.tgt[1]) | set(con_tran_preds)
+    keep_these = []
+
+    for p in src_tran_preds:
+        if type(p) == BiOp and p.op == "<":
+            if BiOp(p.left, "<", p.right) in tgt_tran_preds:
+                keep_these += [p]
+            elif BiOp(p.left, ">", p.right) in tgt_tran_preds:
+                keep_these += [neg(BiOp(p.left, ">", p.right)), neg(BiOp(p.left, ">", p.right))]
+            elif neg(BiOp(p.left, ">", p.right)) in tgt_tran_preds and neg(BiOp(p.left, "<", p.right)) in tgt_tran_preds:
+                keep_these += [p]
+        elif type(p) == BiOp and p.op == ">":
+            if BiOp(p.left, ">", p.right) in tgt_tran_preds:
+                keep_these += [p]
+            elif BiOp(p.left, "<", p.right) in tgt_tran_preds:
+                keep_these += [neg(BiOp(p.left, ">", p.right)), neg(BiOp(p.left, ">", p.right))]
+            elif neg(BiOp(p.left, ">", p.right)) in tgt_tran_preds and neg(BiOp(p.left, "<", p.right)) in tgt_tran_preds:
+                keep_these += [p]
+
+    keep_these += [q for q in tgt_tran_preds if neg(q).simplify() not in keep_these] + [p for p in env_trans.tgt[1] if p not in tgt_tran_preds]
+
+    return list(set(keep_these))
