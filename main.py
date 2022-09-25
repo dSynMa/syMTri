@@ -1,18 +1,20 @@
 import argparse
 
+from programs.analysis.model_checker import ModelChecker
 from programs.parsing.string_to_program import string_to_program
 from programs.synthesis.synthesis import synthesize
 
 
 # inputs: date_file ltl_file
+from programs.util import create_nuxmv_model
+
+
 def main():
     parser = argparse.ArgumentParser()
     # input monitor
     parser.add_argument('--p', dest='program', help="Path to a .prog file.", type=str)
 
-    parser.add_argument('--translate', dest='translate', help="Translation workflow.", type=bool)
-
-    parser.add_argument('--format', dest='format', type=str, nargs='?', const=True, default="dot")
+    parser.add_argument('--translate', dest='translate', help="Translation workflow.", type=str)
 
     # Synthesis workflow
     parser.add_argument('--synthesise', dest='synthesise', help="Synthesis workflow.", type=bool, nargs='?', const=True)
@@ -32,11 +34,20 @@ def main():
 
     date = string_to_program(date_file)
 
-    if args.translate:
-        if args.to_nuxmv:
-            print(date.to_nuXmv())
+    if args.translate is not None:
+        if args.translate.lower() == "dot":
+            print(date.to_dot())
+        elif args.translate.lower() == "nuxmv":
+            print(create_nuxmv_model(date.to_nuXmv_with_turns()))
+        elif args.translate.lower() == "vmt":
+            model = create_nuxmv_model(date.to_nuXmv_with_turns())
+            ltl_spec = None
+            if args.ltl != None:
+                ltl_spec = args.ltl
+            model_checker = ModelChecker()
+            model_checker.to_vmt(model, ltl_spec)
         else:
-            print(date.to_nuXmv_case_style())
+            print(args.translate + " is not recognised. --translate options are 'dot' or 'nuxmv' or 'vmt'.")
     elif args.synthesise:
         if args.ltl is None and args.tlsf is None:
             raise Exception("No property specified.")

@@ -92,7 +92,12 @@ def parse_nuxmv_ce_output_finite(out: str):
 
     prefix = prefix[:-1]
 
-    monitor_transitions = []
+    return prefix, prog_transition_indices_and_state_from_ce(prefix)
+
+
+def prog_transition_indices_and_state_from_ce(prefix):
+    monitor_transitions_and_state = []
+
     for dic in prefix:
         if dic["turn"] != "mon":
             transition = "-1"
@@ -101,10 +106,10 @@ def parse_nuxmv_ce_output_finite(out: str):
                     if dic[key.replace("guard_", "act_")] == "TRUE":
                         transition = key.replace("guard_", "")
                         break
-            monitor_transitions.append(transition)
+            dic_without_prev_vars = {key:value for key, value in dic.items() if not key.endswith("_prev")}
+            monitor_transitions_and_state.append((transition, dic_without_prev_vars))
 
-    return prefix, monitor_transitions
-
+    return monitor_transitions_and_state
 
 def get_ce_from_nuxmv_output(out: str):
     ce = out.split("Counterexample")[1].strip()
