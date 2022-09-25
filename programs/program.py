@@ -195,16 +195,16 @@ class Program:
         for s in self.states:
             env_from_s = [t for t in self.env_transitions if t.src == s]
             conds_env = [t.condition for t in env_from_s]
-            env_from_s += [Transition(s, neg(disjunct_formula_set(conds_env)), [], [], s)]
+            env_from_s += [Transition(s, neg(disjunct_formula_set(conds_env)), self.complete_action_set([]), [], s)]
             complete_env += env_from_s
 
             con_from_s = [t for t in self.con_transitions if t.src == s]
             conds_con = [t.condition for t in con_from_s]
-            con_from_s += [Transition(s, neg(disjunct_formula_set(conds_con)), [], [], s)]
+            con_from_s += [Transition(s, neg(disjunct_formula_set(conds_con)), self.complete_action_set([]), [], s)]
             complete_con += con_from_s
 
         return complete_env, complete_con
 
     def complete_action_set(self, actions: [BiOp]):
         non_updated_vars = [tv.name for tv in self.valuation if tv.name not in [str(act.left) for act in actions]]
-        return actions + [BiOp(Variable(var), "=", Variable(var)) for var in non_updated_vars]
+        return actions + [BiOp(Variable(var), ":=", Variable(var)) for var in non_updated_vars]
