@@ -104,13 +104,16 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
             there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, False)
 
             if not there_is_mismatch:
-                if any([] != [tt for tt in (
-                        controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions)
-                              if t.tgt == tt.src]
-                       for t in (
-                               controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions)):
-                    raise Exception(
-                        "I have no idea what's gone wrong. The counterstrategy has a state with no outgoing transitions.")
+                for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
+                    ok = False
+                    for tt in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
+                        if t.tgt[0] == tt.src[0] and set(t.tgt[1]) == set(tt.src[1]):
+                            ok = True
+                            break
+
+                    if not ok:
+                        raise Exception(
+                            "I have no idea what's gone wrong. The counterstrategy has no outgoing transition from this monitor state: " + str(t.tgt[0]) + ", " + ", ".join([str(p) for p in t.tgt[1]]))
 
                 # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
                 return False, controller_projected_on_program
