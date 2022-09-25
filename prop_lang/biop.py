@@ -91,7 +91,7 @@ class BiOp(Formula):
                 return left
             elif isinstance(right, Value) and right.is_false():
                 return UniOp("!", left).simplify()
-        return BiOp(left, self.op, right)
+        return self
 
     def ops_used(self):
         return [self.op] + self.left.ops_used() + self.right.ops_used()
