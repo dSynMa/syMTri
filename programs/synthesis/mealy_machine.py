@@ -75,18 +75,19 @@ class MealyMachine:
 
         for src in self.env_transitions.keys():
             for (beh, tgt) in self.env_transitions.get(src):
-                label = str(beh)
+                label = str(beh.replace(to_replace))
                 dot.edge(str(src), str(tgt), label)
 
         for src in self.con_transitions.keys():
             for (beh, tgt) in self.con_transitions.get(src):
-                label = str(beh)
+                label = str(beh.replace(to_replace))
                 dot.edge(str(src), str(tgt), label, style="dotted")
 
         return dot
 
-    def to_nuXmv_with_turns(self, mon_events):
-        new_mon_events = [BiOp(m, ":=", Variable("mon_" + m.name)) for m in mon_events]
+    def to_nuXmv_with_turns(self, mon_events, pred_acts):
+        new_mon_events = [BiOp(m, ":=", Variable("mon_" + m.name)) for m in mon_events]\
+                         + [BiOp(m, ":=", Variable(m.name)) for m in pred_acts]
         init_conds = []
 
         for (env_beh, tgt) in self.env_transitions.get(self.init_st):
@@ -127,7 +128,7 @@ class MealyMachine:
         for st in self.states:
             identity.append("next(" + str(st) + ") = " + str(st))
 
-        identity += ["!next(" + str(event) + ")" for event in self.env_events if Variable(str(event)) not in mon_events]
+        identity += ["!next(" + str(event) + ")" for event in self.env_events if Variable(str(event)) not in (mon_events + pred_acts)]
 
         define += ["identity_" + self.name + " := " + " & ".join(identity)]
 
@@ -138,12 +139,14 @@ class MealyMachine:
         vars += [str(var) + " : boolean" for var in self.env_events]
         vars += [str(var) + " : boolean" for var in self.con_events]
         vars += ["mon_" + str(var) + " : boolean" for var in mon_events]
+        vars += [str(var) + " : boolean" for var in pred_acts]
 
         init = [str(init_cond)]
         transitions += ["turn != con & (identity_" + self.name + " & " + str(conjunct_formula_set(
-            [BiOp(UniOp("next", "mon_" + e.name), "=", Variable("mon_" + e.name)) for e in mon_events])) + ")"]
+            [BiOp(UniOp("next", Variable("mon_" + e.name)), "=", Variable("mon_" + e.name)) for e in mon_events] +
+            [BiOp(UniOp("next", Variable(p.name)), "=", Variable(p.name)) for p in pred_acts]).to_nuxmv()) + ")"]
         trans = ["(" + ")\n\t|\t(".join(transitions) + ")"]
-        invar = [str(s) + " -> " + str(conjunct_formula_set([neg(ss) for ss in self.states if ss != s])) for s in
+        invar = [str(s) + " -> " + str(conjunct_formula_set(sorted({neg(Variable(ss)) for ss in (self.states - {s})}, key=lambda x: str(x))).to_nuxmv()) for s in
                  self.states]
         invar += [str(disjunct_formula_set([Variable(str(s)) for s in self.states]))]
 
