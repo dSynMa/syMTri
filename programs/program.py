@@ -174,6 +174,7 @@ class Program:
         init += [str(val.name) + " = " + str(val.value) for val in self.valuation]
         init += ["!" + str(event) for event in self.out_events]
         trans = ["\n\t|\t".join(transitions)]
+        trans += ["next(" + str(var.name) + "_prev) = " + str(var.name) for var in self.valuation]
 
         invar = [s + " -> " + str(conjunct_formula_set([neg(ss) for ss in self.states if ss != s])) for s in
                  self.states]
