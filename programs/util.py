@@ -11,12 +11,13 @@ from programs.analysis.model_checker import ModelChecker
 from programs.analysis.nuxmv_model import NuXmvModel
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
+from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct_formula_set, conjunct, neg
+from prop_lang.util import conjunct_formula_set, conjunct, neg, append_to_variable_name
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
@@ -27,9 +28,9 @@ def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, str
     text += "DEFINE\n" + "\t" + ";\n\t".join(program_model.define + strategy_model.define) + ";\n"
     env_turn = BiOp(Variable("turn"), "=", Value("env"))
     text += "\tcompatible := !(turn = mon) | (" + str(
-        conjunct_formula_set([BiOp(m, ' = ', Variable("mon_" + m.name)) for m in mon_events] +
-                            [BiOp(conjunct(env_turn, Variable("pred_" + str(i))), "->", Variable(str(pred_list[i])))
-                               for i in range(0, len(pred_list))]
+        conjunct_formula_set([BiOp(m, '=', Variable("mon_" + m.name)) for m in mon_events] +
+                            [BiOp(conjunct(env_turn, label_pred(p, pred_list)), "->", p)
+                               for p in pred_list]
                               )) +");\n"
 
     text += "INIT\n" + "\t(" + ")\n\t& (".join(program_model.init + strategy_model.init + ["turn = env", "mismatch = FALSE"]) + ")\n"
@@ -351,11 +352,45 @@ def synthesis_problem_to_TLSF_script(inputs, outputs, assumptions, guarantees):
     main += ";\n".join(map(str, outputs))
     main += " }\n"
     main += "\tASSUMPTIONS { "
-    main += ";\n".join(map(str, assumptions))
+    main += ";\n\n".join(map(str, assumptions))
     main += " }\n"
     main += "\tGUARANTEES { "
-    main += ";\n".join(map(str, guarantees))
+    main += ";\n\n".join(map(str, guarantees))
     main += " }\n"
     main += "}"
 
     return info + main
+
+
+def stutter_transitions(program: Program, env: bool):
+    stutter_transitions = []
+    if env:
+        transitions = program.env_transitions
+    else:
+        transitions = program.con_transitions
+    for state in program.states:
+        stutter_transitions += [Transition(state,
+                                           conjunct_formula_set([neg(t.condition)
+                                                                 for t in transitions if t.src == state]),
+                                        [],
+                                        [],
+                                        state)]
+    return stutter_transitions
+
+
+def concretize_and_ground_transitions(program, indices_and_state_list):
+    transitions = program.env_transitions + program.con_transitions
+
+    used_transitions_grounded = []
+    for i, st in indices_and_state_list:
+        if i != '-1':
+            transition = transitions[int(i)]
+            grounded_state = project_ce_state_onto_ev(st, program.env_events + program.con_events)
+            projected_condition = transition.condition.ground(
+                [TypedValuation(key, "bool", Value(grounded_state[key].lower())) for key in grounded_state.keys()])
+            used_transitions_grounded += [Transition(transition.src,
+                                                                projected_condition,
+                                                                transition.action,
+                                                                transition.output,
+                                                                transition.tgt)]
+    return used_transitions_grounded
