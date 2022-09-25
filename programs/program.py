@@ -166,6 +166,11 @@ class Program:
         vars += [str(var.name) + " : " + str(var.type) for var in self.valuation if
                  not (var.type == "nat" or var.type == "natural")]
         vars += [str(var.name) + " : integer" for var in self.valuation if (var.type == "nat" or var.type == "natural")]
+        # for transition_predicate checking
+        vars += [str(var.name) + "_prev : " + str(var.type) for var in self.valuation if
+                 not (var.type == "nat" or var.type == "natural")]
+        vars += [str(var.name) + "_prev : integer" for var in self.valuation if (var.type == "nat" or var.type == "natural")]
+
         vars += [str(var) + " : boolean" for var in self.env_events]
         vars += [str(var) + " : boolean" for var in self.con_events]
         vars += [str(var) + " : boolean" for var in self.out_events]
