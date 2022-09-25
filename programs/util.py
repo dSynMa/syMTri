@@ -21,10 +21,10 @@ from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 
-def create_nuxmv_model_for_compatibility_checking(model1: NuXmvModel, model2: NuXmvModel, mon_events, pred_list):
+def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, strategy_model: NuXmvModel, mon_events, pred_list):
     text = "MODULE main\n"
-    text += "VAR\n" + "\t" + ";\n\t".join(set(model1.vars + model2.vars + ["mismatch : boolean"])) + ";\n"
-    text += "DEFINE\n" + "\t" + ";\n\t".join(model1.define + model2.define) + ";\n"
+    text += "VAR\n" + "\t" + ";\n\t".join(set(program_model.vars + strategy_model.vars + ["mismatch : boolean"])) + ";\n"
+    text += "DEFINE\n" + "\t" + ";\n\t".join(program_model.define + strategy_model.define) + ";\n"
     env_turn = BiOp(Variable("turn"), "=", Value("env"))
     text += "\tcompatible := !(turn = mon) | (" + str(
         conjunct_formula_set([BiOp(m, ' = ', Variable("mon_" + m.name)) for m in mon_events] +
@@ -32,8 +32,8 @@ def create_nuxmv_model_for_compatibility_checking(model1: NuXmvModel, model2: Nu
                                for i in range(0, len(pred_list))]
                               )) +");\n"
 
-    text += "INIT\n" + "\t(" + ")\n\t& (".join(model1.init + model2.init + ["turn = env", "mismatch = FALSE"]) + ")\n"
-    text += "INVAR\n" + "\t((" + ")\n\t& (".join(model1.invar + model2.invar) + "))\n"
+    text += "INIT\n" + "\t(" + ")\n\t& (".join(program_model.init + strategy_model.init + ["turn = env", "mismatch = FALSE"]) + ")\n"
+    text += "INVAR\n" + "\t((" + ")\n\t& (".join(program_model.invar + strategy_model.invar) + "))\n"
 
     turn_logic = ["(turn = con -> next(turn) = env)"]
     turn_logic += ["(turn = env -> next(turn) = mon)"]
@@ -41,15 +41,15 @@ def create_nuxmv_model_for_compatibility_checking(model1: NuXmvModel, model2: Nu
 
     maintain_mon_vars = str(conjunct_formula_set(
         [BiOp(UniOp("next", Variable("mon_" + m.name)), ' = ', Variable("mon_" + m.name)) for m in mon_events]))
-    new_trans = ["compatible", "!next(mismatch)"] + model1.trans + model2.trans + turn_logic
+    new_trans = ["compatible", "!next(mismatch)"] + program_model.trans + strategy_model.trans + turn_logic
     normal_trans = "\t((" + ")\n\t& (".join(new_trans) + "))\n"
 
     normal_trans += "\t | (!compatible & " + \
-                    " next(mismatch) & identity_" + model1.name + \
-                    " & identity_" + model2.name + " & next(turn) = turn & " + maintain_mon_vars + ")"
+                    " next(mismatch) & identity_" + program_model.name + \
+                    " & identity_" + strategy_model.name + " & next(turn) = turn & " + maintain_mon_vars + ")"
     normal_trans = "(!mismatch -> (" + normal_trans + "))"
 
-    deadlock = "(mismatch -> (next(mismatch) & identity_" + model1.name + " & identity_" + model2.name + " & next(turn) = turn & " + maintain_mon_vars + "))"
+    deadlock = "(mismatch -> (next(mismatch) & identity_" + program_model.name + " & identity_" + strategy_model.name + " & next(turn) = turn & " + maintain_mon_vars + "))"
 
     text += "TRANS\n" + normal_trans + "\n\t& " + deadlock + "\n"
     text = text.replace("%", "mod")
