@@ -16,7 +16,7 @@ class Test(TestCase):
             abstraction = predicate_abstraction(program, [], symbol_table_from_program(program))
             ltl_abstraction = abstraction_to_ltl_with_turns(abstraction)
             print(ltl_abstraction)
-            out = model_checker.check(nuxmv_model, str(ltl_abstraction))
+            out = model_checker.check(nuxmv_model, str(ltl_abstraction), None, False)
             if not out[0]:
                 print(out[1])
             assert (out[0] is True)

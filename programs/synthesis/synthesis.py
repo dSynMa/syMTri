@@ -77,7 +77,7 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
             print(mm.to_dot())
 
             system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
-            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system)
+            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, False)
 
             if not there_is_mismatch:
                 # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
