@@ -53,6 +53,8 @@ def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, str
 
     text += "TRANS\n" + normal_trans + "\n\t& " + deadlock + "\n"
     text = text.replace("%", "mod")
+    text = text.replace("&&", "&")
+    text = text.replace("||", "|")
     return text
 
 
@@ -69,6 +71,8 @@ def create_nuxmv_model(nuxmvModel):
 
     text += "TRANS\n" + "\t(" + ")\n\t& (".join(nuxmvModel.trans + turn_logic) + ")\n"
     text = text.replace("%", "mod")
+    text = text.replace("&&", "&")
+    text = text.replace("||", "|")
     return text
 
 
