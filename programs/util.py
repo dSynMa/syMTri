@@ -163,29 +163,6 @@ def only_this_state_next(states, state):
     return only_this_state
 
 
-def use_liveness_refinement(ce: [dict], symbol_table):
-    assert len(ce) > 0
-
-    counterstrategy_states_con = [key for dict in ce for key, value in dict.items()
-                                  if dict["turn"] == "env" and key.startswith("st_") and value == "TRUE"]
-
-    last_state = counterstrategy_states_con[len(counterstrategy_states_con) - 1]
-    if last_state in counterstrategy_states_con[:-1]:
-        indices_of_prev_visits = [i for i, x in enumerate(counterstrategy_states_con[:-1]) if x == last_state]
-        corresponding_ce_state = [ce[(3 * i) + 1] for i in indices_of_prev_visits]
-        var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
-                           for i in range(0, len(corresponding_ce_state) - 1)]
-        var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in var_differences]
-        var_differences = [[v for v in vs if v in symbol_table.keys()] for vs in var_differences]
-        if any([x for xs in var_differences for x in xs if
-                re.match("(int(eger)?|nat(ural)?|real)", symbol_table[x].type)]):
-            return True
-        else:
-            return False
-    else:
-        return False
-
-
 def get_differently_value_vars(state1: dict, state2: dict):
     return [key for key in state1.keys() if key in state2.keys() and state1[key] != state2[key]]
 
