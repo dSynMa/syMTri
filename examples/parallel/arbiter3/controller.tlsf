@@ -22,15 +22,15 @@ MAIN {
   }
 
   ASSUMPTIONS {
-    G(!(request & dealWithTasks));
-    G(!(request & otherRoom));
-    G(!(dealingWithTasks & otherRoom));
-    G(dealingWithTasks -> (dealingWithTasks W release));
-    G F dealingWithTasks;
+    G(!(request && dealWithTasks));
+    G(!(request && otherRoom));
+    G(!(dealWithTasks && otherRoom));
+    G(dealWithTasks -> (dealWithTasks W release));
+    G F dealWithTasks;
   }
 
   GUARANTEES {
-      G((dealingWithTasks & doTask) -> F release);
+      G((dealWithTasks && doTask) -> F release);
   }
 
 }
