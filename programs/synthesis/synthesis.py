@@ -27,6 +27,14 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
         out_acts_syfco = syfco_ltl_out(tlsf_path)
 
     ltl = string_to_ltl(ltl_text)
+
+    if isinstance(ltl, BiOp) and (ltl.op == "->" or ltl.op == "=>"):
+        ltl_assumptions = ltl.left
+        ltl_guarantees = ltl.right
+    else:
+        ltl_assumptions = true()
+        ltl_guarantees = ltl
+
     in_acts = [e for e in aut.env_events + aut.out_events]
     out_acts = [e for e in aut.con_events]
 
@@ -38,12 +46,13 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
 
     in_acts += [Variable(e) for e in aut.states]
 
-    return abstract_synthesis_loop(aut, ltl, in_acts, out_acts, docker)
+    return abstract_synthesis_loop(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts, docker)
 
 
-def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable], out_acts: [Variable], docker: str) -> \
+def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable], out_acts: [Variable], docker: str) -> \
         Tuple[bool, MealyMachine]:
     symbol_table = symbol_table_from_program(program)
+    ltl = implies(ltl_assumptions, ltl_guarantees)
 
     state_predicates = []
     rankings = []
