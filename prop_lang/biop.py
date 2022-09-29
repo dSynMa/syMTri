@@ -103,6 +103,8 @@ class BiOp(Formula):
         if self.op == "%":
             return UniOp("toint", BiOp(UniOp("unsigned word[8]", self.left.to_nuxmv()), "mod",
                                        UniOp("unsigned word[8]", self.right.to_nuxmv())))
+        elif self.op == "==":
+            return BiOp(self.left.to_nuxmv(), '==', self.right.to_nuxmv())
         elif self.op == "=>":
             return BiOp(self.left.to_nuxmv(), '->', self.right.to_nuxmv())
         elif self.op == "<=>":

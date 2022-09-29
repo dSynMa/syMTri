@@ -163,11 +163,11 @@ class Program:
 
         vars = ["turn : {env, mon, con}"]
         vars += [str(st) + " : boolean" for st in self.states]
-        vars += [str(var.name) + " : " + str(var.type) for var in self.valuation if
+        vars += [str(var.name) + " : " + str(var.type).replace("bool", "boolean") for var in self.valuation if
                  not (var.type == "nat" or var.type == "natural")]
         vars += [str(var.name) + " : integer" for var in self.valuation if (var.type == "nat" or var.type == "natural")]
         # for transition_predicate checking
-        vars += [str(var.name) + "_prev : " + str(var.type) for var in self.valuation if
+        vars += [str(var.name) + "_prev : " + str(var.type.replace("bool", "boolean")) for var in self.valuation if
                  not (var.type == "nat" or var.type == "natural")]
         vars += [str(var.name) + "_prev : integer" for var in self.valuation if (var.type == "nat" or var.type == "natural")]
 
@@ -176,7 +176,7 @@ class Program:
         vars += [str(var) + " : boolean" for var in self.out_events]
 
         init = [self.initial_state]
-        init += [str(val.name) + " = " + str(val.value) for val in self.valuation]
+        init += [str(val.name) + " = " + str(val.value.to_nuxmv()) for val in self.valuation]
         init += ["!" + str(event) for event in self.out_events]
         trans = ["\n\t|\t".join(transitions)]
         trans += ["next(" + str(var.name) + "_prev) = " + str(var.name) for var in self.valuation]

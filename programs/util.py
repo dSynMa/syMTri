@@ -59,6 +59,7 @@ def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, str
     text = text.replace("%", "mod")
     text = text.replace("&&", "&")
     text = text.replace("||", "|")
+    text = text.replace("==", "=")
     return text
 
 
@@ -77,6 +78,7 @@ def create_nuxmv_model(nuxmvModel):
     text = text.replace("%", "mod")
     text = text.replace("&&", "&")
     text = text.replace("||", "|")
+    text = text.replace("==", "=")
     return text
 
 
