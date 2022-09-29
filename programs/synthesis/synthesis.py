@@ -20,6 +20,8 @@ from prop_lang.variable import Variable
 def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tuple[bool, Program]:
     if tlsf_path is not None:
         ltl_text = syfco_ltl(tlsf_path)
+        if " Error\"" in ltl_text:
+            raise Exception("Error parsing " + tlsf_path + " see syfco error:\n" + ltl_text)
         ltl_text = ltl_text.replace('"', "")
         in_acts_syfco = syfco_ltl_in(tlsf_path)
         out_acts_syfco = syfco_ltl_out(tlsf_path)
