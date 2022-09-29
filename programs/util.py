@@ -289,13 +289,13 @@ def label_preds_according_to_index(ps):
     return {label_pred(p) for p in ps}
 
 
-def there_is_mismatch_between_monitor_and_strategy(system, livenesstosafety: bool):
+def there_is_mismatch_between_monitor_and_strategy(system, livenesstosafety: bool, ltl_assumptions: Formula):
     print(system)
     model_checker = ModelChecker()
     # Sanity check
     result, out = model_checker.check(system, "F FALSE", None, livenesstosafety)
     assert not result
-    there_is_no_mismatch, out = model_checker.check(system, "G !mismatch", None, livenesstosafety)
+    there_is_no_mismatch, out = model_checker.check(system, str(ltl_assumptions.to_nuxmv()) + "-> G !mismatch", None, livenesstosafety)
 
     return not there_is_no_mismatch, out
 

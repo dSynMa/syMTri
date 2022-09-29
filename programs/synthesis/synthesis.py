@@ -112,7 +112,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             return True, controller_projected_on_program
         else:
             system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
-            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, False)
+            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, False, ltl_assumptions)
 
             if not there_is_mismatch:
                 for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
