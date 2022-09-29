@@ -113,8 +113,6 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
     done_states_env = set()
     done_states_con = set()
 
-    done_states_env.add(program.initial_state)
-
     while len(current_states) != 0:
         next_states = set()
 
@@ -167,11 +165,20 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
 
         con_turn_flag = not con_turn_flag
 
-    return Program("pred_abst_" + program.name, done_states_env | done_states_con | {init_st}, init_st, [],
+    states = unique_pred_states(done_states_env | done_states_con)
+    return Program("pred_abst_" + program.name, states | {init_st}, init_st, [],
                    env_transitions,
                    con_transitions, program.env_events,
                    program.con_events, program.out_events)
 
+
+def unique_pred_states(states):
+    unique_states = {}
+    for q,preds in states:
+        hsh = hash((q,preds))
+        if hsh not in unique_states.keys():
+            unique_states[hsh] = (q,preds)
+    return set(unique_states.values())
 
 # Use this for testing
 def abstraction_to_ltl_with_turns(pred_abstraction: Program):
@@ -293,7 +300,7 @@ def abstraction_to_ltl(pred_abstraction: Program, state_predicates: [Formula], t
                            conjunct_formula_set(sorted(bookeeping_tran_preds, key = lambda x: str(x)))
                 ))]
 
-        next = sorted(next, key=lambda x : str(x))
+        next = sorted(set(next), key=lambda x : str(x))
         con_env_transitions += [G(implies(now, disjunct_formula_set(next))).to_nuxmv()]
 
     transition_cond = sorted(con_env_transitions, key=lambda x : str(x))
