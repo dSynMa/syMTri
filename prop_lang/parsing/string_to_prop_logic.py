@@ -11,16 +11,15 @@ from prop_lang.variable import Variable
 @generate
 def prop_logic_expression():
     yield spaces()
-    expr = yield try_choice(bracketed_expression, try_choice(boolean_bi_expression,
-                                                  unit_prop_logic_expression))
+    expr = yield try_choice(boolean_bi_expression, try_choice(unit_prop_logic_expression, bracketed_expression))
     yield spaces()
     return expr
 
 
 @generate
 def unit_prop_logic_expression():
-    expr = yield try_choice(boolean_math_bi_expression,
-                            try_choice(boolean_val, try_choice(variable, try_choice(uni_expression,
+    expr = yield try_choice(uni_expression,
+                            try_choice(boolean_math_bi_expression, try_choice(boolean_val, try_choice(variable,
                                                                                     bracketed_expression))))
     yield spaces()
     return expr
@@ -44,7 +43,7 @@ def uni_expression():
 @generate
 def boolean_bi_expression():
     left = yield unit_prop_logic_expression << spaces()
-    op = yield regex("(&+|\\|+|=+|!=|\\-+>|<\\-+>)") << spaces()
+    op = yield regex("(&+|\|+|=+|!=|\\-+>|<\\-+>)") << spaces()
     right = yield unit_prop_logic_expression << spaces()
     return BiOp(left, op, right)
 
@@ -103,8 +102,7 @@ def math_expression():
 @generate
 def math_unit_expression():
     expr = yield try_choice(number_val, try_choice(variable,
-                                                    try_choice(math_bracketed_expression,
-                                                               math_uni_expression)))
+                                                    try_choice(math_uni_expression, math_bracketed_expression)))
     yield spaces()
     return expr
 

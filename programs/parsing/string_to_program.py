@@ -100,7 +100,7 @@ def bool_decl_parser():
 def num_decl_parser():
     var = yield name << spaces() << string(":") << spaces()
     type = yield regex(
-        "(int(eger)?|nat(ural)?|real|([0-9]+|" + name_regex + ")+\.\.([0-9]+|" + name_regex + "))") << spaces()
+        "(int(eger)?|nat(ural)?|bool(ean)?|real|([0-9]+|" + name_regex + ")+\.\.([0-9]+|" + name_regex + "))") << spaces()
     yield spaces()
     yield string(":=") << spaces()
     value = yield math_expression << spaces()
