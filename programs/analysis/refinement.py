@@ -139,10 +139,14 @@ def loop_to_c(symbol_table, program : Program, entry_predicate: Formula, loop_be
                 + "\n\t".join(choices) \
                 + "\t}"
 
-    return "#include<stdbool.h>\n\nvoid main(" + param_list + "){\n\t" + "\n\t".join(init) + loop_code + "\n}"
+    c_code = "#include<stdbool.h>\n\nvoid main(" + param_list + "){\n\t" + "\n\t".join(init) + loop_code + "\n}"
+    c_code = c_code.replace("TRUE", "true")
+    c_code = c_code.replace("FALSE", "false")
+
+    return c_code
 
 
-def use_liveness_refinement(ce: [dict], symbol_table):
+def use_liveness_refinement(ce: [dict], program, symbol_table):
     assert len(ce) > 0
 
     counterstrategy_states_con = [key for dict in ce for key, value in dict.items()
