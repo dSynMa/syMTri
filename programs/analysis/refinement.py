@@ -158,11 +158,18 @@ def use_liveness_refinement(ce: [dict], program, symbol_table):
         var_differences = [[v for v in vs if v in symbol_table.keys()] for vs in var_differences]
         if any([x for xs in var_differences for x in xs if
                 re.match("(int(eger)?|nat(ural)?|real)", symbol_table[x].type)]):
-            first_index = 0
-            if indices_of_prev_visits[0] > 0:
-                first_index = indices_of_prev_visits[0]
-            return True, prog_transition_indices_and_state_from_ce(ce[first_index:])
+
+            if not len(indices_of_prev_visits) > 0:
+                raise Exception("Something weird here.")
+
+            first_index = indices_of_prev_visits[0]
+            ce_prog_init_trans = prog_transition_indices_and_state_from_ce(ce[0:first_index])
+            ce_prog_init_trans_concretised = concretize_transitions(program, ce_prog_init_trans)
+            ce_prog_loop_trans = prog_transition_indices_and_state_from_ce(ce[first_index + 1:])
+            ce_prog_loop_tran_concretised = concretize_transitions(program, ce_prog_loop_trans)
+            entry_predicate = interpolation(ce, program, ce_prog_init_trans_concretised + ce_prog_loop_tran_concretised, len(ce_prog_init_trans) + 1, symbol_table)
+            return True, ce_prog_loop_trans, entry_predicate
         else:
-            return False, None
+            return False, None, None
     else:
-        return False, None
+        return False, None, None

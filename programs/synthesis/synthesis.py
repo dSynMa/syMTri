@@ -13,7 +13,7 @@ from programs.util import symbol_table_from_program, create_nuxmv_model_for_comp
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.parsing.string_to_ltl import string_to_ltl
-from prop_lang.util import neg, G, F, implies, conjunct, disjunct_formula_set, X, disjunct
+from prop_lang.util import neg, G, F, implies, conjunct, disjunct_formula_set, X, disjunct, true
 from prop_lang.variable import Variable
 
 
@@ -113,7 +113,9 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
 
                     if not ok:
                         raise Exception(
-                            "I have no idea what's gone wrong. The counterstrategy has no outgoing transition from this monitor state: " + str(t.tgt[0]) + ", " + ", ".join([str(p) for p in t.tgt[1]]))
+                            "I have no idea what's gone wrong. "
+                            "The counterstrategy has no outgoing transition from this monitor state: "
+                            + str(t.tgt[0]) + ", " + ", ".join([str(p) for p in t.tgt[1]]))
 
                 # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
                 return False, controller_projected_on_program
@@ -123,7 +125,7 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
                 transitions_without_stutter = [transitions[int(t)] for t, _ in transition_indices_and_state if
                                                t != '-1']
 
-                use_liveness, counterexample_loop = use_liveness_refinement(ce, symbol_table)
+                use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(ce, program, symbol_table)
 
                 if not use_liveness:
                     new_preds = safety_refinement(ce, transitions_without_stutter, symbol_table, program)
@@ -144,29 +146,14 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
                 if use_liveness:
                     last_transition = transitions_without_stutter[len(transitions_without_stutter) - 1]
 
-                    desired_env_props = []
-                    desired_prog_props = []
-
-                    # use mismatch_ce_state to identify which program transitions the env wanted to take
-                    mismatch_ce_state = ce[len(ce) - 1]
-                    for key in mismatch_ce_state.keys():
-                        if "mon_" in key and key.replace("mon_", "") in map(str, program.states):
-                            if mismatch_ce_state[key] == "TRUE":
-                                desired_prog_props.append(Variable(key.replace("mon_", "")))
-                            else:
-                                desired_prog_props.append(neg(Variable(key.replace("mon_", ""))))
-                        elif key in map(str, program.env_events):
-                            if mismatch_ce_state[key] == "TRUE":
-                                desired_env_props.append(Variable(key))
-                            else:
-                                desired_env_props.append(neg(Variable(key)))
-
-                    # identify the loop in the monitor exercised by the counterexample
+                    # ground transitions in the counterexample loop
+                    # on the environment and controller events in the counterexample
                     loop_before_exit = concretize_and_ground_transitions(program, counterexample_loop)
                     # transitions_to_close_loop = grounded_desired_prog_trans
 
                     ranking, invars = liveness_refinement(symbol_table,
                                                           program,
+                                                          entry_predicate,
                                                           loop_before_exit,
                                                           last_transition.condition)
                     rankings.append((ranking, invars))

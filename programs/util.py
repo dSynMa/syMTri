@@ -376,6 +376,16 @@ def stutter_transitions(program: Program, env: bool):
     return stutter_transitions
 
 
+def concretize_transitions(program, indices_and_state_list):
+    transitions = program.env_transitions + program.con_transitions
+
+    used_transitions = []
+    for i, st in indices_and_state_list:
+        if i != '-1':
+            used_transitions += [transitions[int(i)]]
+    return used_transitions
+
+
 def concretize_and_ground_transitions(program, indices_and_state_list):
     transitions = program.env_transitions + program.con_transitions
 
