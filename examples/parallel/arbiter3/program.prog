@@ -32,7 +32,7 @@ program eventually__allow_grant {
 
     CONTROLLER TRANSITIONS {
         q1 -> q1 [(((done2 & !room1) | (done1 & room1)) & granting) & (cnt > 1) $ granting := false],
-        q1 -> q1 [(((done2 & room1) | (done1 & !room1)) & granting) & cnt > 1 $ granting := false; cnt := cnt + 1],
+        q1 -> q1 [((done2 & room1) | (done1 & !room1)) & granting $ granting := false; cnt := cnt + 1],
         q1 -> q2 [(((done2 & !room1) | (done1 & room1)) & granting) & cnt == 0 $ granting := false]
     }
 }

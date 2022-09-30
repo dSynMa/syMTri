@@ -25,11 +25,10 @@ MAIN {
     G(!(request && dealWithTasks));
     G(!(request && otherRoom));
     G(!(dealWithTasks && otherRoom));
-    G(dealWithTasks -> (dealWithTasks W release));
-    G F dealWithTasks;
   }
 
   GUARANTEES {
+      G(!(done1 && done2));
       G((dealWithTasks && doTask) -> F release);
   }
 
