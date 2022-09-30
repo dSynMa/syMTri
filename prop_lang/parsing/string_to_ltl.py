@@ -46,7 +46,7 @@ def bi_ltl_expression_once():
 def bi_ltl_expression():
     left = yield unit_ltl_expression << spaces()
     op = yield spaces() >> regex("(&+|\|+|\-+>|<\-+>|U|W|R|M)") << spaces()
-    rights = yield sepBy(try_choice(bi_ltl_expression_once, unit_ltl_expression), regex(op)) << spaces()
+    rights = yield sepBy(try_choice(ltl_expression, unit_ltl_expression), regex(op)) << spaces()
     if len(rights) == 0:
         ret = yield fail_with("Dangling operator: " + str(left) + " " + str(op))
         return ret
