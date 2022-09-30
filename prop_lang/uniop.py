@@ -9,6 +9,7 @@ from prop_lang.variable import Variable
 
 class UniOp(Formula):
     def __init__(self, op: str, right: Formula):
+        assert isinstance(right, Formula)
         self.op = op
         self.right = right
 
