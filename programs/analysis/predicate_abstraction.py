@@ -8,6 +8,7 @@ from programs.transition import Transition
 from programs.util import label_preds_according_to_index, add_prev_suffix
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
+from prop_lang.parsing.string_to_ltl import string_to_ltl
 from prop_lang.uniop import UniOp
 from prop_lang.util import conjunct, neg, conjunct_formula_set, conjunct_typed_valuation_set, disjunct_formula_set, \
     implies, G, X
@@ -56,22 +57,25 @@ def meaning_within_incremental_one_step(f: Formula, previous_preds: [[Formula]],
     return Ps
 
 
-def powerset(S: set):
+def powerset_complete(S: set):
     positive_subsets = chain.from_iterable(combinations(S, r) for r in range(len(S) + 1))
-    complete_subsets = set()
+    complete_subsets = list()
     for ps in positive_subsets:
         real_ps = set(ps)
         negative = {neg(s) for s in S if (s) not in real_ps}
         complete = set(real_ps).union(negative)
-        complete_subsets.add(frozenset(complete))
+        complete_subsets.append(frozenset(complete))
 
     return complete_subsets
 
 
-def predicate_abstraction(program: Program, state_predicates: [Formula], transition_predicates: [Formula], symbol_table) -> Program:
-    env_sublists = powerset(program.env_events)
-    con_sublists = powerset(program.con_events)
+def powerset(S: set):
+    subsets = chain.from_iterable(combinations(S, r) for r in range(len(S) + 1))
 
+    return sorted(list(map(set, subsets)), key=lambda x: len(x))
+
+
+def predicate_abstraction(program: Program, state_predicates: [Formula], transition_predicates: [Formula], symbol_table, simplified: bool) -> Program:
     init_st = program.initial_state
     init_conf = conjunct_typed_valuation_set(program.valuation)
     env_transitions = set()
@@ -86,8 +90,11 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
     # initial transitions rule
     # TODO this should only be computed once, if predicate set updated it can be done incrementally
     for t in orig_env_transitions:
-        if t.src == program.initial_state:
-            for E in env_sublists:
+        vars_in_cond = t.condition.variablesin()
+        env_vars_in_cond = [e for e in vars_in_cond if e in program.env_events]
+        env_powerset = powerset_complete(env_vars_in_cond)
+        for E in env_powerset:
+            if t.src == program.initial_state:
                 events = conjunct_formula_set(E)
                 state = conjunct(init_conf, events)
                 guarded = conjunct(state, t.condition)
@@ -118,21 +125,24 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
 
         if con_turn_flag:
             transition_set = orig_con_transitions
-            events_sublists = con_sublists
+            events = program.con_events
         else:
             transition_set = orig_env_transitions
-            events_sublists = env_sublists
+            events = program.env_events
 
         new_transitions = set()
 
         for q, P in current_states:
-            # TODO precompute mapping from states to transitions
             q_transitions = {t for t in transition_set if t.src == q}
-            for Evs in events_sublists:
-                context_P = conjunct_formula_set(P)
-                context_Evs = conjunct_formula_set(Evs)
-                context = conjunct(context_P, context_Evs)
-                for t in q_transitions:
+            for t in q_transitions:
+                vars_in_cond = t.condition.variablesin()
+                env_vars_in_cond = [e for e in vars_in_cond if e in events]
+                env_powerset = powerset_complete(env_vars_in_cond)
+                for Evs in env_powerset:
+                    # TODO precompute mapping from states to transitions
+                    context_P = conjunct_formula_set(P)
+                    context_Evs = conjunct_formula_set(Evs)
+                    context = conjunct(context_P, context_Evs)
                     guard_in_context = And(*conjunct(t.condition, context).to_smt(symbol_table_with_prev_vars))
                     if smt_checker.check(guard_in_context):
                         context_P_without_prevs = conjunct_formula_set([p for p in P if [] == [v for v in p.variablesin() if v.name.endswith("_prev")]])
@@ -142,18 +152,18 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
                         f = conjunct_formula_set(
                             set(prev_action).union({prev_condition, add_prev_suffix(program, context_P_without_prevs), context_Evs}))
                         next_Ps = meaning_within(f, predicates, symbol_table_with_prev_vars)
+                        pred_trans = set()
                         for next_P in next_Ps:
                             next_state = (t.tgt, next_P)
-                            if con_turn_flag and next_state not in done_states_env:
-                                next_states.add(next_state)
-                            elif not con_turn_flag and next_state not in done_states_con:
-                                next_states.add(next_state)
-
                             new_output = set(t.output)
                             new_output |= {neg(o) for o in program.out_events if o not in t.output}
                             new_output = list(new_output)
-                            new_transitions.add(Transition((q, P), context_Evs, [], new_output, next_state))
-
+                            pred_trans.add(Transition((q, P), context_Evs, [], new_output, next_state))
+                        new_transitions.update(pred_trans)
+                        if con_turn_flag and next_state not in done_states_env:
+                            next_states.add(next_state)
+                        elif not con_turn_flag and next_state not in done_states_con:
+                            next_states.add(next_state)
         if con_turn_flag:
             done_states_con.update(current_states)
             con_transitions.update(new_transitions)
@@ -166,11 +176,46 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
         con_turn_flag = not con_turn_flag
 
     states = unique_pred_states(done_states_env | done_states_con)
+
+    # simplification stage
+    if simplified:
+        new_env_transitions = merge_transitions(env_transitions, symbol_table)
+        new_con_transitions = merge_transitions(con_transitions, symbol_table)
+    else:
+        new_env_transitions = env_transitions
+        new_con_transitions = con_transitions
+
     return Program("pred_abst_" + program.name, states | {init_st}, init_st, [],
-                   env_transitions,
-                   con_transitions, program.env_events,
+                   new_env_transitions,
+                   new_con_transitions, program.env_events,
                    program.con_events, program.out_events)
 
+
+def merge_transitions(transitions: [Transition], symbol_table):
+    new_transitions = []
+
+    # partition the transitions into classes where in each class each transition has the same outputs and source and end state
+    partitions = dict()
+    for transition in transitions:
+        key = (transition.src, (conjunct_formula_set(sorted(transition.output, key=lambda x : str(x)))), transition.tgt)
+        if key in partitions.keys():
+            partitions[key].append(transition)
+        else:
+            partitions[key] = [transition]
+    for key in partitions.keys():
+        trans_here = partitions[key]
+        conditions = disjunct_formula_set(sorted([t.condition for t in trans_here], key=lambda x : str(x)))
+        conditions_smt = conditions.to_smt(symbol_table)
+        conditions_simplified_fnode = conditions_smt[0].simplify()
+        ## simplify when doing disjunct, after lex ordering
+        ## also, may consider when enumerating possible event sets starting with missing some evetns and seeing how many transitions they match, if only then can stop adding to it
+        try:
+            # TODO using string_to_ltl here since it can deal with unbracketed combinations, e.g. a | b | c
+            #  string_to_pl needs to be extended to handle this too
+            new_transitions.append(Transition(key[0], string_to_ltl(str(conditions_simplified_fnode)), [], trans_here[0].output, key[2]))
+        except Exception as e:
+            raise e
+    return new_transitions
 
 def unique_pred_states(states):
     unique_states = {}
