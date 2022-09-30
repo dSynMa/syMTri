@@ -9,20 +9,39 @@ from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
 from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_on_ce_state_with_index, \
-    project_ce_state_onto_ev, get_differently_value_vars, symbol_table_from_program, \
-    prog_transition_indices_and_state_from_ce
+    project_ce_state_onto_ev, get_differently_value_vars, prog_transition_indices_and_state_from_ce, \
+    concretize_transitions
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from prop_lang.mathexpr import MathExpr
 from prop_lang.parsing.string_to_prop_logic import string_to_mathexpr
-from prop_lang.util import conjunct, conjunct_formula_set, neg, G, F, implies, disjunct_formula_set
+from prop_lang.util import conjunct, conjunct_formula_set, neg, true
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 
 def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -> [FNode]:
-    logic = "QF_UFLRA"  # TODO what to put here?
+    # we collect interpolants in this set
+    Cs = set()
 
+    for j in reversed(range(0, len(prefix))):
+        C = interpolation(ce, program, prefix, j, symbol_table)
+        if C is None:
+            print("I think that interpolation is being checked against formulas that are not contradictory.")
+            break
+        # if B is itself inconsistent
+        if isinstance(C, Value) and C.is_true():
+            break
+        elif isinstance(C, Value) and C.is_false():
+            break
+
+        Cs |= {C}
+        Cs |= {neg(C).simplify()}
+
+    return Cs
+
+
+def interpolation(ce: [dict], program: Program, prefix: [Transition], cut_point: int, symbol_table):
+    logic = "QF_UFLRA"  # TODO what to put here?
     smt_checker = SMTChecker()
 
     # this will be used to add intermediate variables for each monitor state
@@ -37,73 +56,50 @@ def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -
     reset_vars = [BiOp(Variable(v + "_" + str(i)), ":=", Variable(v)) for v in symbol_table.keys() for i in
                   range(0, len(prefix))]
 
-    # we collect interpolants in this set
-    Cs = set()
-
-    # this characterises the variables at the initial state, we rename to name_0
     init_prop = ce_state_to_formula(ce[0], symbol_table).replace(ith_vars(0))
 
-    # this characterise the base of the B of the interpolant problem, essentially, the initial proposition, and the
-    # negation of the condition of the transition the environment did not want to take
-    # B = conjunct(neg(prefix[len(prefix) - 1].condition).replace(ith_vars(len(prefix) - 1)), init_prop)
+    path_formula_set_A = []
+    for i in range(0, cut_point):
+        path_formula_set_A += [BiOp(Variable(act.left.name + "_" + str(i + 1)),
+                                    "=",
+                                    act.right.replace(ith_vars(i))) for act in
+                               program.complete_action_set(prefix[i].action)]
 
-    A = []
-    B = []
-    C = []
+    path_formula_A = conjunct_formula_set(path_formula_set_A)
 
-    for j in reversed(range(0, len(prefix))):
-        # localize jth state
-        path_formula_set_A = []
-        for i in range(0, j):
-            path_formula_set_A += [BiOp(Variable(act.left.name + "_" + str(i + 1)),
-                                        "=",
-                                        act.right.replace(ith_vars(i))) for act in
-                                   program.complete_action_set(prefix[i].action)]
+    path_formula_set_B = []
+    for i in range(cut_point, len(prefix) - 1):
+        path_formula_set_B += [BiOp(Variable(act.left.name + "_" + str(i + 1)),
+                                    "=",
+                                    act.right.replace(ith_vars(i))) for act in
+                               program.complete_action_set(prefix[i].action)]
 
-        path_formula_A = conjunct_formula_set(path_formula_set_A)
+    projected_condition = prefix[len(prefix) - 1].condition.replace(ith_vars(len(prefix) - 1))
+    grounded_condition = ground_formula_on_ce_state_with_index(projected_condition,
+                                                               project_ce_state_onto_ev(ce[len(prefix) - 1],
+                                                                                        program.env_events
+                                                                                        + program.con_events),
+                                                               len(prefix) - 1)
 
-        path_formula_set_B = []
-        for i in range(j, len(prefix) - 1):
-            path_formula_set_B += [BiOp(Variable(act.left.name + "_" + str(i + 1)),
-                                       "=",
-                                       act.right.replace(ith_vars(i))) for act in
-                                  program.complete_action_set(prefix[i].action)]
+    path_formula_set_B += [neg(grounded_condition)]
 
-        projected_condition = prefix[len(prefix) - 1].condition.replace(ith_vars(len(prefix) - 1))
-        grounded_condition = ground_formula_on_ce_state_with_index(projected_condition,
-                                                                    project_ce_state_onto_ev(ce[len(prefix) - 1],
-                                                                                            program.env_events
-                                                                                            + program.con_events), len(prefix) - 1)
+    path_formula_B = conjunct_formula_set(path_formula_set_B)
 
-        path_formula_set_B += [neg(grounded_condition)]
+    A = And(*conjunct(init_prop, path_formula_A).to_smt(new_symbol_table))
+    B = And(*path_formula_B.to_smt(new_symbol_table))
 
-        path_formula_B = conjunct_formula_set(path_formula_set_B)
+    C = smt_checker.binary_interpolant(A, B, logic)
 
-        A = [And(*conjunct(init_prop, path_formula_A).to_smt(new_symbol_table))] + A
-        B = [And(*path_formula_B.to_smt(new_symbol_table))] + B
-
-        C = [smt_checker.binary_interpolant(A[0], B[0], logic)] + C
-        if C[0] is None:
-            print("I think that interpolation is being checked against formulas that are not contradictory: \n" +
-                  "A: " + str(A[0]) +
-                  "\nB: " + str(B[0]))
-            break
-        # if B is itself inconsistent
-        if C[0].is_true():
-            break
-        elif C[0].is_false():
-            break
-
-        Cj_generalised = fnode_to_formula(C[0]).replace(reset_vars).simplify()
-        Cs |= {Cj_generalised}
-        Cs |= {neg(Cj_generalised).simplify()}
-
-    return Cs
+    if C is not None:
+        Cf = fnode_to_formula(C).replace(reset_vars).simplify()
+        return Cf
+    else:
+        return None
 
 
-def liveness_refinement(symbol_table, program, loop_before_exit, exit_cond: Formula):
+def liveness_refinement(symbol_table, program, entry_predicate, unfolded_loop, exit_cond: Formula):
     # try to come up with a ranking function
-    c_code = loop_to_c(symbol_table, program, Value("true"), loop_before_exit, exit_cond)
+    c_code = loop_to_c(symbol_table, program, entry_predicate, unfolded_loop, exit_cond)
     ranker = Ranker()
     success, ranking_function, invars = ranker.check(c_code)
     if not success:
@@ -139,10 +135,14 @@ def loop_to_c(symbol_table, program : Program, entry_predicate: Formula, loop_be
                 + "\n\t".join(choices) \
                 + "\t}"
 
-    return "#include<stdbool.h>\n\nvoid main(" + param_list + "){\n\t" + "\n\t".join(init) + loop_code + "\n}"
+    c_code = "#include<stdbool.h>\n\nvoid main(" + param_list + "){\n\t" + "\n\t".join(init) + loop_code + "\n}"
+    c_code = c_code.replace("TRUE", "true")
+    c_code = c_code.replace("FALSE", "false")
+
+    return c_code
 
 
-def use_liveness_refinement(ce: [dict], symbol_table):
+def use_liveness_refinement(ce: [dict], program, symbol_table):
     assert len(ce) > 0
 
     counterstrategy_states_con = [key for dict in ce for key, value in dict.items()
@@ -158,11 +158,18 @@ def use_liveness_refinement(ce: [dict], symbol_table):
         var_differences = [[v for v in vs if v in symbol_table.keys()] for vs in var_differences]
         if any([x for xs in var_differences for x in xs if
                 re.match("(int(eger)?|nat(ural)?|real)", symbol_table[x].type)]):
-            first_index = 0
-            if indices_of_prev_visits[0] > 0:
-                first_index = indices_of_prev_visits[0]
-            return True, prog_transition_indices_and_state_from_ce(ce[first_index:])
+
+            if not len(indices_of_prev_visits) > 0:
+                raise Exception("Something weird here.")
+
+            first_index = indices_of_prev_visits[0]
+            ce_prog_init_trans = prog_transition_indices_and_state_from_ce(ce[0:first_index])
+            ce_prog_init_trans_concretised = concretize_transitions(program, ce_prog_init_trans)
+            ce_prog_loop_trans = prog_transition_indices_and_state_from_ce(ce[first_index + 1:])
+            ce_prog_loop_tran_concretised = concretize_transitions(program, ce_prog_loop_trans)
+            entry_predicate = interpolation(ce, program, ce_prog_init_trans_concretised + ce_prog_loop_tran_concretised, len(ce_prog_init_trans) + 1, symbol_table)
+            return True, ce_prog_loop_trans, entry_predicate
         else:
-            return False, None
+            return False, None, None
     else:
-        return False, None
+        return False, None, None
