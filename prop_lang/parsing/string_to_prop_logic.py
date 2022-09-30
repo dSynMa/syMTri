@@ -20,7 +20,7 @@ def prop_logic_expression():
 def unit_prop_logic_expression():
     expr = yield try_choice(uni_expression,
                             try_choice(boolean_math_bi_expression, try_choice(boolean_val, try_choice(variable,
-                                                                                    bracketed_expression))))
+                                                                                                bracketed_expression))))
     yield spaces()
     return expr
 
