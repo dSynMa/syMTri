@@ -42,3 +42,17 @@ class Test(TestCase):
         print(ltl)
         if ltl is None:
             self.fail()
+
+
+    def test_string_to_ltl_5(self):
+        ltl = string_to_ltl("(((done2 & !room1) | (done1 & room1)) & granting) & (cnt > 1) ")
+        print(ltl)
+        if ltl is None:
+            self.fail()
+
+
+    def test_string_to_ltl_6(self):
+        ltl = string_to_ltl("((request & (! decrement)) | ((! request) & (! decrement)) | (decrement & (! request)) | (decrement & request))")
+        print(ltl)
+        if ltl is None:
+            self.fail()
