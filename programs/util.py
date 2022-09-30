@@ -296,7 +296,7 @@ def there_is_mismatch_between_monitor_and_strategy(system, livenesstosafety: boo
     result, out = model_checker.check(system, "F FALSE", None, livenesstosafety)
     if result:
         raise Exception("Are you sure the counterstrategy given is complete?")
-    there_is_no_mismatch, out = model_checker.check(system, str(ltl_assumptions.to_nuxmv()) +  " -> G !mismatch", None, livenesstosafety)
+    there_is_no_mismatch, out = model_checker.check(system, "G !mismatch", None, livenesstosafety)
 
     return not there_is_no_mismatch, out
 
