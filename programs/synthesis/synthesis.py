@@ -52,7 +52,7 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
 def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable], out_acts: [Variable], docker: str) -> \
         Tuple[bool, MealyMachine]:
     symbol_table = symbol_table_from_program(program)
-    ltl = implies(ltl_assumptions, ltl_guarantees)
+    ltl = implies(ltl_assumptions, ltl_guarantees).simplify()
 
     state_predicates = []
     rankings = []
@@ -63,7 +63,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                  + [Variable(s) for s in program.states]
 
     while True:
-        abstract_program = predicate_abstraction(program, state_predicates, transition_predicates, symbol_table)
+        abstract_program = predicate_abstraction(program, state_predicates, transition_predicates, symbol_table, True)
         print(abstract_program.to_dot())
 
         pred_list = state_predicates + transition_predicates
