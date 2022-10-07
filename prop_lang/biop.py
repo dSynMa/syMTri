@@ -103,6 +103,8 @@ class BiOp(Formula):
         if self.op == "%":
             return UniOp("toint", BiOp(UniOp("unsigned word[8]", self.left.to_nuxmv()), "mod",
                                        UniOp("unsigned word[8]", self.right.to_nuxmv())))
+        elif self.op == "==":
+            return BiOp(self.left.to_nuxmv(), '==', self.right.to_nuxmv())
         elif self.op == "=>":
             return BiOp(self.left.to_nuxmv(), '->', self.right.to_nuxmv())
         elif self.op == "<=>":
@@ -111,6 +113,12 @@ class BiOp(Formula):
             return BiOp(self.left.to_nuxmv(), '&', self.right.to_nuxmv())
         elif self.op == "||":
             return BiOp(self.left.to_nuxmv(), '|', self.right.to_nuxmv())
+        elif self.op == "W":
+            return BiOp(BiOp(self.left, "U", self.right), "|", UniOp("G", self.left)).to_nuxmv()
+        elif self.op == "R":
+            return BiOp(self.right, "W", BiOp(self.right, "&", self.left)).to_nuxmv()
+        elif self.op == "M":
+            return BiOp(self.right, "U", BiOp(self.right, "&", self.left)).to_nuxmv()
         else:
             return BiOp(self.left.to_nuxmv(), self.op, self.right.to_nuxmv())
 

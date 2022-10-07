@@ -20,11 +20,21 @@ from prop_lang.variable import Variable
 def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tuple[bool, Program]:
     if tlsf_path is not None:
         ltl_text = syfco_ltl(tlsf_path)
+        if " Error\"" in ltl_text:
+            raise Exception("Error parsing " + tlsf_path + " see syfco error:\n" + ltl_text)
         ltl_text = ltl_text.replace('"', "")
         in_acts_syfco = syfco_ltl_in(tlsf_path)
         out_acts_syfco = syfco_ltl_out(tlsf_path)
 
     ltl = string_to_ltl(ltl_text)
+
+    if isinstance(ltl, BiOp) and (ltl.op == "->" or ltl.op == "=>"):
+        ltl_assumptions = ltl.left
+        ltl_guarantees = ltl.right
+    else:
+        ltl_assumptions = true()
+        ltl_guarantees = ltl
+
     in_acts = [e for e in aut.env_events + aut.out_events]
     out_acts = [e for e in aut.con_events]
 
@@ -36,7 +46,7 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
 
     in_acts += [Variable(e) for e in aut.states]
 
-    return abstract_synthesis_loop(aut, ltl, in_acts, out_acts, docker)
+    return abstract_synthesis_loop(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts, docker)
 
 def _notebook_setup(aut: Program, ltl_text: str, tlsf_path: str, docker: bool):
     if tlsf_path is not None:
@@ -152,9 +162,10 @@ def _notebook_iterate(
 
 
 
-def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable], out_acts: [Variable], docker: str) -> \
+def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable], out_acts: [Variable], docker: str) -> \
         Tuple[bool, MealyMachine]:
     symbol_table = symbol_table_from_program(program)
+    ltl = implies(ltl_assumptions, ltl_guarantees).simplify()
 
     state_predicates = []
     rankings = []
@@ -165,7 +176,7 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
                  + [Variable(s) for s in program.states]
 
     while True:
-        abstract_program = predicate_abstraction(program, state_predicates, transition_predicates, symbol_table)
+        abstract_program = predicate_abstraction(program, state_predicates, transition_predicates, symbol_table, True)
         print(abstract_program.to_dot())
 
         pred_list = state_predicates + transition_predicates
@@ -214,7 +225,7 @@ def abstract_synthesis_loop(program: Program, ltl: Formula, in_acts: [Variable],
             return True, controller_projected_on_program
         else:
             system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
-            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, False)
+            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, False, ltl_assumptions)
 
             if not there_is_mismatch:
                 for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:

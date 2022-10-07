@@ -40,8 +40,8 @@ def conjunct(left: Formula, right: Formula):
 def conjunct_formula_set(s) -> Formula:
     ret = true()
     for f in s:
-        ret = conjunct(ret, f)
-    return ret
+        ret = conjunct(f, ret)
+    return ret.simplify()
 
 
 def conjunct_typed_valuation_set(s: set[TypedValuation]) -> Formula:
@@ -72,8 +72,8 @@ def disjunct(left: Formula, right: Formula):
 def disjunct_formula_set(s) -> Formula:
     ret = false()
     for f in s:
-        ret = disjunct(ret, f)
-    return ret
+        ret = disjunct(f, ret)
+    return ret.simplify()
 
 
 def implies(left: Formula, right: Formula):
