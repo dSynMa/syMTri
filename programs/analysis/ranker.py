@@ -34,7 +34,7 @@ class Ranker:
 
                         return True, string_to_mathexpr(ranking_function).simplify(), [string_to_pl(invar) for invar in invars]
                     except Exception as err:
-                        raise Exception(str(err) + "\n\n" + out)
+                        raise Exception(str(err) + "\n\n" + out + "\n\n" + main_function)
                 else:
                     raise Exception("Unexpected result during termination checking of:\n" + main_function)
                     print(out)
