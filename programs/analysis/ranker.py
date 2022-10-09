@@ -20,7 +20,7 @@ class Ranker:
                 out: str = so[1]
 
                 if "Verification result: UNKNOWN" in out:
-                    return False, main_function
+                    return False, main_function, None
                 elif "Verification result: FALSE" in out:
                     raise Exception("Unexpectedly non-terminating program:\n" + main_function)
                     print(out)
