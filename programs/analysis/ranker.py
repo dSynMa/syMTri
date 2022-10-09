@@ -13,8 +13,8 @@ class Ranker:
 
             try:
                 cmd = "docker run " + " -v " + tmp.name + ":/workdir/prog.c" + " --entrypoint /bin/bash cpachecker -c " + \
-                    '"/cpachecker/scripts/cpa.sh  -preprocess -terminationAnalysis /workdir/prog.c -spec /cpachecker/config/properties/termination.prp ' \
-                    '&& cat output/terminationAnalysisResult.txt"'
+                    '"(rm -r -f ./output); (/cpachecker/scripts/cpa.sh  -preprocess -terminationAnalysis /workdir/prog.c -spec /cpachecker/config/properties/termination.prp ' \
+                    '&& cat output/terminationAnalysisResult.txt)"'
 
                 so = subprocess.getstatusoutput(cmd)
                 out: str = so[1]
