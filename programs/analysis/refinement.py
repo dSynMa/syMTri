@@ -19,20 +19,29 @@ from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 
-def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -> [FNode]:
+def safety_refinement(ce: [dict], prefix_pairs: [[(Transition, dict)]], symbol_table, program) -> [FNode]:
     # we collect interpolants in this set
     Cs = set()
 
-    for j in reversed(range(0, len(prefix))):
-        C = interpolation(ce, program, prefix, j, symbol_table)
-        if C is None:
-            print("I think that interpolation is being checked against formulas that are not contradictory.")
-            break
-        # if B is itself inconsistent
-        if isinstance(C, Value) and C.is_true():
-            break
-        elif isinstance(C, Value) and C.is_false():
-            break
+    concurring_transitions = [x for xs in prefix_pairs[:-1] for x in xs]
+    disagreed_on = prefix_pairs[len(prefix_pairs) - 1]
+
+    # this is a hack to ensure correct behaviour when there is a mismatch with only transition (disagreed_on)
+    # since interpolation requires len(concurring_transitions) to be at least one 1
+    if concurring_transitions == []:
+        concurring_transitions = [(Transition(program.initial_state, true(), [], [], program.initial_state), ce[0])]
+
+    for i in range(0, len(disagreed_on)):
+        for j in reversed(range(0, len(concurring_transitions) + i + 1)):
+            C = interpolation(program, concurring_transitions + disagreed_on[0:i], disagreed_on[i], j, symbol_table)
+            if C is None:
+                print("I think that interpolation is being checked against formulas that are not contradictory.")
+                break
+            # if B is itself inconsistent
+            if isinstance(C, Value) and C.is_true():
+                break
+            elif isinstance(C, Value) and C.is_false():
+                break
 
         Cs |= {C}
         Cs |= {neg(C).simplify()}
@@ -43,6 +52,7 @@ def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -
 def interpolation(program: Program, concurring_transitions: [(Transition, dict)], disagreed_on: (Transition, dict),
                   cut_point: int, symbol_table):
     assert cut_point <= len(concurring_transitions)
+    assert len(concurring_transitions) > 0
 
     logic = "QF_UFLRA"  # TODO what to put here?
     smt_checker = SMTChecker()
