@@ -343,32 +343,55 @@ def abstraction_to_ltl(pred_abstraction: Program, state_predicates: [Formula], t
 
     matching_pairs = {}
 
-    # for every state that is not the initial state
-    for c in pred_abstraction.states:
-        if c is not pred_abstraction.initial_state:
-            # get all transitions from that state
-            all_con_trans_from_c = [t for t in not_init_con_transitions if t.src == c]
-            # get all conditions of those transitions
-            all_conds = {t.condition for t in all_con_trans_from_c}
-            # given a condition from a state, get all possible destinations of it
-            dst_cond = {cond: [t.tgt for t in not_init_con_transitions if t.src == c and cond == t.condition] for cond in all_conds}
-            matching_pairs.update({(c, cond): [et for et in not_init_env_transitions if et.src in dst_cond[cond]] for cond in dst_cond.keys()})
+    # for every state that is not the initial state: s
+    # for each controller transition from that state: t
+    # get the set of all env transitions that can happen immediately after: ets
+    # and match s with the pair of condition of t and ets
+    #
+    # at the end, every state s is associated with a list of conditions
+    # and the associated env transitions that can happen after
+    for s in pred_abstraction.states:
+        if s is not pred_abstraction.initial_state:
+            for t in not_init_con_transitions:
+                if t.src == s:
+                    ets = []
+                    for et in not_init_env_transitions:
+                        if et.src == t.tgt:
+                            ets.append(et)
+                        else:
+                            pass
+                    if s in matching_pairs.keys():
+                        matching_pairs[s] += [(t.condition, ets)]
+                    else:
+                        matching_pairs[s] = [(t.condition, ets)]
+                else:
+                    pass
 
     con_env_transitions = []
-    for (c_s, cond), ets in matching_pairs.items():
-        now_state_preds = [p for p in c_s[1] if p in state_predicates]
-        now = conjunct(conjunct(Variable(c_s[0]),
-                                conjunct_formula_set(sorted(complete_and_label_pred_sets(now_state_preds, predicates), key = lambda x: str(x)))),
-                       cond)
+    for c_s, cond_ets in matching_pairs.items():
+        now_state_preds = [p for p in c_s.predicates if p in (state_predicates + [neg(p) for p in state_predicates])]
+        now = conjunct(Variable(c_s.state),
+                       conjunct_formula_set(sorted(label_preds(now_state_preds, predicates),
+                                                   key=lambda x: str(x))))
         next = []
-        for et in ets:
-            bookeeping_tran_preds = label_preds_according_to_index(tran_preds_after_con_env_step(et, state_predicates + transition_predicates))
-            next += [
-                X(conjunct(conjunct_formula_set([Variable(et.tgt[0]), et.condition] + et.output),
-                           conjunct_formula_set(sorted(bookeeping_tran_preds, key = lambda x: str(x)))
-                ))]
+        for (cond, ets) in cond_ets:
+            now_next = []
+            for et in ets:
+                bookeeping_tran_preds = label_preds(tran_preds_after_con_env_step(et, negation_closed_predicates),
+                                                    state_predicates + transition_predicates)
+                now_next += [X(conjunct(conjunct_formula_set([Variable(et.tgt.state), et.condition] + et.output),
+                                        conjunct_formula_set(sorted(bookeeping_tran_preds, key=lambda x: str(x)))
+                                        ))]
 
-        next = sorted(set(next), key=lambda x : str(x))
+            # If cond (which is the about the current state) is just True (i.e., it s negation is unsat)
+            # then just ignore it
+            if isinstance(cond, Value) and cond.is_true():
+                next += [disjunct_formula_set(sorted(set(now_next), key=lambda x: str(x)))]
+            else:
+                next += [conjunct(cond, disjunct_formula_set(sorted(set(now_next), key=lambda x: str(x))))]
+
+        next = sorted(set(next), key=lambda x: str(x))
+
         con_env_transitions += [G(implies(now, disjunct_formula_set(next))).to_nuxmv()]
 
     transition_cond = sorted(con_env_transitions, key=lambda x : str(x))
