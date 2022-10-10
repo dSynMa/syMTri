@@ -138,26 +138,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
                 use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(ce, program, symbol_table)
 
-                if not use_liveness:
-                    new_preds = safety_refinement(ce, transitions_without_stutter, symbol_table, program)
-                    print(", ".join([str(p) for p in new_preds]))
-                    if new_preds == []:
-                        raise Exception("No new state predicates identified.")
-
-                    new_all_preds = {x.simplify() for x in new_preds}
-                    new_all_preds = reduce_up_to_iff(state_predicates, list(new_all_preds), symbol_table)
-
-                    if len(new_all_preds) == len(state_predicates):
-                        raise Exception(
-                            "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
-                                                                                                "previous predicates.\n"
-                                                                           "Counterexample was:\n" + "\n".join([str(t[0]) for ts in transitions_without_stutter for t in ts]))
-
-                    state_predicates = list(new_all_preds)
-
                 if use_liveness:
-                    last_transition = transitions_without_stutter[len(transitions_without_stutter) - 1]
-
                     # ground transitions in the counterexample loop
                     # on the environment and controller events in the counterexample
                     loop_before_exit = ground_transitions_and_flatten(program, counterexample_loop)
@@ -199,3 +180,20 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                                                            "Counterexample was:\n" + "\n".join([str(t[0]) for ts in transitions_without_stutter for t in ts]))
                     # important to add this, since later on assumptions depend on position of predicates in list
                     transition_predicates += new_transition_predicates
+
+                if True:
+                    new_preds = safety_refinement(ce, transitions_without_stutter, symbol_table, program)
+                    print(", ".join([str(p) for p in new_preds]))
+                    if new_preds == []:
+                        raise Exception("No new state predicates identified.")
+
+                    new_all_preds = {x.simplify() for x in new_preds}
+                    new_all_preds = reduce_up_to_iff(state_predicates, list(new_all_preds), symbol_table)
+
+                    if len(new_all_preds) == len(state_predicates):
+                        raise Exception(
+                            "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
+                                                                                                "previous predicates.\n"
+                                                                           "Counterexample was:\n" + "\n".join([str(t[0]) for ts in transitions_without_stutter for t in ts]))
+
+                    state_predicates = list(new_all_preds)
