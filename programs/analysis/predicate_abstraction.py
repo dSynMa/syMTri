@@ -166,10 +166,10 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
                             new_output |= {neg(o) for o in program.out_events if o not in t.output}
                             new_output = list(new_output)
                             new_transitions.add(Transition(abs_st, context_Evs, [], new_output, next_state))
-                        if con_turn_flag and next_state not in done_states_env:
-                            next_states.add(next_state)
-                        elif not con_turn_flag and next_state not in done_states_con:
-                            next_states.add(next_state)
+                            if con_turn_flag and next_state not in done_states_env:
+                                next_states.add(next_state)
+                            elif not con_turn_flag and next_state not in done_states_con:
+                                next_states.add(next_state)
         if con_turn_flag:
             done_states_con.update(current_states)
             con_transitions.update(new_transitions)
