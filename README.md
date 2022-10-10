@@ -4,7 +4,9 @@
 
 ### Description
 
-syMTri allows you to combine monitors as symbolic automata (inspired by [DA](https://link.springer.com/chapter/10.1007/978-3-642-03240-0_13)T[Es](https://github.com/ccol002/larva-rv-tool)) with LTL formulas. There are two
+syMTri allows you to combine monitors as symbolic automata (inspired
+by [DA](https://link.springer.com/chapter/10.1007/978-3-642-03240-0_13)T[Es](https://github.com/ccol002/larva-rv-tool))
+with LTL formulas. There are two
 modalities for this combination:
 
 1. The monitor passes control to the LTL formula; or
@@ -73,7 +75,7 @@ You can find releases compiled in and for Ubuntu in the [releases page](https://
 Argument list:
 
 1. `--m <file>`: link to the monitor file;
-   
+
 *For synthesis:*
 
 2. `--l <file>`: link to the tlsf file (**that does not use any propositions from the definition section in the
@@ -85,13 +87,14 @@ Argument list:
 6. `--server <server-location>`: use this if your Strix implementation is running on a virtual machine and exposed
    through a server that exposes an endpoint at `<server-location>/strix` that responds to `GET` requests with
    controllers in KISS format (i.e. strix is called with the `-k` parameter).
-   
+
 *For translation to nuXmv:*
 
-7. `--to_nuxmv`: use this if you want a translation of the monitor into nuxmv input format, for analysis purposes. 
+7. `--to_nuxmv`: use this if you want a translation of the monitor into nuxmv input format, for analysis purposes.
    This assumes that each state has outgoing transitions with mutually exclusive guards.
-8. `--to_nuxmv_cases`: a variant of the above command that uses case style rather than propositional form. This gives a 
-different interpretation of the monitor semantics, where mutually exclusivity of guards is not required, but the first
+8. `--to_nuxmv_cases`: a variant of the above command that uses case style rather than propositional form. This gives a
+   different interpretation of the monitor semantics, where mutually exclusivity of guards is not required, but the
+   first
    transition with a guard that matches is taken.
 
 The default output is a monitor with outputs in a format similar to the input monitor.

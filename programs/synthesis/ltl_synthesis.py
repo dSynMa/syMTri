@@ -64,7 +64,8 @@ def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variab
                 except Exception as err:
                     raise err
             else:
-                raise Exception("Strix not returning appropriate value.\n\n" + cmd + "\n\n" + output + "\n\n" + tlsf_script)
+                raise Exception(
+                    "Strix not returning appropriate value.\n\n" + cmd + "\n\n" + output + "\n\n" + tlsf_script)
     except Exception as err:
         raise err
     pass

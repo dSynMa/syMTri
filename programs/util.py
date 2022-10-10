@@ -22,11 +22,12 @@ from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 
-def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, strategy_model: NuXmvModel, mon_events, pred_list):
+def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, strategy_model: NuXmvModel, mon_events,
+                                                  pred_list):
     text = "MODULE main\n"
-    vars = sorted(program_model.vars)\
+    vars = sorted(program_model.vars) \
            + sorted([v for v in strategy_model.vars
-                     if v not in program_model.vars])\
+                     if v not in program_model.vars]) \
            + ["mismatch : boolean"]
     text += "VAR\n" + "\t" + ";\n\t".join(vars) + ";\n"
     text += "DEFINE\n" + "\t" + ";\n\t".join(program_model.define + strategy_model.define) + ";\n"
@@ -35,11 +36,12 @@ def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, str
     prog_and_mon_events_equality = [BiOp(m, '=', Variable("mon_" + m.name)) for m in mon_events]
     text += "\tcompatible := !(turn = mon) | (" + str(
         conjunct_formula_set(prog_and_mon_events_equality +
-                            [BiOp(conjunct(env_turn, label_pred(p, pred_list)), "->", p)
-                               for p in pred_list]
-                              )) +");\n"
+                             [BiOp(conjunct(env_turn, label_pred(p, pred_list)), "->", p)
+                              for p in pred_list]
+                             )) + ");\n"
 
-    text += "INIT\n" + "\t(" + ")\n\t& (".join(program_model.init + strategy_model.init + ["turn = env", "mismatch = FALSE"]) + ")\n"
+    text += "INIT\n" + "\t(" + ")\n\t& (".join(
+        program_model.init + strategy_model.init + ["turn = env", "mismatch = FALSE"]) + ")\n"
     text += "INVAR\n" + "\t((" + ")\n\t& (".join(program_model.invar + strategy_model.invar) + "))\n"
 
     turn_logic = ["(turn = con -> next(turn) = env)"]
@@ -48,7 +50,8 @@ def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, str
 
     maintain_mon_vars = str(conjunct_formula_set(
         [BiOp(UniOp("next", Variable("mon_" + m.name)), ' = ', Variable("mon_" + m.name)) for m in (mon_events)]
-        + [BiOp(UniOp("next", Variable(m.name)), ' = ', Variable(m.name)) for m in [label_pred(p, pred_list) for p in pred_list]]))
+        + [BiOp(UniOp("next", Variable(m.name)), ' = ', Variable(m.name)) for m in
+           [label_pred(p, pred_list) for p in pred_list]]))
     new_trans = ["compatible", "!next(mismatch)"] + program_model.trans + strategy_model.trans + turn_logic
     normal_trans = "\t((" + ")\n\t& (".join(new_trans) + "))\n"
 
@@ -114,7 +117,7 @@ def prog_transition_indices_and_state_from_ce(prefix):
                     if dic[key.replace("guard_", "act_")] == "TRUE":
                         transition = key.replace("guard_", "")
                         break
-            dic_without_prev_vars = {key:value for key, value in dic.items() if not key.endswith("_prev")}
+            dic_without_prev_vars = {key: value for key, value in dic.items() if not key.endswith("_prev")}
             monitor_transitions_and_state.append((transition, dic_without_prev_vars))
 
     return monitor_transitions_and_state
@@ -307,7 +310,8 @@ def label_preds(ps, preds):
     return {label_pred(p, preds) for p in ps}
 
 
-def there_is_mismatch_between_monitor_and_strategy(system, livenesstosafety: bool, ltl_assumptions: Formula, ltl_guarantees: Formula):
+def there_is_mismatch_between_monitor_and_strategy(system, livenesstosafety: bool, ltl_assumptions: Formula,
+                                                   ltl_guarantees: Formula):
     print(system)
     model_checker = ModelChecker()
     # Sanity check
@@ -330,7 +334,7 @@ def reduce_up_to_iff(old_preds, new_preds, symbol_table):
 
     for p in new_preds:
         if p and neg(p) not in keep_these and p and neg(p) not in remove_these and \
-                not has_equiv_pred(p, set(old_preds) | keep_these, symbol_table)and \
+                not has_equiv_pred(p, set(old_preds) | keep_these, symbol_table) and \
                 not has_equiv_pred(neg(p), set(old_preds) | keep_these, symbol_table):
             keep_these.add(p)
         else:
@@ -352,7 +356,7 @@ def has_equiv_pred(p, preds, symbol_table):
                 # if p or !p is unsat (i.e., p or !p is False), then no need to add it
                 return True
             elif not (smt_checker.check(And(Not(And(*p_smt)), And(*pp_smt))) or
-                  smt_checker.check(And(Not(And(*pp_smt)), And(*p_smt)))):
+                      smt_checker.check(And(Not(And(*pp_smt)), And(*p_smt)))):
                 return True
     return False
 
@@ -443,16 +447,17 @@ def ground_transitions_and_flatten(program, transitions_and_state_list):
         for transition, st in transition_st_list:
             projected_condition = ground_predicate_on_bool_vars(program, transition.condition, st)
             used_transitions_grounded += [Transition(transition.src,
-                                                                projected_condition,
-                                                                transition.action,
-                                                                transition.output,
-                                                                transition.tgt)]
+                                                     projected_condition,
+                                                     transition.action,
+                                                     transition.output,
+                                                     transition.tgt)]
         grounded += used_transitions_grounded
     return grounded
 
 
 def ground_predicate_on_bool_vars(program, predicate, ce_state):
-    grounded_state = project_ce_state_onto_ev(ce_state, program.env_events + program.con_events + [Variable(v.name) for v in
+    grounded_state = project_ce_state_onto_ev(ce_state,
+                                              program.env_events + program.con_events + [Variable(v.name) for v in
                                                                                          program.valuation if
                                                                                          re.match("bool(ean)?",
                                                                                                   v.type.lower())])

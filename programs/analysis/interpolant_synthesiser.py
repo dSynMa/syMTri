@@ -4,7 +4,6 @@ from tempfile import NamedTemporaryFile
 
 import pysmt.parsing
 from pysmt.fnode import FNode
-from pysmt.shortcuts import Solver, Symbol
 
 from programs.util import _add_solver, _check_os
 
@@ -26,7 +25,7 @@ class InterpolantSynthesiser:
 
         # This stuff is not supported by pysmt, so we will inject it by hand
         logic = "(set-logic ALL)"
-        interp = "(get-interpolant A " + B.to_smtlib() + ")"
+        interp = "(get-interpolant A " + A.to_smtlib() + ")"
 
         _check_os()
 

@@ -13,8 +13,8 @@ class Ranker:
 
             try:
                 cmd = "docker run " + " -v " + tmp.name + ":/workdir/prog.c" + " --entrypoint /bin/bash cpachecker -c " + \
-                    '"(rm -r -f ./output); (/cpachecker/scripts/cpa.sh  -preprocess -terminationAnalysis /workdir/prog.c -spec /cpachecker/config/properties/termination.prp ' \
-                    '&& cat output/terminationAnalysisResult.txt)"'
+                      '"(rm -r -f ./output); (/cpachecker/scripts/cpa.sh  -preprocess -terminationAnalysis /workdir/prog.c -spec /cpachecker/config/properties/termination.prp ' \
+                      '&& cat output/terminationAnalysisResult.txt)"'
 
                 so = subprocess.getstatusoutput(cmd)
                 out: str = so[1]
@@ -28,11 +28,15 @@ class Ranker:
                     try:
                         term_arg = out.split("Termination argument consisting of:")[1].strip().split("\n")
                         ranking_function = term_arg[0].replace("Ranking function ", "").replace("main::", "")
-                        ranking_function = ranking_function.removeprefix(ranking_function.split(") = ")[0]).removeprefix(") = ")
-                        invars = term_arg[1].replace("Supporting invariants ", "").replace("[", "").replace("]", "").split(",")
+                        ranking_function = ranking_function.removeprefix(
+                            ranking_function.split(") = ")[0]).removeprefix(") = ")
+                        invars = term_arg[1].replace("Supporting invariants ", "").replace("[", "").replace("]",
+                                                                                                            "").split(
+                            ",")
                         invars.remove('')
 
-                        return True, string_to_mathexpr(ranking_function).simplify(), [string_to_pl(invar) for invar in invars]
+                        return True, string_to_mathexpr(ranking_function).simplify(), [string_to_pl(invar) for invar in
+                                                                                       invars]
                     except Exception as err:
                         raise Exception(str(err) + "\n\n" + out + "\n\n" + main_function)
                 else:

@@ -50,7 +50,8 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
     return abstract_synthesis_loop(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts, docker)
 
 
-def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable], out_acts: [Variable], docker: str) -> \
+def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable],
+                            out_acts: [Variable], docker: str) -> \
         Tuple[bool, MealyMachine]:
     # TODO add check that monitor is deterministic under given ltl assumptions
 
@@ -113,7 +114,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             return True, controller_projected_on_program
         else:
             system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
-            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, False, ltl_assumptions, ltl_guarantees)
+            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, False, ltl_assumptions,
+                                                                                    ltl_guarantees)
 
             if not there_is_mismatch:
                 for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
@@ -143,7 +145,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     # on the environment and controller events in the counterexample
                     loop_before_exit = ground_transitions_and_flatten(program, counterexample_loop)
 
-                    entry_predicate_grounded = ground_predicate_on_bool_vars(program, entry_predicate, counterexample_loop[0][-1][1]).simplify()
+                    entry_predicate_grounded = ground_predicate_on_bool_vars(program, entry_predicate,
+                                                                             counterexample_loop[0][-1][1]).simplify()
                     # exit_predicate_grounded = concretize_and_ground_predicate(program, last_transitions[-1][0].condition, counterexample_loop[-1][-1][1])
                     exit_predicate_grounded = true()
 
@@ -177,7 +180,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                         "(" + ", ".join(
                             [str(p) for p in new_transition_predicates]) + ") are a subset of "
                                                                            "previous predicates.\n"
-                                                                           "Counterexample was:\n" + "\n".join([str(t[0]) for ts in transitions_without_stutter for t in ts]))
+                                                                           "Counterexample was:\n" + "\n".join(
+                            [str(t[0]) for ts in transitions_without_stutter for t in ts]))
                     # important to add this, since later on assumptions depend on position of predicates in list
                     transition_predicates += new_transition_predicates
 
@@ -194,6 +198,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                         raise Exception(
                             "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
                                                                                                 "previous predicates.\n"
-                                                                           "Counterexample was:\n" + "\n".join([str(t[0]) for ts in transitions_without_stutter for t in ts]))
+                                                                                                "Counterexample was:\n" + "\n".join(
+                                [str(t[0]) for ts in transitions_without_stutter for t in ts]))
 
                     state_predicates = list(new_all_preds)

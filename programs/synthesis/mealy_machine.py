@@ -93,7 +93,7 @@ class MealyMachine:
         mon_events = mon_out_events \
                      + [Variable(s) for s in mon_states]
 
-        new_mon_events = [BiOp(m, ":=", Variable("mon_" + m.name)) for m in mon_events]\
+        new_mon_events = [BiOp(m, ":=", Variable("mon_" + m.name)) for m in mon_events] \
                          + [BiOp(m, ":=", Variable(m.name)) for m in pred_acts]
         init_conds = []
 
@@ -135,7 +135,8 @@ class MealyMachine:
         for st in self.states:
             identity.append("next(" + str(st) + ") = " + str(st))
 
-        identity += ["next(" + str(event) + ") = " + str(event) for event in (self.env_events + self.con_events) if Variable(str(event)) not in (mon_events + pred_acts)]
+        identity += ["next(" + str(event) + ") = " + str(event) for event in (self.env_events + self.con_events) if
+                     Variable(str(event)) not in (mon_events + pred_acts)]
 
         define += ["identity_" + self.name + " := " + " & ".join(identity)]
 
@@ -143,7 +144,8 @@ class MealyMachine:
 
         vars = ["turn : {env, mon, con}"]
         vars += [str(st) + " : boolean" for st in self.states]
-        vars += [str(var) + " : boolean" for var in self.env_events if str(var) not in [str(v) for v in (mon_events + pred_acts)]]
+        vars += [str(var) + " : boolean" for var in self.env_events if
+                 str(var) not in [str(v) for v in (mon_events + pred_acts)]]
         vars += [str(var) + " : boolean" for var in self.con_events]
         vars += ["mon_" + str(var) + " : boolean" for var in mon_events]
         vars += [str(var) + " : boolean" for var in pred_acts]
@@ -158,7 +160,7 @@ class MealyMachine:
         invar += [str(disjunct_formula_set([Variable(str(s)) for s in self.states]))]
         j = 0
         while j < len(trans_pred_acts):
-            invar += [str(neg(conjunct(trans_pred_acts[j], trans_pred_acts[j+1])))]
+            invar += [str(neg(conjunct(trans_pred_acts[j], trans_pred_acts[j + 1])))]
             j += 2
 
         return NuXmvModel(self.name, set(vars), define, init, invar, trans)
@@ -199,7 +201,8 @@ class MealyMachine:
                     for p_t in predicate_abstraction.env_transitions:
                         if p_t.src == p_s:
                             formula = conjunct_formula_set(
-                                [m_cond.replace(replace_preds), p_t.condition, Variable(p_t.tgt.state), at_least_one_state,
+                                [m_cond.replace(replace_preds), p_t.condition, Variable(p_t.tgt.state),
+                                 at_least_one_state,
                                  at_most_one_state] + list(p_t.tgt.predicates) + p_t.output)
                             formula = And(*formula.to_smt(symbol_table))
                             compatible = smt_checker.check(formula)
