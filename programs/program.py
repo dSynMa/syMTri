@@ -8,7 +8,7 @@ from programs.typed_valuation import TypedValuation
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import neg, disjunct_formula_set, conjunct_formula_set
+from prop_lang.util import neg, disjunct_formula_set, conjunct_formula_set, mutually_exclusive_rules
 from prop_lang.variable import Variable
 
 
@@ -181,8 +181,7 @@ class Program:
         trans = ["\n\t|\t".join(transitions)]
         trans += ["next(" + str(var.name) + "_prev) = " + str(var.name) for var in self.valuation]
 
-        invar = [s + " -> " + str(conjunct_formula_set([neg(ss) for ss in self.states if ss != s])) for s in
-                 self.states]
+        invar = mutually_exclusive_rules(self.states)
         invar += [str(disjunct_formula_set([Variable(s) for s in self.states]))]
         invar += [str(val.name) + " >= 0" for val in self.valuation if (val.type == "nat" or val.type == "natural")]
 
