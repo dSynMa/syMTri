@@ -56,7 +56,7 @@ class MealyMachine:
         to_replace = []
         if pred_list is not None:
             for pred in pred_list:
-                pred_var = label_pred(pred)
+                pred_var = label_pred(pred, pred_list)
                 to_replace += [BiOp(pred_var, ":=", pred)]
 
         dot = Digraph(name="MealyMachine",
@@ -183,7 +183,7 @@ class MealyMachine:
         replace_preds = []
         i = 0
         for p in pred_list:
-            label = label_pred(p)
+            label = label_pred(p, pred_list)
             replace_preds.append(BiOp(Variable(label.name), ":=", p))
             i += 1
 

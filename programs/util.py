@@ -25,7 +25,8 @@ from prop_lang.variable import Variable
 def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, strategy_model: NuXmvModel, mon_events, pred_list):
     text = "MODULE main\n"
     vars = sorted(program_model.vars)\
-           + sorted([v for v in strategy_model.vars if v not in program_model.vars])\
+           + sorted([v for v in strategy_model.vars
+                     if v not in program_model.vars])\
            + ["mismatch : boolean"]
     text += "VAR\n" + "\t" + ";\n\t".join(vars) + ";\n"
     text += "DEFINE\n" + "\t" + ";\n\t".join(program_model.define + strategy_model.define) + ";\n"
@@ -34,7 +35,7 @@ def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, str
     prog_and_mon_events_equality = [BiOp(m, '=', Variable("mon_" + m.name)) for m in mon_events]
     text += "\tcompatible := !(turn = mon) | (" + str(
         conjunct_formula_set(prog_and_mon_events_equality +
-                            [BiOp(conjunct(env_turn, label_pred(p)), "->", p)
+                            [BiOp(conjunct(env_turn, label_pred(p, pred_list)), "->", p)
                                for p in pred_list]
                               )) +");\n"
 
@@ -47,7 +48,7 @@ def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, str
 
     maintain_mon_vars = str(conjunct_formula_set(
         [BiOp(UniOp("next", Variable("mon_" + m.name)), ' = ', Variable("mon_" + m.name)) for m in (mon_events)]
-        + [BiOp(UniOp("next", Variable(m.name)), ' = ', Variable(m.name)) for m in [label_pred(p) for p in pred_list]]))
+        + [BiOp(UniOp("next", Variable(m.name)), ' = ', Variable(m.name)) for m in [label_pred(p, pred_list) for p in pred_list]]))
     new_trans = ["compatible", "!next(mismatch)"] + program_model.trans + strategy_model.trans + turn_logic
     normal_trans = "\t((" + ")\n\t& (".join(new_trans) + "))\n"
 
@@ -263,8 +264,19 @@ def ground_formula_on_ce_state_with_index(formula: Formula, state: dict, i) -> F
     return formula.replace(to_replace_with)
 
 
-def label_pred(p):
-    return Variable(str(p)
+def label_pred(p, preds):
+    if p not in preds:
+        if (isinstance(p, UniOp) and p.op == "!"):
+            return neg(stringify_pred(p.right))
+        else:
+            return neg(stringify_pred(neg(p)))
+    else:
+        return stringify_pred(p)
+
+
+def stringify_pred(p):
+    return Variable("_" +
+                    str(p)
                     .replace(" ", "")
                     .replace("_", "")
                     .replace("(", "_")
@@ -291,11 +303,11 @@ def label_pred(p):
                     )
 
 
-def label_preds_according_to_index(ps):
-    return {label_pred(p) for p in ps}
+def label_preds(ps, preds):
+    return {label_pred(p, preds) for p in ps}
 
 
-def there_is_mismatch_between_monitor_and_strategy(system, livenesstosafety: bool, ltl_assumptions: Formula):
+def there_is_mismatch_between_monitor_and_strategy(system, livenesstosafety: bool, ltl_assumptions: Formula, ltl_guarantees: Formula):
     print(system)
     model_checker = ModelChecker()
     # Sanity check
@@ -318,9 +330,9 @@ def reduce_up_to_iff(old_preds, new_preds, symbol_table):
 
     for p in new_preds:
         if p and neg(p) not in keep_these and p and neg(p) not in remove_these and \
-                not has_equiv_pred(p, set(old_preds) | keep_these, symbol_table):
+                not has_equiv_pred(p, set(old_preds) | keep_these, symbol_table)and \
+                not has_equiv_pred(neg(p), set(old_preds) | keep_these, symbol_table):
             keep_these.add(p)
-            keep_these.add(neg(p))
         else:
             remove_these.add(p)
             remove_these.add(neg(p))
