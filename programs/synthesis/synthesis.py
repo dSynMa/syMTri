@@ -52,6 +52,8 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
 
 def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable], out_acts: [Variable], docker: str) -> \
         Tuple[bool, MealyMachine]:
+    # TODO add check that monitor is deterministic under given ltl assumptions
+
     symbol_table = symbol_table_from_program(program)
     ltl = implies(ltl_assumptions, ltl_guarantees).simplify()
 
