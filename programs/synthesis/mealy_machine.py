@@ -203,8 +203,8 @@ class MealyMachine:
                     for p_t in predicate_abstraction.env_transitions:
                         if p_t.src == p_s:
                             formula = conjunct_formula_set(
-                                [m_cond.replace(replace_preds), p_t.condition, Variable(p_t.tgt[0]), at_least_one_state,
-                                 at_most_one_state] + list(p_t.tgt[1]) + p_t.output)
+                                [m_cond.replace(replace_preds), p_t.condition, Variable(p_t.tgt.state), at_least_one_state,
+                                 at_most_one_state] + list(p_t.tgt.predicates) + p_t.output)
                             formula = And(*formula.to_smt(symbol_table))
                             compatible = smt_checker.check(formula)
                             if compatible:
