@@ -2,6 +2,7 @@ from itertools import chain, combinations
 
 from pysmt.shortcuts import And
 
+from programs.analysis.abstract_state import AbstractState
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
@@ -108,7 +109,7 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
                     next_preds = {p for p in negation_closed_predicates if
                                   smt_checker.check(
                                       And(*conjunct(p, next_valuation).to_smt(symbol_table_with_prev_vars)))}
-                    next_state = (t.tgt, frozenset(next_preds))
+                    next_state = AbstractState(t.tgt, frozenset(next_preds))
                     current_states.add(next_state)
 
                     new_output = set(t.output)
@@ -133,8 +134,9 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
 
         new_transitions = set()
 
-        for q, P in current_states:
-            q_transitions = {t for t in transition_set if t.src == q}
+        for abs_st in current_states:
+            q, P = abs_st.unpack()
+            q_transitions = {t for t in transition_set if str(t.src) == str(q)}
             for t in q_transitions:
                 vars_in_cond = t.condition.variablesin()
                 env_vars_in_cond = [e for e in vars_in_cond if e in events]
@@ -155,12 +157,11 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
                                 {prev_condition, add_prev_suffix(program, context_P_without_prevs), context_Evs}))
                         next_Ps = meaning_within(f, negation_closed_predicates, symbol_table_with_prev_vars)
                         for next_P in next_Ps:
-                            next_state = (t.tgt, next_P)
+                            next_state = AbstractState(t.tgt, next_P)
                             new_output = set(t.output)
                             new_output |= {neg(o) for o in program.out_events if o not in t.output}
                             new_output = list(new_output)
-                            pred_trans.add(Transition((q, P), context_Evs, [], new_output, next_state))
-                        new_transitions.update(pred_trans)
+                            new_transitions.add(Transition(abs_st, context_Evs, [], new_output, next_state))
                         if con_turn_flag and next_state not in done_states_env:
                             next_states.add(next_state)
                         elif not con_turn_flag and next_state not in done_states_con:
@@ -198,7 +199,7 @@ def merge_transitions(transitions: [Transition], symbol_table):
     # partition the transitions into classes where in each class each transition has the same outputs and source and end state
     partitions = dict()
     for transition in transitions:
-        key = (transition.src, (conjunct_formula_set(sorted(transition.output, key=lambda x : str(x)))), transition.tgt)
+        key = str(transition.src) + str(conjunct_formula_set(sorted(transition.output, key=lambda x: str(x)))) + str(transition.tgt)
         if key in partitions.keys():
             partitions[key].append(transition)
         else:
@@ -218,13 +219,7 @@ def merge_transitions(transitions: [Transition], symbol_table):
             raise e
     return new_transitions
 
-def unique_pred_states(states):
-    unique_states = {}
-    for q,preds in states:
-        hsh = hash((q,preds))
-        if hsh not in unique_states.keys():
-            unique_states[hsh] = (q,preds)
-    return set(unique_states.values())
+
 
 # Use this for testing
 def abstraction_to_ltl_with_turns(pred_abstraction: Program):
@@ -301,13 +296,13 @@ def abstraction_to_ltl(pred_abstraction: Program, state_predicates: [Formula], t
 
     init_transitions = [t for t in pred_abstraction.env_transitions if t.src == pred_abstraction.initial_state]
     init_cond_formula = disjunct_formula_set(
-        {conjunct(conjunct_formula_set([Variable(t.tgt[0]), t.condition] + t.output),
-                  conjunct_formula_set(sorted(complete_and_label_pred_sets(t.tgt[1], predicates), key = lambda x : str(x)))
+        {conjunct(conjunct_formula_set([Variable(t.tgt.state), t.condition] + t.output),
+                  conjunct_formula_set(sorted(complete_and_label_pred_sets(t.tgt.predicates, predicates), key=lambda x: str(x)))
                   ) for t in init_transitions}
     )
     init_cond = init_cond_formula.to_nuxmv()
 
-    states = [Variable(s[0]) for s in pred_abstraction.states if s != pred_abstraction.initial_state] + \
+    states = [Variable(s.state) for s in pred_abstraction.states if s != pred_abstraction.initial_state] + \
              [Variable(pred_abstraction.initial_state)]
     states = set(states)
 
@@ -356,12 +351,12 @@ def abstraction_to_ltl(pred_abstraction: Program, state_predicates: [Formula], t
     return [init_cond, at_least_and_at_most_one_state] + transition_cond
 
 
-def tran_preds_after_con_env_step(env_trans : Transition, predicates: [Formula]):
+def tran_preds_after_con_env_step(env_trans: Transition, predicates: [Formula]):
     src_tran_preds = [p for p in predicates
-                      if p in env_trans.src[1]
+                      if p in env_trans.src.predicates
                       if [] != [v for v in p.variablesin() if v.name.endswith("_prev")]]
     tgt_tran_preds = [p for p in predicates
-                      if p in env_trans.tgt[1]
+                      if p in env_trans.tgt.predicates
                       if [] != [v for v in p.variablesin() if v.name.endswith("_prev")]]
 
     keep_these = []
