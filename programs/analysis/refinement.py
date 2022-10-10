@@ -129,7 +129,8 @@ def liveness_refinement(symbol_table, program, entry_predicate, unfolded_loop, e
     return ranking_function, invars
 
 
-def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_before_exit: [Transition], exit_cond: Formula):
+def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_before_exit: [Transition],
+              exit_cond: Formula):
     # params
     param_list = ", ".join([symbol_table[str(v)].type + " " + str(v)
                             for v in {v.name for v in program.valuation}
@@ -145,7 +146,9 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
         .replace("real", "double")
 
     init = ["if(!" + str(entry_predicate).replace(" = ", " == ").replace(" & ", " && ") + ") return;"] \
-           + ["if(!(" + " && ".join([v + " >= 0 " for v in symbol_table.keys() if not v.endswith("_prev") and symbol_table[v].type in ["natural", "nat"]]) + ")) return;"]
+           + ["if(!(" + " && ".join([v + " >= 0 " for v in symbol_table.keys() if
+                                     not v.endswith("_prev") and symbol_table[v].type in ["natural",
+                                                                                          "nat"]]) + ")) return;"]
 
     choices = ["if(" + str(t.condition).replace(" = ", " == ").replace(" & ", " && ") + "){"
                + ("\n\t" if len(t.action) > 0 else "")
