@@ -191,6 +191,7 @@ class Program:
         complete_env = []
         complete_con = []
 
+        assert set(self.states) == set([s for t in self.env_transitions for s in [t.tgt, t.src]] + [s for t in self.con_transitions for s in [t.tgt, t.src]])
         for s in self.states:
             env_from_s = [t for t in self.env_transitions if t.src == s]
             conds_env = [t.condition for t in env_from_s]
