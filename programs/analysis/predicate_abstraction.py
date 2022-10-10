@@ -1,18 +1,19 @@
 from itertools import chain, combinations
 
-from pysmt.shortcuts import And
+from pysmt.shortcuts import And, Not, TRUE
 
 from programs.analysis.abstract_state import AbstractState
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
-from programs.util import label_preds_according_to_index, add_prev_suffix
+from programs.util import label_preds, add_prev_suffix
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.parsing.string_to_ltl import string_to_ltl
 from prop_lang.uniop import UniOp
 from prop_lang.util import conjunct, neg, conjunct_formula_set, conjunct_typed_valuation_set, disjunct_formula_set, \
     implies, G, X
+from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 smt_checker = SMTChecker()
