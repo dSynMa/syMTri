@@ -135,7 +135,7 @@ class MealyMachine:
         for st in self.states:
             identity.append("next(" + str(st) + ") = " + str(st))
 
-        identity += ["!next(" + str(event) + ")" for event in self.env_events if Variable(str(event)) not in (mon_events + pred_acts)]
+        identity += ["next(" + str(event) + ") = " + str(event) for event in (self.env_events + self.con_events) if Variable(str(event)) not in (mon_events + pred_acts)]
 
         define += ["identity_" + self.name + " := " + " & ".join(identity)]
 
