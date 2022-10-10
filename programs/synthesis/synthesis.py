@@ -131,6 +131,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             else:
                 ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(out)
                 transitions_without_stutter = concretize_transitions(program, transition_indices_and_state)
+                print("Counterexample is:\n" + "\n".join([str(t[0]) for ts in transitions_without_stutter for t in ts]))
 
                 use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(ce, program, symbol_table)
 
@@ -146,7 +147,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     if len(new_all_preds) == len(state_predicates):
                         raise Exception(
                             "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
-                                                                                                "previous predicates.")
+                                                                                                "previous predicates.\n"
+                                                                           "Counterexample was:\n" + "\n".join([str(t[0]) for ts in transitions_without_stutter for t in ts]))
 
                     state_predicates = list(new_all_preds)
 
