@@ -177,9 +177,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
                     new_transition_predicates = [x for r, _ in rankings for x in
                                                  [BiOp(add_prev_suffix(program, r), ">", r),
-                                                  neg(BiOp(add_prev_suffix(program, r), ">", r)),
-                                                  BiOp(add_prev_suffix(program, r), "<", r),
-                                                  neg(BiOp(add_prev_suffix(program, r), "<", r))]]
+                                                  BiOp(add_prev_suffix(program, r), "<", r)
+                                                  ]]
 
                     print(", ".join([str(p) for p in new_transition_predicates]))
                     if new_transition_predicates == []:
