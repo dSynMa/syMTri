@@ -247,6 +247,7 @@ def merge_transitions(transitions: [Transition], symbol_table):
 
 
 # Use this for testing
+# TODO update, this is probably not in sync with abstraction_to_ltl
 def abstraction_to_ltl_with_turns(pred_abstraction: Program):
     init_transitions = [t for t in pred_abstraction.env_transitions if t.src == pred_abstraction.initial_state]
     init_cond = disjunct_formula_set(
@@ -394,7 +395,8 @@ def abstraction_to_ltl(pred_abstraction: Program, state_predicates: [Formula], t
 
         con_env_transitions += [G(implies(now, disjunct_formula_set(next))).to_nuxmv()]
 
-    transition_cond = sorted(con_env_transitions, key=lambda x : str(x))
+    # TODO this set is needed when we have transition predicates
+    transition_cond = sorted(set(con_env_transitions), key=lambda x: str(x))
 
     return [init_cond, at_least_and_at_most_one_state] + transition_cond
 
