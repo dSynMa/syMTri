@@ -377,18 +377,19 @@ def synthesis_problem_to_TLSF_script(inputs, outputs, assumptions, guarantees):
 
 def stutter_transitions(program: Program, env: bool):
     stutter_transitions = []
-    if env:
-        transitions = program.env_transitions
-    else:
-        transitions = program.con_transitions
     for state in program.states:
-        stutter_transitions += [Transition(state,
-                                           conjunct_formula_set([neg(t.condition)
-                                                                 for t in transitions if t.src == state]),
-                                        [],
-                                        [],
-                                        state)]
+        stutter_transitions += [stutter_transition(program, state, env)]
     return stutter_transitions
+
+
+def stutter_transition(program: Program, state, env: bool):
+    transitions = program.env_transitions if env else program.con_transitions
+    return Transition(state,
+                      conjunct_formula_set([neg(t.condition)
+                                            for t in transitions if t.src == state]),
+                      [],
+                      [],
+                      state)
 
 
 def concretize_transitions(program, indices_and_state_list):
