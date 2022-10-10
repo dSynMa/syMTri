@@ -100,6 +100,13 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         print(controller_projected_on_program.to_dot())
 
         if real:
+            system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
+            try:
+                there_is_mismatch_between_monitor_and_strategy(system, False, ltl_assumptions, ltl_guarantees)
+            except:
+                raise Exception("I have no idea what's gone wrong. Strix thinks the previous mealy machine is a "
+                                "controller, but nuxmv thinks it is non consistent with the monitor.")
+
             return True, controller_projected_on_program
         else:
             system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
