@@ -164,7 +164,9 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
 
     c_code = "#include<stdbool.h>\n\nvoid main(" + param_list + "){\n\t" + "\n\t".join(init) + loop_code + "\n}"
     c_code = c_code.replace("TRUE", "true")
+    c_code = c_code.replace("True", "true")
     c_code = c_code.replace("FALSE", "false")
+    c_code = c_code.replace("False", "false")
 
     return c_code
 
