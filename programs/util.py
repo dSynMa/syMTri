@@ -99,8 +99,6 @@ def symbol_table_from_program(program: Program):
 def parse_nuxmv_ce_output_finite(out: str):
     prefix, _ = get_ce_from_nuxmv_output(out)
 
-    prefix = prefix[:-1]
-
     return prefix, prog_transition_indices_and_state_from_ce(prefix)
 
 
@@ -120,6 +118,7 @@ def prog_transition_indices_and_state_from_ce(prefix):
 
     return monitor_transitions_and_state
 
+
 def get_ce_from_nuxmv_output(out: str):
     ce = out.split("Counterexample")[1].strip()
     # ce = re.sub("[^\n]*(act|guard)\_[0-9]+ = [^\n]+", "", ce)
@@ -138,7 +137,11 @@ def get_ce_from_nuxmv_output(out: str):
     loop.remove([])
     loop = [dict([(s.split("=")[0].strip(), s.split("=")[1].strip()) for s in t if len(s.strip()) > 0]) for t in loop]
 
-    return complete_ce(prefix, loop)
+    complete_prefix, complete_loop = complete_ce(prefix, loop)
+
+    prune_up_to_mismatch = [i for i in range(0, len(complete_prefix)) if complete_prefix[i]["compatible"] == "FALSE"]
+
+    return complete_prefix[0:prune_up_to_mismatch[0] + 1], complete_prefix[prune_up_to_mismatch[0] + 1:] + complete_loop
 
 
 def complete_ce(prefix, loop):
