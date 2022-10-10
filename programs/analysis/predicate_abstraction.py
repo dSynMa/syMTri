@@ -87,6 +87,7 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
     symbol_table_with_prev_vars = symbol_table | {key + "_prev": value for key, value in symbol_table.items()}
 
     predicates = state_predicates + transition_predicates
+    negation_closed_predicates = predicates + [neg(p) for p in predicates]
     # initial transitions rule
     # TODO this should only be computed once, if predicate set updated it can be done incrementally
     for t in orig_env_transitions:
@@ -104,7 +105,7 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
                     relabelled_actions = [BiOp(b.left, "=", add_prev_suffix(program, b.right)) for b in complete_action]
                     action_formula = conjunct_formula_set(relabelled_actions)
                     next_valuation = conjunct(action_formula, add_prev_suffix(program, init_conf))
-                    next_preds = {p for p in predicates if
+                    next_preds = {p for p in negation_closed_predicates if
                                   smt_checker.check(
                                       And(*conjunct(p, next_valuation).to_smt(symbol_table_with_prev_vars)))}
                     next_state = (t.tgt, frozenset(next_preds))
@@ -150,9 +151,9 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
                         complete_action = program.complete_action_set(t.action)
                         prev_action = [BiOp(act.left, "=", add_prev_suffix(program, act.right)) for act in complete_action]
                         f = conjunct_formula_set(
-                            set(prev_action).union({prev_condition, add_prev_suffix(program, context_P_without_prevs), context_Evs}))
-                        next_Ps = meaning_within(f, predicates, symbol_table_with_prev_vars)
-                        pred_trans = set()
+                            set(prev_action).union(
+                                {prev_condition, add_prev_suffix(program, context_P_without_prevs), context_Evs}))
+                        next_Ps = meaning_within(f, negation_closed_predicates, symbol_table_with_prev_vars)
                         for next_P in next_Ps:
                             next_state = (t.tgt, next_P)
                             new_output = set(t.output)
@@ -296,6 +297,8 @@ def complete_and_label_pred_sets(pred_set, full_preds):
 
 def abstraction_to_ltl(pred_abstraction: Program, state_predicates: [Formula], transition_predicates: [Formula]):
     predicates = state_predicates + transition_predicates
+    negation_closed_predicates = predicates + [neg(p) for p in predicates]
+
     init_transitions = [t for t in pred_abstraction.env_transitions if t.src == pred_abstraction.initial_state]
     init_cond_formula = disjunct_formula_set(
         {conjunct(conjunct_formula_set([Variable(t.tgt[0]), t.condition] + t.output),
