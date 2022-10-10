@@ -193,6 +193,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                         "it turns out the new transition predicates "
                                         "(" + ", ".join(
                             [str(p) for p in new_transition_predicates]) + ") are a subset of "
-                                                                           "previous predicates.")
+                                                                           "previous predicates.\n"
+                                                                           "Counterexample was:\n" + "\n".join([str(t[0]) for ts in transitions_without_stutter for t in ts]))
                     # important to add this, since later on assumptions depend on position of predicates in list
                     transition_predicates += new_transition_predicates
