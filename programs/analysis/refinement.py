@@ -198,8 +198,17 @@ def use_liveness_refinement(ce: [dict], program, symbol_table):
             ce_prog_init_trans_concretised = concretize_transitions(program, ce_prog_init_trans)
             ce_prog_loop_trans = prog_transition_indices_and_state_from_ce(ce[first_index + 1:])
             ce_prog_loop_tran_concretised = concretize_transitions(program, ce_prog_loop_trans)
-            entry_predicate = interpolation(ce, program, ce_prog_init_trans_concretised + ce_prog_loop_tran_concretised, len(ce_prog_init_trans) + 1, symbol_table)
-            return True, ce_prog_loop_trans, entry_predicate
+            entry_predicate = interpolation(program,
+                                            [x for xs in ce_prog_init_trans_concretised for x in xs]
+                                            + [x for xs in ce_prog_loop_tran_concretised[:-1] for x in xs],
+                                            ce_prog_loop_tran_concretised[len(ce_prog_loop_tran_concretised) - 1][0],
+                                            first_index,
+                                            symbol_table)
+
+            if entry_predicate == None:
+                raise Exception("Something weird here. Entry predicate to loop is None.")
+
+            return True, ce_prog_loop_tran_concretised, entry_predicate
         else:
             return False, None, None
     else:
