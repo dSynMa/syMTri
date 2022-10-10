@@ -395,29 +395,58 @@ def stutter_transition(program: Program, state, env: bool):
 def concretize_transitions(program, indices_and_state_list):
     transitions = program.env_transitions + program.con_transitions
 
-    used_transitions = []
-    for i, st in indices_and_state_list:
-        if i != '-1':
-            used_transitions += [transitions[int(i)]]
-    return used_transitions
+    concretized = []
+
+    first_transition_index = int(indices_and_state_list[0][0])
+    if first_transition_index != -1:
+        concretized += [[(transitions[first_transition_index], indices_and_state_list[0][1])]]
+    for i in range(1, len(indices_and_state_list)):
+        if i % 2 == 0:
+            continue
+        trans_here = []
+        trans_index_con = int(indices_and_state_list[i][0])
+        if trans_index_con != -1:
+            trans_here += [(transitions[trans_index_con], indices_and_state_list[i][1])]
+        if i + 1 < len(indices_and_state_list):
+            trans_index_env = int(indices_and_state_list[i + 1][0])
+            if trans_index_env != -1:
+                trans_here += [(transitions[int(trans_index_env)], indices_and_state_list[i + 1][1])]
+        if len(trans_here) > 0:
+            concretized += [trans_here]
+
+    if indices_and_state_list[-1][0] == '-1':
+        if len(concretized) == 0:
+            state = program.initial_state
+        else:
+            state = concretized[-1][-1][0].tgt
+        concretized += [[(stutter_transition(program, state, False), indices_and_state_list[-1][1]),
+                         (stutter_transition(program, state, True), indices_and_state_list[-1][1])]]
+    return concretized
 
 
-def concretize_and_ground_transitions(program, indices_and_state_list):
-    transitions = program.env_transitions + program.con_transitions
-
-    used_transitions_grounded = []
-    for i, st in indices_and_state_list:
-        if i != '-1':
-            transition = transitions[int(i)]
-            grounded_state = project_ce_state_onto_ev(st, program.env_events + program.con_events)
-            projected_condition = transition.condition.ground(
-                [TypedValuation(key, "bool", Value(grounded_state[key].lower())) for key in grounded_state.keys()])
+def ground_transitions_and_flatten(program, transitions_and_state_list):
+    grounded = []
+    for transition_st_list in transitions_and_state_list:
+        used_transitions_grounded = []
+        for transition, st in transition_st_list:
+            projected_condition = ground_predicate_on_bool_vars(program, transition.condition, st)
             used_transitions_grounded += [Transition(transition.src,
                                                                 projected_condition,
                                                                 transition.action,
                                                                 transition.output,
                                                                 transition.tgt)]
-    return used_transitions_grounded
+        grounded += used_transitions_grounded
+    return grounded
+
+
+def ground_predicate_on_bool_vars(program, predicate, ce_state):
+    grounded_state = project_ce_state_onto_ev(ce_state, program.env_events + program.con_events + [Variable(v.name) for v in
+                                                                                         program.valuation if
+                                                                                         re.match("bool(ean)?",
+                                                                                                  v.type.lower())])
+    projected_condition = predicate.ground(
+        [TypedValuation(key, "bool", Value(grounded_state[key].lower())) for key in grounded_state.keys()])
+    return projected_condition
 
 
 def add_prev_suffix(program, formula):
