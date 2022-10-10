@@ -226,9 +226,13 @@ def merge_transitions(transitions: [Transition], symbol_table):
             partitions[key] = [transition]
     for key in partitions.keys():
         trans_here = partitions[key]
-        conditions = disjunct_formula_set(sorted([t.condition for t in trans_here], key=lambda x : str(x)))
+        conditions = disjunct_formula_set(sorted([t.condition for t in trans_here], key=lambda x: str(x)))
         conditions_smt = conditions.to_smt(symbol_table)
-        conditions_simplified_fnode = conditions_smt[0].simplify()
+        # If negation is unsat
+        if not smt_checker.check(Not(And(*conditions_smt))):
+            conditions_simplified_fnode = TRUE()
+        else:
+            conditions_simplified_fnode = conditions_smt[0].simplify()
         ## simplify when doing disjunct, after lex ordering
         ## also, may consider when enumerating possible event sets starting with missing some evetns and seeing how many transitions they match, if only then can stop adding to it
         try:
