@@ -30,8 +30,10 @@ def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, str
     text += "VAR\n" + "\t" + ";\n\t".join(vars) + ";\n"
     text += "DEFINE\n" + "\t" + ";\n\t".join(program_model.define + strategy_model.define) + ";\n"
     env_turn = BiOp(Variable("turn"), "=", Value("env"))
+
+    prog_and_mon_events_equality = [BiOp(m, '=', Variable("mon_" + m.name)) for m in mon_events]
     text += "\tcompatible := !(turn = mon) | (" + str(
-        conjunct_formula_set([BiOp(m, '=', Variable("mon_" + m.name)) for m in mon_events] +
+        conjunct_formula_set(prog_and_mon_events_equality +
                             [BiOp(conjunct(env_turn, label_pred(p)), "->", p)
                                for p in pred_list]
                               )) +");\n"
