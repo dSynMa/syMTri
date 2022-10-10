@@ -156,14 +156,10 @@ class MealyMachine:
         invar = mutually_exclusive_rules(self.states)
         invar += mutually_exclusive_rules(["mon_" + s for s in mon_states])
         invar += [str(disjunct_formula_set([Variable(str(s)) for s in self.states]))]
-        i = 0
-        while i < len(pred_acts):
-            invar += [str(neg(conjunct(pred_acts[i], pred_acts[i+1])))]
-            i += 2
         j = 0
         while j < len(trans_pred_acts):
-            invar += [str(neg(conjunct(trans_pred_acts[j], trans_pred_acts[j+3])))]
-            j += 4
+            invar += [str(neg(conjunct(trans_pred_acts[j], trans_pred_acts[j+1])))]
+            j += 2
 
         return NuXmvModel(self.name, set(vars), define, init, invar, trans)
 

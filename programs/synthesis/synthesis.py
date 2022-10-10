@@ -70,27 +70,18 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         abstraction = abstraction_to_ltl(abstract_program, state_predicates, transition_predicates)
         print(", ".join(map(str, abstraction)))
 
-        pred_name_dict = {p: label_pred(p) for p in pred_list}
+        pred_name_dict = {p: label_pred(p, pred_list) for p in pred_list}
         pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
 
         predicate_constraints = []
         i = 0
-        while i < len(state_predicates):
-            pred = pred_name_dict[pred_list[i]]
-            not_pred = pred_name_dict[pred_list[i + 1]]
-            predicate_constraints += [G(neg(conjunct(pred, not_pred)))]
-            i += 2
-        while i < len(pred_list):
-            dec = pred_name_dict[pred_list[i]]
-            not_dec = pred_name_dict[pred_list[i + 1]]
-            inc = pred_name_dict[pred_list[i + 2]]
-            not_inc = pred_name_dict[pred_list[i + 3]]
-            predicate_constraints += [X(G(neg(conjunct(dec, not_dec))))]
-            predicate_constraints += [X(G(neg(conjunct(inc, not_inc))))]
-            predicate_constraints += [X(G(disjunct_formula_set([conjunct(dec, not_inc), conjunct(inc, not_dec), conjunct(not_dec, not_inc)])))]
+        while i < len(transition_predicates):
+            dec = pred_name_dict[transition_predicates[i]]
+            inc = pred_name_dict[transition_predicates[i + 1]]
+            predicate_constraints += [X(G(neg(conjunct(dec, inc))))]
 
             predicate_constraints += [implies(G(F(dec)), G(F(inc)))]
-            i += 4
+            i += 2
 
         assumptions = predicate_constraints + abstraction
 
