@@ -91,7 +91,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                                  out_acts,
                                                  docker)
 
-        mealy = mm.to_nuXmv_with_turns(mon_events, state_predicates, transition_predicates)
+        mealy = mm.to_nuXmv_with_turns(program.states, program.out_events, state_predicates, transition_predicates)
 
         print(mm.to_dot(pred_list))
         controller_projected_on_program = mm.project_controller_on_program(program, abstract_program, pred_list,
@@ -110,13 +110,13 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             return True, controller_projected_on_program
         else:
             system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
-            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, False, ltl_assumptions)
+            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, False, ltl_assumptions, ltl_guarantees)
 
             if not there_is_mismatch:
                 for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
                     ok = False
                     for tt in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
-                        if t.tgt[0] == tt.src[0] and set(t.tgt[1]) == set(tt.src[1]):
+                        if t.tgt == tt.src:
                             ok = True
                             break
 
@@ -124,15 +124,13 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                         raise Exception(
                             "I have no idea what's gone wrong. "
                             "The counterstrategy has no outgoing transition from this monitor state: "
-                            + str(t.tgt[0]) + ", " + ", ".join([str(p) for p in t.tgt[1]]))
+                            + str(t.tgt.state) + ", " + ", ".join([str(p) for p in t.tgt.predicates]))
 
                 # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
                 return False, controller_projected_on_program
             else:
                 ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(out)
-                transitions = program.env_transitions + program.con_transitions
-                transitions_without_stutter = [transitions[int(t)] for t, _ in transition_indices_and_state if
-                                               t != '-1']
+                transitions_without_stutter = concretize_transitions(program, transition_indices_and_state)
 
                 use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(ce, program, symbol_table)
 
