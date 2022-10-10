@@ -9,7 +9,7 @@ from programs.util import label_pred
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct_formula_set, disjunct_formula_set, neg, conjunct
+from prop_lang.util import conjunct_formula_set, disjunct_formula_set, neg, conjunct, mutually_exclusive_rules
 from prop_lang.variable import Variable
 
 
@@ -56,7 +56,7 @@ class MealyMachine:
         to_replace = []
         if pred_list is not None:
             for pred in pred_list:
-                pred_var = label_pred(pred)
+                pred_var = label_pred(pred, pred_list)
                 to_replace += [BiOp(pred_var, ":=", pred)]
 
         dot = Digraph(name="MealyMachine",
@@ -85,12 +85,15 @@ class MealyMachine:
 
         return dot
 
-    def to_nuXmv_with_turns(self, mon_events, state_pred_list, trans_pred_list):
-        state_pred_acts = [label_pred(p) for p in state_pred_list]
-        trans_pred_acts = [label_pred(p) for p in trans_pred_list]
+    def to_nuXmv_with_turns(self, mon_states, mon_out_events, state_pred_list, trans_pred_list):
+        state_pred_acts = [label_pred(p, state_pred_list) for p in state_pred_list]
+        trans_pred_acts = [label_pred(p, trans_pred_list) for p in trans_pred_list]
         pred_acts = state_pred_acts + trans_pred_acts
 
-        new_mon_events = [BiOp(m, ":=", Variable("mon_" + m.name)) for m in mon_events]\
+        mon_events = mon_out_events \
+                     + [Variable(s) for s in mon_states]
+
+        new_mon_events = [BiOp(m, ":=", Variable("mon_" + m.name)) for m in mon_events] \
                          + [BiOp(m, ":=", Variable(m.name)) for m in pred_acts]
         init_conds = []
 
@@ -132,7 +135,8 @@ class MealyMachine:
         for st in self.states:
             identity.append("next(" + str(st) + ") = " + str(st))
 
-        identity += ["!next(" + str(event) + ")" for event in self.env_events if Variable(str(event)) not in (mon_events + pred_acts)]
+        identity += ["next(" + str(event) + ") = " + str(event) for event in (self.env_events + self.con_events) if
+                     Variable(str(event)) not in (mon_events + pred_acts)]
 
         define += ["identity_" + self.name + " := " + " & ".join(identity)]
 
@@ -140,7 +144,8 @@ class MealyMachine:
 
         vars = ["turn : {env, mon, con}"]
         vars += [str(st) + " : boolean" for st in self.states]
-        vars += [str(var) + " : boolean" for var in self.env_events if var not in [str(v) for v in (mon_events + pred_acts)]]
+        vars += [str(var) + " : boolean" for var in self.env_events if
+                 str(var) not in [str(v) for v in (mon_events + pred_acts)]]
         vars += [str(var) + " : boolean" for var in self.con_events]
         vars += ["mon_" + str(var) + " : boolean" for var in mon_events]
         vars += [str(var) + " : boolean" for var in pred_acts]
@@ -150,19 +155,15 @@ class MealyMachine:
             [BiOp(UniOp("next", Variable("mon_" + e.name)), "=", Variable("mon_" + e.name)) for e in mon_events] +
             [BiOp(UniOp("next", Variable(p.name)), "=", Variable(p.name)) for p in pred_acts]).to_nuxmv()) + ")"]
         trans = ["(" + ")\n\t|\t(".join(transitions) + ")"]
-        invar = [str(s) + " -> " + str(conjunct_formula_set(sorted({neg(Variable(ss)) for ss in (self.states - {s})}, key=lambda x: str(x))).to_nuxmv()) for s in
-                 self.states]
+        invar = mutually_exclusive_rules(self.states)
+        invar += mutually_exclusive_rules(["mon_" + s for s in mon_states])
         invar += [str(disjunct_formula_set([Variable(str(s)) for s in self.states]))]
-        i = 0
-        while i < len(pred_acts):
-            invar += [str(neg(conjunct(pred_acts[i], pred_acts[i+1])))]
-            i += 2
         j = 0
         while j < len(trans_pred_acts):
-            invar += [str(neg(conjunct(trans_pred_acts[j], trans_pred_acts[j+3])))]
-            j += 4
+            invar += [str(neg(conjunct(trans_pred_acts[j], trans_pred_acts[j + 1])))]
+            j += 2
 
-        return NuXmvModel(self.name, vars, define, init, invar, trans)
+        return NuXmvModel(self.name, set(vars), define, init, invar, trans)
 
     # TODO this function needs to be optimised
     def project_controller_on_program(self, program, predicate_abstraction: Program, pred_list, symbol_table):
@@ -180,7 +181,7 @@ class MealyMachine:
         replace_preds = []
         i = 0
         for p in pred_list:
-            label = label_pred(p)
+            label = label_pred(p, pred_list)
             replace_preds.append(BiOp(Variable(label.name), ":=", p))
             i += 1
 
@@ -200,8 +201,9 @@ class MealyMachine:
                     for p_t in predicate_abstraction.env_transitions:
                         if p_t.src == p_s:
                             formula = conjunct_formula_set(
-                                [m_cond.replace(replace_preds), p_t.condition, Variable(p_t.tgt[0]), at_least_one_state,
-                                 at_most_one_state] + list(p_t.tgt[1]) + p_t.output)
+                                [m_cond.replace(replace_preds), p_t.condition, Variable(p_t.tgt.state),
+                                 at_least_one_state,
+                                 at_most_one_state] + list(p_t.tgt.predicates) + p_t.output)
                             formula = And(*formula.to_smt(symbol_table))
                             compatible = smt_checker.check(formula)
                             if compatible:

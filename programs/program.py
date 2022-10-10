@@ -8,7 +8,7 @@ from programs.typed_valuation import TypedValuation
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import neg, disjunct_formula_set, conjunct_formula_set
+from prop_lang.util import neg, disjunct_formula_set, mutually_exclusive_rules
 from prop_lang.variable import Variable
 
 
@@ -169,7 +169,8 @@ class Program:
         # for transition_predicate checking
         vars += [str(var.name) + "_prev : " + str(var.type.replace("bool", "boolean")) for var in self.valuation if
                  not (var.type == "nat" or var.type == "natural")]
-        vars += [str(var.name) + "_prev : integer" for var in self.valuation if (var.type == "nat" or var.type == "natural")]
+        vars += [str(var.name) + "_prev : integer" for var in self.valuation if
+                 (var.type == "nat" or var.type == "natural")]
 
         vars += [str(var) + " : boolean" for var in self.env_events]
         vars += [str(var) + " : boolean" for var in self.con_events]
@@ -181,8 +182,7 @@ class Program:
         trans = ["\n\t|\t".join(transitions)]
         trans += ["next(" + str(var.name) + "_prev) = " + str(var.name) for var in self.valuation]
 
-        invar = [s + " -> " + str(conjunct_formula_set([neg(ss) for ss in self.states if ss != s])) for s in
-                 self.states]
+        invar = mutually_exclusive_rules(self.states)
         invar += [str(disjunct_formula_set([Variable(s) for s in self.states]))]
         invar += [str(val.name) + " >= 0" for val in self.valuation if (val.type == "nat" or val.type == "natural")]
 
@@ -192,6 +192,9 @@ class Program:
         complete_env = []
         complete_con = []
 
+        assert set(self.states) == set(
+            [s for t in self.env_transitions for s in [t.tgt, t.src]] + [s for t in self.con_transitions for s in
+                                                                         [t.tgt, t.src]])
         for s in self.states:
             env_from_s = [t for t in self.env_transitions if t.src == s]
             conds_env = [t.condition for t in env_from_s]

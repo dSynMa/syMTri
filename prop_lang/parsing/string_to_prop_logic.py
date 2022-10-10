@@ -20,7 +20,7 @@ def prop_logic_expression():
 def unit_prop_logic_expression():
     expr = yield try_choice(uni_expression,
                             try_choice(boolean_math_bi_expression, try_choice(boolean_val, try_choice(variable,
-                                                                                                bracketed_expression))))
+                                                                                                      bracketed_expression))))
     yield spaces()
     return expr
 
@@ -102,7 +102,7 @@ def math_expression():
 @generate
 def math_unit_expression():
     expr = yield try_choice(number_val, try_choice(variable,
-                                                    try_choice(math_uni_expression, math_bracketed_expression)))
+                                                   try_choice(math_uni_expression, math_bracketed_expression)))
     yield spaces()
     return expr
 
@@ -117,6 +117,7 @@ def variable():
 def variableFromList(vars: [str]):
     var = yield regex("|".join(vars))
     return Variable(var)
+
 
 @generate
 def boolean_val():

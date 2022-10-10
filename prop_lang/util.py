@@ -41,7 +41,7 @@ def conjunct_formula_set(s) -> Formula:
     ret = true()
     for f in s:
         ret = conjunct(f, ret)
-    return ret.simplify()
+    return ret
 
 
 def conjunct_typed_valuation_set(s: set[TypedValuation]) -> Formula:
@@ -73,7 +73,7 @@ def disjunct_formula_set(s) -> Formula:
     ret = false()
     for f in s:
         ret = disjunct(f, ret)
-    return ret.simplify()
+    return ret
 
 
 def implies(left: Formula, right: Formula):
@@ -192,3 +192,12 @@ def push_negation(f: Formula):
 
 def append_to_variable_name(formula, vars_names, suffix):
     return formula.replace([BiOp(Variable(v), ":=", Variable(v + suffix)) for v in vars_names])
+
+
+def mutually_exclusive_rules(states):
+    return [str(s) + " -> " + str(conjunct_formula_set([neg(Variable(str(ss))) for ss in states if ss != s])) for s in
+            states]
+
+
+def is_boolean(var, tvs):
+    return any(tv for tv in tvs if tv.name == str(var) and re.match("bool(ean)?", str(tv.type)))

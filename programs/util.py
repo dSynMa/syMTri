@@ -22,21 +22,26 @@ from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 
-def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, strategy_model: NuXmvModel, mon_events, pred_list):
+def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, strategy_model: NuXmvModel, mon_events,
+                                                  pred_list):
     text = "MODULE main\n"
-    vars = sorted(program_model.vars)\
-           + sorted([v for v in strategy_model.vars if v not in program_model.vars])\
+    vars = sorted(program_model.vars) \
+           + sorted([v for v in strategy_model.vars
+                     if v not in program_model.vars]) \
            + ["mismatch : boolean"]
     text += "VAR\n" + "\t" + ";\n\t".join(vars) + ";\n"
     text += "DEFINE\n" + "\t" + ";\n\t".join(program_model.define + strategy_model.define) + ";\n"
     env_turn = BiOp(Variable("turn"), "=", Value("env"))
-    text += "\tcompatible := !(turn = mon) | (" + str(
-        conjunct_formula_set([BiOp(m, '=', Variable("mon_" + m.name)) for m in mon_events] +
-                            [BiOp(conjunct(env_turn, label_pred(p)), "->", p)
-                               for p in pred_list]
-                              )) +");\n"
 
-    text += "INIT\n" + "\t(" + ")\n\t& (".join(program_model.init + strategy_model.init + ["turn = env", "mismatch = FALSE"]) + ")\n"
+    prog_and_mon_events_equality = [BiOp(m, '=', Variable("mon_" + m.name)) for m in mon_events]
+    text += "\tcompatible := !(turn = mon) | (" + str(
+        conjunct_formula_set(prog_and_mon_events_equality +
+                             [BiOp(conjunct(env_turn, label_pred(p, pred_list)), "->", p)
+                              for p in pred_list]
+                             )) + ");\n"
+
+    text += "INIT\n" + "\t(" + ")\n\t& (".join(
+        program_model.init + strategy_model.init + ["turn = env", "mismatch = FALSE"]) + ")\n"
     text += "INVAR\n" + "\t((" + ")\n\t& (".join(program_model.invar + strategy_model.invar) + "))\n"
 
     turn_logic = ["(turn = con -> next(turn) = env)"]
@@ -44,7 +49,9 @@ def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, str
     turn_logic += ["(turn = mon -> next(turn) = con)"]
 
     maintain_mon_vars = str(conjunct_formula_set(
-        [BiOp(UniOp("next", Variable("mon_" + m.name)), ' = ', Variable("mon_" + m.name)) for m in mon_events]))
+        [BiOp(UniOp("next", Variable("mon_" + m.name)), ' = ', Variable("mon_" + m.name)) for m in (mon_events)]
+        + [BiOp(UniOp("next", Variable(m.name)), ' = ', Variable(m.name)) for m in
+           [label_pred(p, pred_list) for p in pred_list]]))
     new_trans = ["compatible", "!next(mismatch)"] + program_model.trans + strategy_model.trans + turn_logic
     normal_trans = "\t((" + ")\n\t& (".join(new_trans) + "))\n"
 
@@ -96,8 +103,6 @@ def symbol_table_from_program(program: Program):
 def parse_nuxmv_ce_output_finite(out: str):
     prefix, _ = get_ce_from_nuxmv_output(out)
 
-    prefix = prefix[:-1]
-
     return prefix, prog_transition_indices_and_state_from_ce(prefix)
 
 
@@ -112,10 +117,11 @@ def prog_transition_indices_and_state_from_ce(prefix):
                     if dic[key.replace("guard_", "act_")] == "TRUE":
                         transition = key.replace("guard_", "")
                         break
-            dic_without_prev_vars = {key:value for key, value in dic.items() if not key.endswith("_prev")}
+            dic_without_prev_vars = {key: value for key, value in dic.items() if not key.endswith("_prev")}
             monitor_transitions_and_state.append((transition, dic_without_prev_vars))
 
     return monitor_transitions_and_state
+
 
 def get_ce_from_nuxmv_output(out: str):
     ce = out.split("Counterexample")[1].strip()
@@ -135,7 +141,11 @@ def get_ce_from_nuxmv_output(out: str):
     loop.remove([])
     loop = [dict([(s.split("=")[0].strip(), s.split("=")[1].strip()) for s in t if len(s.strip()) > 0]) for t in loop]
 
-    return complete_ce(prefix, loop)
+    complete_prefix, complete_loop = complete_ce(prefix, loop)
+
+    prune_up_to_mismatch = [i for i in range(0, len(complete_prefix)) if complete_prefix[i]["compatible"] == "FALSE"]
+
+    return complete_prefix[0:prune_up_to_mismatch[0] + 1], complete_prefix[prune_up_to_mismatch[0] + 1:] + complete_loop
 
 
 def complete_ce(prefix, loop):
@@ -257,8 +267,19 @@ def ground_formula_on_ce_state_with_index(formula: Formula, state: dict, i) -> F
     return formula.replace(to_replace_with)
 
 
-def label_pred(p):
-    return Variable(str(p)
+def label_pred(p, preds):
+    if p not in preds:
+        if (isinstance(p, UniOp) and p.op == "!"):
+            return neg(stringify_pred(p.right))
+        else:
+            return neg(stringify_pred(neg(p)))
+    else:
+        return stringify_pred(p)
+
+
+def stringify_pred(p):
+    return Variable("_" +
+                    str(p)
                     .replace(" ", "")
                     .replace("_", "")
                     .replace("(", "_")
@@ -285,11 +306,12 @@ def label_pred(p):
                     )
 
 
-def label_preds_according_to_index(ps):
-    return {label_pred(p) for p in ps}
+def label_preds(ps, preds):
+    return {label_pred(p, preds) for p in ps}
 
 
-def there_is_mismatch_between_monitor_and_strategy(system, livenesstosafety: bool, ltl_assumptions: Formula):
+def there_is_mismatch_between_monitor_and_strategy(system, livenesstosafety: bool, ltl_assumptions: Formula,
+                                                   ltl_guarantees: Formula):
     print(system)
     model_checker = ModelChecker()
     # Sanity check
@@ -312,9 +334,9 @@ def reduce_up_to_iff(old_preds, new_preds, symbol_table):
 
     for p in new_preds:
         if p and neg(p) not in keep_these and p and neg(p) not in remove_these and \
-                not has_equiv_pred(p, set(old_preds) | keep_these, symbol_table):
+                not has_equiv_pred(p, set(old_preds) | keep_these, symbol_table) and \
+                not has_equiv_pred(neg(p), set(old_preds) | keep_these, symbol_table):
             keep_these.add(p)
-            keep_these.add(neg(p))
         else:
             remove_these.add(p)
             remove_these.add(neg(p))
@@ -327,9 +349,15 @@ def has_equiv_pred(p, preds, symbol_table):
     for pp in preds:
         if p is pp:
             return True
-        elif not (smt_checker.check(And(Not(And(*p.to_smt(symbol_table))), And(*pp.to_smt(symbol_table)))) or
-                  smt_checker.check(And(Not(And(*pp.to_smt(symbol_table))), And(*p.to_smt(symbol_table))))):
-            return True
+        else:
+            p_smt = p.to_smt(symbol_table)
+            pp_smt = pp.to_smt(symbol_table)
+            if not smt_checker.check(And(*p_smt)) or not smt_checker.check(Not(And(*p_smt))):
+                # if p or !p is unsat (i.e., p or !p is False), then no need to add it
+                return True
+            elif not (smt_checker.check(And(Not(And(*p_smt)), And(*pp_smt))) or
+                      smt_checker.check(And(Not(And(*pp_smt)), And(*p_smt)))):
+                return True
     return False
 
 
@@ -365,46 +393,77 @@ def synthesis_problem_to_TLSF_script(inputs, outputs, assumptions, guarantees):
 
 def stutter_transitions(program: Program, env: bool):
     stutter_transitions = []
-    if env:
-        transitions = program.env_transitions
-    else:
-        transitions = program.con_transitions
     for state in program.states:
-        stutter_transitions += [Transition(state,
-                                           conjunct_formula_set([neg(t.condition)
-                                                                 for t in transitions if t.src == state]),
-                                        [],
-                                        [],
-                                        state)]
+        stutter_transitions += [stutter_transition(program, state, env)]
     return stutter_transitions
+
+
+def stutter_transition(program: Program, state, env: bool):
+    transitions = program.env_transitions if env else program.con_transitions
+    return Transition(state,
+                      conjunct_formula_set([neg(t.condition)
+                                            for t in transitions if t.src == state]),
+                      [],
+                      [],
+                      state)
 
 
 def concretize_transitions(program, indices_and_state_list):
     transitions = program.env_transitions + program.con_transitions
 
-    used_transitions = []
-    for i, st in indices_and_state_list:
-        if i != '-1':
-            used_transitions += [transitions[int(i)]]
-    return used_transitions
+    concretized = []
+
+    first_transition_index = int(indices_and_state_list[0][0])
+    if first_transition_index != -1:
+        concretized += [[(transitions[first_transition_index], indices_and_state_list[0][1])]]
+    for i in range(1, len(indices_and_state_list)):
+        if i % 2 == 0:
+            continue
+        trans_here = []
+        trans_index_con = int(indices_and_state_list[i][0])
+        if trans_index_con != -1:
+            trans_here += [(transitions[trans_index_con], indices_and_state_list[i][1])]
+        if i + 1 < len(indices_and_state_list):
+            trans_index_env = int(indices_and_state_list[i + 1][0])
+            if trans_index_env != -1:
+                trans_here += [(transitions[int(trans_index_env)], indices_and_state_list[i + 1][1])]
+        if len(trans_here) > 0:
+            concretized += [trans_here]
+
+    if indices_and_state_list[-1][0] == '-1':
+        if len(concretized) == 0:
+            state = program.initial_state
+        else:
+            state = concretized[-1][-1][0].tgt
+        concretized += [[(stutter_transition(program, state, False), indices_and_state_list[-1][1]),
+                         (stutter_transition(program, state, True), indices_and_state_list[-1][1])]]
+    return concretized
 
 
-def concretize_and_ground_transitions(program, indices_and_state_list):
-    transitions = program.env_transitions + program.con_transitions
-
-    used_transitions_grounded = []
-    for i, st in indices_and_state_list:
-        if i != '-1':
-            transition = transitions[int(i)]
-            grounded_state = project_ce_state_onto_ev(st, program.env_events + program.con_events)
-            projected_condition = transition.condition.ground(
-                [TypedValuation(key, "bool", Value(grounded_state[key].lower())) for key in grounded_state.keys()])
+def ground_transitions_and_flatten(program, transitions_and_state_list):
+    grounded = []
+    for transition_st_list in transitions_and_state_list:
+        used_transitions_grounded = []
+        for transition, st in transition_st_list:
+            projected_condition = ground_predicate_on_bool_vars(program, transition.condition, st)
             used_transitions_grounded += [Transition(transition.src,
-                                                                projected_condition,
-                                                                transition.action,
-                                                                transition.output,
-                                                                transition.tgt)]
-    return used_transitions_grounded
+                                                     projected_condition,
+                                                     transition.action,
+                                                     transition.output,
+                                                     transition.tgt)]
+        grounded += used_transitions_grounded
+    return grounded
+
+
+def ground_predicate_on_bool_vars(program, predicate, ce_state):
+    grounded_state = project_ce_state_onto_ev(ce_state,
+                                              program.env_events + program.con_events + [Variable(v.name) for v in
+                                                                                         program.valuation if
+                                                                                         re.match("bool(ean)?",
+                                                                                                  v.type.lower())])
+    projected_condition = predicate.ground(
+        [TypedValuation(key, "bool", Value(grounded_state[key].lower())) for key in grounded_state.keys()])
+    return projected_condition
 
 
 def add_prev_suffix(program, formula):

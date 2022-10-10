@@ -4,11 +4,12 @@ import subprocess
 from tempfile import NamedTemporaryFile
 from unittest import SkipTest, TestCase
 
-from programs.typed_valuation import TypedValuation
-from prop_lang.parsing.string_to_ltl import string_to_ltl
 from pysmt.factory import SolverRedefinitionError
 from pysmt.logics import QF_UFLRA
 from pysmt.shortcuts import Solver, Symbol, get_env
+
+from programs.typed_valuation import TypedValuation
+from prop_lang.parsing.string_to_ltl import string_to_ltl
 
 
 def _check_os():
@@ -32,7 +33,6 @@ def _add_solver(description, command, args=[], logics=None):
 
 
 class TestCvc5(TestCase):
-
     SOLVER_NAME = "cvc5"
 
     def __init__(self, methodName: str = ...) -> None:
@@ -105,7 +105,6 @@ class TestCvc5(TestCase):
 
 
 class TestMathSat(TestCase):
-
     SOLVER_NAME = "mathsat-smtlib"
 
     # def _add_mathsat(self):
@@ -144,7 +143,7 @@ class TestMathSat(TestCase):
             self.assertEqual(s.is_sat(smt), expected_sat)
 
     def test_to_smt_0(self):
-        self._test_to_smt("1 == 0", {}, False,)
+        self._test_to_smt("1 == 0", {}, False, )
 
     def test_to_smt_1(self):
         self._test_to_smt(
