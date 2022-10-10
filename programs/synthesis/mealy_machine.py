@@ -9,7 +9,7 @@ from programs.util import label_pred
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct_formula_set, disjunct_formula_set, neg, conjunct
+from prop_lang.util import conjunct_formula_set, disjunct_formula_set, neg, conjunct, mutually_exclusive_rules
 from prop_lang.variable import Variable
 
 
@@ -85,10 +85,13 @@ class MealyMachine:
 
         return dot
 
-    def to_nuXmv_with_turns(self, mon_events, state_pred_list, trans_pred_list):
-        state_pred_acts = [label_pred(p) for p in state_pred_list]
-        trans_pred_acts = [label_pred(p) for p in trans_pred_list]
+    def to_nuXmv_with_turns(self, mon_states, mon_out_events, state_pred_list, trans_pred_list):
+        state_pred_acts = [label_pred(p, state_pred_list) for p in state_pred_list]
+        trans_pred_acts = [label_pred(p, trans_pred_list) for p in trans_pred_list]
         pred_acts = state_pred_acts + trans_pred_acts
+
+        mon_events = mon_out_events \
+                     + [Variable(s) for s in mon_states]
 
         new_mon_events = [BiOp(m, ":=", Variable("mon_" + m.name)) for m in mon_events]\
                          + [BiOp(m, ":=", Variable(m.name)) for m in pred_acts]
@@ -150,8 +153,8 @@ class MealyMachine:
             [BiOp(UniOp("next", Variable("mon_" + e.name)), "=", Variable("mon_" + e.name)) for e in mon_events] +
             [BiOp(UniOp("next", Variable(p.name)), "=", Variable(p.name)) for p in pred_acts]).to_nuxmv()) + ")"]
         trans = ["(" + ")\n\t|\t(".join(transitions) + ")"]
-        invar = [str(s) + " -> " + str(conjunct_formula_set(sorted({neg(Variable(ss)) for ss in (self.states - {s})}, key=lambda x: str(x))).to_nuxmv()) for s in
-                 self.states]
+        invar = mutually_exclusive_rules(self.states)
+        invar += mutually_exclusive_rules(["mon_" + s for s in mon_states])
         invar += [str(disjunct_formula_set([Variable(str(s)) for s in self.states]))]
         i = 0
         while i < len(pred_acts):
