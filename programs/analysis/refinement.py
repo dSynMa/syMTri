@@ -57,7 +57,7 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
 
     # this will be used to generalise the interpolants references to intermediate variables to the original variable name
     reset_vars = [BiOp(Variable(v + "_" + str(i)), ":=", Variable(v)) for v in symbol_table.keys() for i in
-                  range(0, len(concurring_transitions))]
+                  range(0, len(concurring_transitions) + 1)]
 
     init_prop = ce_state_to_formula(concurring_transitions[0][1], symbol_table).replace(ith_vars(0))
 
