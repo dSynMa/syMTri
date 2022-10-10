@@ -46,7 +46,8 @@ def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, str
     turn_logic += ["(turn = mon -> next(turn) = con)"]
 
     maintain_mon_vars = str(conjunct_formula_set(
-        [BiOp(UniOp("next", Variable("mon_" + m.name)), ' = ', Variable("mon_" + m.name)) for m in mon_events]))
+        [BiOp(UniOp("next", Variable("mon_" + m.name)), ' = ', Variable("mon_" + m.name)) for m in (mon_events)]
+        + [BiOp(UniOp("next", Variable(m.name)), ' = ', Variable(m.name)) for m in [label_pred(p) for p in pred_list]]))
     new_trans = ["compatible", "!next(mismatch)"] + program_model.trans + strategy_model.trans + turn_logic
     normal_trans = "\t((" + ")\n\t& (".join(new_trans) + "))\n"
 
