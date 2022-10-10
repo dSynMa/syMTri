@@ -27,7 +27,7 @@ program eventually__allow_grant {
         q0 -> q1 [dealWithTasks & (cnt > 0)],
         q0 -> q2 [dealWithTasks & (cnt == 0)],
         q1 -> q1 [(!granting & cnt > 0) $ cnt := cnt - 1; granting := true; >> doTask],
-        q1 -> q2 [ $ >> release]
+        q2 -> q0 [ $ >> release]
     }
 
     CONTROLLER TRANSITIONS {
