@@ -40,7 +40,10 @@ def safety_refinement(ce: [dict], prefix: [Transition], symbol_table, program) -
     return Cs
 
 
-def interpolation(ce: [dict], program: Program, prefix: [Transition], cut_point: int, symbol_table):
+def interpolation(program: Program, concurring_transitions: [(Transition, dict)], disagreed_on: (Transition, dict),
+                  cut_point: int, symbol_table):
+    assert cut_point <= len(concurring_transitions)
+
     logic = "QF_UFLRA"  # TODO what to put here?
     smt_checker = SMTChecker()
 
@@ -49,40 +52,44 @@ def interpolation(ce: [dict], program: Program, prefix: [Transition], cut_point:
 
     # symbol table is updated with intermediate variables (plus last one, len(prefix), for state after last transition
     new_symbol_table = {}
-    for i in range(0, len(prefix) + 1):
+    for i in range(0, len(concurring_transitions) + 1):
         new_symbol_table.update({key + "_" + str(i): value for key, value in symbol_table.items()})
 
     # this will be used to generalise the interpolants references to intermediate variables to the original variable name
     reset_vars = [BiOp(Variable(v + "_" + str(i)), ":=", Variable(v)) for v in symbol_table.keys() for i in
-                  range(0, len(prefix))]
+                  range(0, len(concurring_transitions))]
 
-    init_prop = ce_state_to_formula(ce[0], symbol_table).replace(ith_vars(0))
+    init_prop = ce_state_to_formula(concurring_transitions[0][1], symbol_table).replace(ith_vars(0))
 
     path_formula_set_A = []
     for i in range(0, cut_point):
         path_formula_set_A += [BiOp(Variable(act.left.name + "_" + str(i + 1)),
                                     "=",
                                     act.right.replace(ith_vars(i))) for act in
-                               program.complete_action_set(prefix[i].action)]
+                               program.complete_action_set(concurring_transitions[i][0].action)]
 
     path_formula_A = conjunct_formula_set(path_formula_set_A)
 
     path_formula_set_B = []
-    for i in range(cut_point, len(prefix) - 1):
+    for i in range(cut_point, len(concurring_transitions)):
         path_formula_set_B += [BiOp(Variable(act.left.name + "_" + str(i + 1)),
                                     "=",
                                     act.right.replace(ith_vars(i))) for act in
-                               program.complete_action_set(prefix[i].action)]
+                               program.complete_action_set(concurring_transitions[i][0].action)]
 
-    projected_condition = prefix[len(prefix) - 1].condition.replace(ith_vars(len(prefix) - 1))
+    neg_part_B = []
+
+    disagreed_on_transition = disagreed_on[0]
+    disagreed_on_state = disagreed_on[1]
+    projected_condition = disagreed_on_transition.condition.replace(ith_vars(len(concurring_transitions)))
     grounded_condition = ground_formula_on_ce_state_with_index(projected_condition,
-                                                               project_ce_state_onto_ev(ce[len(prefix) - 1],
+                                                               project_ce_state_onto_ev(disagreed_on_state,
                                                                                         program.env_events
                                                                                         + program.con_events),
-                                                               len(prefix) - 1)
+                                                               len(concurring_transitions))
+    neg_part_B += [grounded_condition]
 
-    path_formula_set_B += [neg(grounded_condition)]
-
+    path_formula_set_B += [neg(conjunct_formula_set(neg_part_B).simplify())]
     path_formula_B = conjunct_formula_set(path_formula_set_B)
 
     A = And(*conjunct(init_prop, path_formula_A).to_smt(new_symbol_table))
