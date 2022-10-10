@@ -151,11 +151,12 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
                + ("\n\t" if len(t.action) > 0 else "")
                + "\n\t\t".join([str(act.left) + " = " + str(act.right) + ";" for act in t.action if
                                 not is_boolean(act.left, program.valuation)])
-               + "\n\t} else if(!" + str(t.condition).replace(" = ", " == ").replace(" & ", " && ") + "){"
+               + "\n\t} else {"
+               # + "\n\t} else if(!" + str(t.condition).replace(" = ", " == ").replace(" & ", " && ") + "){"
                + "\n\t\tbreak;"
                + "\n\t}"
                for t in loop_before_exit] \
-            + ["if(" + str(exit_cond) + ") break;"]
+              + ["if(" + str(exit_cond) + ") break;" if str(exit_cond.simplify()).lower() != "true" else ""]
 
     loop_code = "\n\twhile(true){\n\t" \
                 + "\n\t".join(choices) \
