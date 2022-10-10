@@ -177,7 +177,27 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
 
         con_turn_flag = not con_turn_flag
 
-    states = unique_pred_states(done_states_env | done_states_con)
+    states = {s for t in (env_transitions | con_transitions) for s in {t.src, t.tgt}}#done_states_env | done_states_con
+
+    # For debugging
+    for t in env_transitions:
+        good = False
+        for x in con_transitions:
+            if t.tgt == x.src:
+                good = True
+                break
+        if not good:
+            raise Exception("Predicate abstraction has state, " + str(t.tgt) + ", without output transitions.\n"
+                                                                               "" + "\n".join(map(str, orig_env_transitions + orig_con_transitions)))
+
+    for t in con_transitions:
+        good = False
+        for x in env_transitions:
+            if t.tgt == x.src:
+                good = True
+                break
+        if not good:
+            raise Exception("Predicate abstraction has state, " + str(t.tgt) + ", without output transitions.")
 
     # simplification stage
     if simplified:
