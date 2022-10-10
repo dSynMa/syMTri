@@ -14,7 +14,7 @@ from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.parsing.string_to_prop_logic import string_to_mathexpr
-from prop_lang.util import conjunct, conjunct_formula_set, neg, true
+from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
@@ -129,13 +129,19 @@ def liveness_refinement(symbol_table, program, entry_predicate, unfolded_loop, e
     return ranking_function, invars
 
 
-def loop_to_c(symbol_table, program : Program, entry_predicate: Formula, loop_before_exit: [Transition], exit_cond: Formula):
-    #params
-    param_list = ", ".join([symbol_table[str(v)].type + " " + str(v) for v in {v.name for v in program.valuation}])
-    param_list = param_list.replace("integer", "int")\
-        .replace("natural", "int")\
-        .replace("nat", "int")\
-        .replace("boolean", "bool")\
+def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_before_exit: [Transition], exit_cond: Formula):
+    # params
+    param_list = ", ".join([symbol_table[str(v)].type + " " + str(v)
+                            for v in {v.name for v in program.valuation}
+                            if
+                            not is_boolean(v, program.valuation) and v in [str(vv) for t in loop_before_exit for vv in
+                                                                           (t.condition.variablesin()
+                                                                            + [act.left for act in t.action]
+                                                                            + [a for act in t.action for a in
+                                                                               act.right.variablesin()])]])
+    param_list = param_list.replace("integer", "int") \
+        .replace("natural", "int") \
+        .replace("nat", "int") \
         .replace("real", "double")
 
     init = ["if(!" + str(entry_predicate).replace(" = ", " == ").replace(" & ", " && ") + ") return;"] \
@@ -143,7 +149,8 @@ def loop_to_c(symbol_table, program : Program, entry_predicate: Formula, loop_be
 
     choices = ["if(" + str(t.condition).replace(" = ", " == ").replace(" & ", " && ") + "){"
                + ("\n\t" if len(t.action) > 0 else "")
-               + "\n\t\t".join([str(act.left) + " = " + str(act.right) + ";" for act in t.action])
+               + "\n\t\t".join([str(act.left) + " = " + str(act.right) + ";" for act in t.action if
+                                not is_boolean(act.left, program.valuation)])
                + "\n\t} else if(!" + str(t.condition).replace(" = ", " == ").replace(" & ", " && ") + "){"
                + "\n\t\tbreak;"
                + "\n\t}"
