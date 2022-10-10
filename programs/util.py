@@ -333,9 +333,15 @@ def has_equiv_pred(p, preds, symbol_table):
     for pp in preds:
         if p is pp:
             return True
-        elif not (smt_checker.check(And(Not(And(*p.to_smt(symbol_table))), And(*pp.to_smt(symbol_table)))) or
-                  smt_checker.check(And(Not(And(*pp.to_smt(symbol_table))), And(*p.to_smt(symbol_table))))):
-            return True
+        else:
+            p_smt = p.to_smt(symbol_table)
+            pp_smt = pp.to_smt(symbol_table)
+            if not smt_checker.check(And(*p_smt)) or not smt_checker.check(Not(And(*p_smt))):
+                # if p or !p is unsat (i.e., p or !p is False), then no need to add it
+                return True
+            elif not (smt_checker.check(And(Not(And(*p_smt)), And(*pp_smt))) or
+                  smt_checker.check(And(Not(And(*pp_smt)), And(*p_smt)))):
+                return True
     return False
 
 
