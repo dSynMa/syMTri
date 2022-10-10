@@ -9,11 +9,12 @@ from programs.synthesis.mealy_machine import MealyMachine
 from programs.util import symbol_table_from_program, create_nuxmv_model_for_compatibility_checking, \
     there_is_mismatch_between_monitor_and_strategy, \
     parse_nuxmv_ce_output_finite, reduce_up_to_iff, \
-    concretize_and_ground_transitions, add_prev_suffix, label_pred
+    add_prev_suffix, label_pred, ground_predicate_on_bool_vars, \
+    concretize_transitions, ground_transitions_and_flatten
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.parsing.string_to_ltl import string_to_ltl
-from prop_lang.util import neg, G, F, implies, conjunct, disjunct_formula_set, X, disjunct, true
+from prop_lang.util import neg, G, F, implies, conjunct, X, true
 from prop_lang.variable import Variable
 
 
@@ -157,14 +158,17 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
                     # ground transitions in the counterexample loop
                     # on the environment and controller events in the counterexample
-                    loop_before_exit = concretize_and_ground_transitions(program, counterexample_loop)
-                    # transitions_to_close_loop = grounded_desired_prog_trans
+                    loop_before_exit = ground_transitions_and_flatten(program, counterexample_loop)
+
+                    entry_predicate_grounded = ground_predicate_on_bool_vars(program, entry_predicate, counterexample_loop[0][-1][1]).simplify()
+                    # exit_predicate_grounded = concretize_and_ground_predicate(program, last_transitions[-1][0].condition, counterexample_loop[-1][-1][1])
+                    exit_predicate_grounded = true()
 
                     ranking, invars = liveness_refinement(symbol_table,
                                                           program,
-                                                          entry_predicate,
+                                                          entry_predicate_grounded,
                                                           loop_before_exit,
-                                                          last_transition.condition)
+                                                          exit_predicate_grounded)
                     rankings.append((ranking, invars))
                     if len(invars) > 0:
                         raise NotImplementedError(
