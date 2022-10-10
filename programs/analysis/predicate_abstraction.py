@@ -238,7 +238,8 @@ def merge_transitions(transitions: [Transition], symbol_table):
         try:
             # TODO using string_to_ltl here since it can deal with unbracketed combinations, e.g. a | b | c
             #  string_to_pl needs to be extended to handle this too
-            new_transitions.append(Transition(key[0], string_to_ltl(str(conditions_simplified_fnode)), [], trans_here[0].output, key[2]))
+            new_transitions.append(
+                Transition(trans_here[0].src, string_to_ltl(str(conditions_simplified_fnode)), [], trans_here[0].output, trans_here[0].tgt))
         except Exception as e:
             raise e
     return new_transitions
