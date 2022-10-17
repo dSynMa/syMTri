@@ -46,8 +46,13 @@ class BiOp(Formula):
     def __hash__(self):
         return hash((self.left, self.op, self.right))
 
+    # returns list of variables that appear in formula
+    # ordered as they appear in the formula
+    # without already appearing variables
     def variablesin(self) -> [Variable]:
-        return self.left.variablesin() + self.right.variablesin()
+        vars = self.left.variablesin() + self.right.variablesin()
+        vars_unique = [v for (i,v) in enumerate(vars) if v not in vars[:i]]
+        return vars_unique
 
     def ground(self, context: [TypedValuation]):
         return BiOp(self.left.ground(context), self.op, self.right.ground(context))
