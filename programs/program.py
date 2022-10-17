@@ -81,8 +81,7 @@ class Program:
                       engine='dot',
                       format='svg')
 
-        to_str = lambda x: str(x) if type(x) != tuple or type(x[1]) != frozenset else str(x[0]) + ", " + ', '.join(
-            map(to_str, list(x[1])))
+        to_str = lambda x: ", ".join([str(v) for v in list(x)]) if hasattr(x, "__iter__") else str(x)
 
         dot.node("init", "", [("shape", "point")])
         for s in self.states:
