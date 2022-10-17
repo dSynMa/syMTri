@@ -182,7 +182,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                                            symbol_table)
 
                     if len(new_all_trans_preds) == len(transition_predicates):
-                        raise Exception("I did something wrong, "
+                        print("I did something wrong, "
                                         "it turns out the new transition predicates "
                                         "(" + ", ".join(
                             [str(p) for p in new_transition_predicates]) + ") are a subset of "
