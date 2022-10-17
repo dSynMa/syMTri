@@ -26,31 +26,37 @@ class MealyMachine:
 
     def add_transitions(self, trans_dict: dict):
         int_st_index = 0
-        for src_index, env_behaviour in trans_dict.keys():
+        env_interm_states = {}
+        for src_index, env_behaviour, tgt_index in trans_dict.keys():
             new_src = "st_" + str(src_index)
-            new_intermed = "st__" + str(int_st_index)
-            int_st_index += 1
 
             env_cond = (env_behaviour.simplify()).to_nuxmv()
-            self.con_transitions[new_intermed] = []
 
-            for con_behaviour, tgt_index in trans_dict[(src_index, env_behaviour)]:
-                con_cond = (con_behaviour.simplify()).to_nuxmv()
-                new_tgt = "st_" + str(tgt_index)
+            con_behaviour = disjunct_formula_set(trans_dict[(src_index, env_behaviour, tgt_index)])
+            con_cond = (con_behaviour.simplify()).to_nuxmv()
+            new_tgt = "st_" + str(tgt_index)
 
-                if new_src not in self.env_transitions.keys():
-                    self.env_transitions[new_src] = []
+            if new_src not in self.env_transitions.keys():
+                self.env_transitions[new_src] = set()
 
-                if (env_cond, new_intermed) not in self.env_transitions[new_src]:
-                    self.env_transitions[new_src].append((env_cond, new_intermed))
+            if (src_index, env_behaviour) in env_interm_states.keys():
+                new_intermed = env_interm_states.get((src_index, env_behaviour))
+            else:
+                new_intermed = "st__" + str(int_st_index)
+                env_interm_states[(src_index, env_behaviour)] = new_intermed
+                int_st_index += 1
+                self.con_transitions[new_intermed] = set()
 
-                if (con_cond, new_tgt) not in self.con_transitions[new_intermed]:
-                    self.con_transitions[new_intermed] += [(con_cond, new_tgt)]
+            if (env_cond, new_intermed) not in self.env_transitions[new_src]:
+                self.env_transitions[new_src].add((env_cond, new_intermed))
 
-                self.states.add(new_intermed)
-                self.counter = self.counter - 1
-                self.states.add(new_src)
-                self.states.add(new_tgt)
+            if (con_cond, new_tgt) not in self.con_transitions[new_intermed]:
+                self.con_transitions[new_intermed] |= {(con_cond, new_tgt)}
+
+            self.states.add(new_intermed)
+            self.counter = self.counter - 1
+            self.states.add(new_src)
+            self.states.add(new_tgt)
 
     def to_dot(self, pred_list: [Formula]):
         to_replace = []
