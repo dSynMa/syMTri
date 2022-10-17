@@ -6,6 +6,7 @@ from programs.program import Program
 from programs.synthesis import ltl_synthesis
 from programs.synthesis.ltl_synthesis import syfco_ltl, syfco_ltl_in, syfco_ltl_out
 from programs.synthesis.mealy_machine import MealyMachine
+from programs.typed_valuation import TypedValuation
 from programs.util import symbol_table_from_program, create_nuxmv_model_for_compatibility_checking, \
     there_is_mismatch_between_monitor_and_strategy, \
     parse_nuxmv_ce_output_finite, reduce_up_to_iff, \
@@ -99,8 +100,10 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         mealy = mm.to_nuXmv_with_turns(program.states, program.out_events, state_predicates, transition_predicates)
 
         print(mm.to_dot(pred_list))
+
+        symbol_table_preds = {str(label_pred(v, pred_list)):TypedValuation(str(label_pred(v, pred_list)), "bool", true()) for v in pred_list}
         controller_projected_on_program = mm.project_controller_on_program(program, abstract_program, pred_list,
-                                                                           symbol_table)
+                                                                           symbol_table | symbol_table_preds)
 
         print(controller_projected_on_program.to_dot())
 
@@ -197,7 +200,13 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                         raise Exception("No new state predicates identified.")
 
                     new_all_preds = {x.simplify() for x in new_preds}
-                    new_all_preds = reduce_up_to_iff(state_predicates, list(new_all_preds), symbol_table)
+                    new_all_preds = reduce_up_to_iff(state_predicates,
+                                                     list(new_all_preds),
+                                                     symbol_table
+                                                     | {str(v): TypedValuation(str(v), symbol_table[str(v).removesuffix("_prev")].type, "true")
+                    for p in new_all_preds
+                    for v in p.variablesin()
+                    if str(v).endswith("prev")}) # TODO symbol_table needs to be updated with prevs
 
                     if len(new_all_preds) == len(state_predicates):
                         raise Exception(
