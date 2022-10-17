@@ -133,14 +133,16 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                         raise Exception(
                             "I have no idea what's gone wrong. "
                             "The counterstrategy has no outgoing transition from this monitor state: "
-                            + str(t.tgt.state) + ", " + ", ".join([str(p) for p in t.tgt.predicates]))
+                            + ", ".join([str(p) for p in list(t.tgt)]))
 
                 # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
                 return False, controller_projected_on_program
             else:
                 ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(out)
                 transitions_without_stutter = concretize_transitions(program, transition_indices_and_state)
-                print("Counterexample is:\n" + "\n".join([str(t[0]) for ts in transitions_without_stutter for t in ts]))
+                print("Counterexample is:\n" + "\n".join(
+                    [str(t[0]) + " var values: " + ", ".join([str(v) + "=" + t[1][str(v)] for v in t[0].condition.variablesin()]) for
+                     ts in transitions_without_stutter for t in ts]))
 
                 use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(ce, program, symbol_table)
 
@@ -213,6 +215,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                             "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
                                                                                                 "previous predicates.\n"
                                                                                                 "Counterexample was:\n" + "\n".join(
-                                [str(t[0]) for ts in transitions_without_stutter for t in ts]))
+                                [str(t[0]) + "\n var values: " + ", ".join([str(v) + "=" + t[1][str(v)] for v in t[0].condition.variablesin() + [v for v in t[1].keys() if str(v).startswith("mon_")] + [v for v in program.env_events + program.con_events]]) for ts in transitions_without_stutter for t in ts])
+                       )
 
                     state_predicates = list(new_all_preds)
