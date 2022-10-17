@@ -36,7 +36,7 @@ def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, str
     prog_and_mon_events_equality = [BiOp(m, '=', Variable("mon_" + m.name)) for m in mon_events]
     text += "\tcompatible := !(turn = mon) | (" + str(
         conjunct_formula_set(prog_and_mon_events_equality +
-                             [BiOp(conjunct(env_turn, label_pred(p, pred_list)), "->", p)
+                             [BiOp(label_pred(p, pred_list), "->", p)
                               for p in pred_list]
                              )) + ");\n"
 
