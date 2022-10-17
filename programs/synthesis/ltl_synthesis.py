@@ -102,28 +102,31 @@ def parse_hoa(output) -> Program:
 
     trans = {}
 
+    var_labels = [BiOp(Variable(i), ":=", Variable(ap)) for i, ap in
+                                  enumerate(hoa.header.propositions)]
+
     for st, edges in hoa.body.state2edges.items():
         for e in edges:
             if e.label == TrueFormula():
-                key = (st.index, true())
+                key = (st.index, true(), e.state_conj[0])
                 if key not in trans.keys():
-                    trans[(st.index, true())] = []
-                trans[(st.index, true())] += [(true(), e.state_conj[0])]
+                    trans[key] = [true()]
+                else:
+                    trans[key] += [true()]
             else:
                 assert e.label.SYMBOL == '&'
-                var_labels = [BiOp(Variable(i), ":=", Variable(ap)) for i, ap in
-                              enumerate(hoa.header.propositions)]
 
                 env = hoaparser_label_expression_to_pl(str(e.label.operands[0]))
                 env = env.replace(var_labels)
 
-                con = hoaparser_label_expression_to_pl(str(e.label.operands[1]))
+                con = hoaparser_label_expression_to_pl("(& " + " ".join(map(str, e.label.operands[1:])) + ")")
                 con = con.replace(var_labels)
 
-                key = (st.index, env)
+                key = (st.index, env, e.state_conj[0])
                 if key not in trans.keys():
-                    trans[(st.index, env)] = []
-                trans[(st.index, env)] += [(con, e.state_conj[0])]
+                    trans[key] = [con]
+                else:
+                    trans[key] += [con]
     mon.add_transitions(trans)
     return mon
 
