@@ -211,9 +211,7 @@ def use_liveness_refinement(ce: [dict], program, symbol_table):
     counterstrategy_states_con = [key for dict in ce for key, value in dict.items()
                                   if dict["turn"] == "env" and key.startswith("st_") and value == "TRUE"]
 
-    # counterstrategy_states_con[len(counterstrategy_states_con) - 1] is the state outside the loop
-    # counterstrategy_states_con[len(counterstrategy_states_con) - 2] is the last state in the loop
-    last_state = counterstrategy_states_con[len(counterstrategy_states_con) - 2]
+    last_state = counterstrategy_states_con[len(counterstrategy_states_con) - 1]
     if last_state in counterstrategy_states_con[:-1]:
         indices_of_prev_visits = [i for i, x in enumerate(counterstrategy_states_con[:-1]) if x == last_state]
         corresponding_ce_state = [ce[(3 * i)] for i in (indices_of_prev_visits)] + [ce[len(ce) - 2]]
