@@ -54,6 +54,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                             out_acts: [Variable], docker: str) -> \
         Tuple[bool, MealyMachine]:
     # TODO add check that monitor is deterministic under given ltl assumptions
+    eager = False
 
     symbol_table = symbol_table_from_program(program)
     ltl = implies(ltl_assumptions, ltl_guarantees).simplify()
@@ -168,7 +169,9 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
                     print(", ".join([str(p) for p in new_transition_predicates]))
                     if new_transition_predicates == []:
-                        raise Exception("No new transition predicates identified.")
+                        # raise Exception("No new transition predicates identified.")
+                        print("No transition predicates identified. So will try safety refinement.")
+                        use_liveness = False
 
                     new_all_trans_preds = {x.simplify() for x in new_transition_predicates}
                     new_all_trans_preds = reduce_up_to_iff(transition_predicates, list(new_all_trans_preds),
@@ -182,10 +185,12 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                                                            "previous predicates.\n"
                                                                            "Counterexample was:\n" + "\n".join(
                             [str(t[0]) for ts in transitions_without_stutter for t in ts]))
+                        print("I will try safety refinement instead.")
+                        use_liveness = False
                     # important to add this, since later on assumptions depend on position of predicates in list
                     transition_predicates += new_transition_predicates
 
-                if True:
+                if eager or not use_liveness:
                     new_preds = safety_refinement(ce, transitions_without_stutter, symbol_table, program)
                     print(", ".join([str(p) for p in new_preds]))
                     if new_preds == []:
