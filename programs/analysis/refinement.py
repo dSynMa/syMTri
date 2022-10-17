@@ -13,6 +13,7 @@ from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_
     concretize_transitions
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
+from prop_lang.parsing.string_to_ltl import string_to_ltl
 from prop_lang.parsing.string_to_prop_logic import string_to_mathexpr
 from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean
 from prop_lang.value import Value
@@ -154,25 +155,46 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
         .replace("nat", "int") \
         .replace("real", "double")
 
-    init = ["if(!" + str(entry_predicate).replace(" = ", " == ").replace(" & ", " && ") + ") return;"] \
-           + ["if(!(" + " && ".join([v + " >= 0 " for v in symbol_table.keys() if
+    init = ["if(!(" + " && ".join([v + " >= 0 " for v in symbol_table.keys() if
                                      not v.endswith("_prev") and symbol_table[v].type in ["natural",
                                                                                           "nat"]]) + ")) return;"]
 
-    choices = ["if(" + str(t.condition).replace(" = ", " == ").replace(" & ", " && ") + "){"
-               + ("\n\t" if len(t.action) > 0 else "")
-               + "\n\t\t".join([str(act.left) + " = " + str(act.right) + ";" for act in t.action if
-                                not is_boolean(act.left, program.valuation)])
-               + "\n\t} else {"
-               # + "\n\t} else if(!" + str(t.condition).replace(" = ", " == ").replace(" & ", " && ") + "){"
-               + "\n\t\tbreak;"
-               + "\n\t}"
-               for t in loop_before_exit] \
-              + ["if(" + str(exit_cond) + ") break;" if str(exit_cond.simplify()).lower() != "true" else ""]
+    choices = []
 
-    loop_code = "\n\twhile(true){\n\t" \
+    for t in loop_before_exit:
+        safety = str(t.condition.simplify().to_smt(symbol_table)[1]).replace(" = ", " == ").replace(" & ", " && ").replace(" | ", " || ")
+        cond_simpl = str(t.condition.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ", " || ")
+        acts = "\n\t\t".join([str(act.left) + " = " + str(act.right) + ";" for act in t.action if
+                                    not is_boolean(act.left, program.valuation)])
+
+        if isinstance(string_to_ltl(cond_simpl).simplify(), Value):
+            if string_to_ltl(cond_simpl).simplify().is_false():
+                choices += ["break;"]
+            elif string_to_ltl(cond_simpl).simplify().is_true():
+                choices += ["\t" + acts]
+        else:
+            choices += ["\tif(" + cond_simpl + ") {" + acts + "}\n\t else break;"]
+        choices += ["\tif(!(" + safety + ")) break;"]
+
+    exit_cond_simplified = str(exit_cond.simplify())\
+                                       .replace(" = ", " == ")\
+                                       .replace(" & ", " && ")\
+                                       .replace(" | ", " || ")
+    exit_cond_var_constraints = str(exit_cond.simplify().to_smt(symbol_table)[1])\
+                                       .replace(" = ", " == ")\
+                                       .replace(" & ", " && ")\
+                                       .replace(" | ", " || ")
+
+    #TODO check for satisfiability instead of equality of with true
+    choices = ["\n\t\tif(!(" + exit_cond_var_constraints + ")) break;" if exit_cond_var_constraints.lower() != "true" else ""] + choices
+    choices = ["\n\t\tif(" + exit_cond_simplified + ") break;" if exit_cond_simplified.lower() != "true" else ""] + choices
+
+    loop_code = "\n\tdo{\n\t" \
                 + "\n\t".join(choices) \
-                + "\t}"
+                + "\n\t} while(true);\n"
+
+    loop_code = "\n\tif(" + str(entry_predicate.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ", " || ") \
+                + "){" + loop_code + "\n\t}"
 
     c_code = "#include<stdbool.h>\n\nvoid main(" + param_list + "){\n\t" + "\n\t".join(init) + loop_code + "\n}"
     c_code = c_code.replace("TRUE", "true")
