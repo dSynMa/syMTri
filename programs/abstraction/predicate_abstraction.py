@@ -2,7 +2,7 @@ from itertools import chain, combinations
 
 from pysmt.shortcuts import And, Not, TRUE
 
-from programs.analysis.abstract_state import AbstractState
+from programs.abstraction.abstract_state import AbstractState
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
