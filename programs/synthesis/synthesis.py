@@ -1,6 +1,6 @@
 from typing import Tuple
 
-from programs.analysis.predicate_abstraction import predicate_abstraction, abstraction_to_ltl
+from programs.abstraction.predicate_abstraction import predicate_abstraction, abstraction_to_ltl
 from programs.analysis.refinement import safety_refinement, liveness_refinement, use_liveness_refinement
 from programs.program import Program
 from programs.synthesis import ltl_synthesis
