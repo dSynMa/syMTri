@@ -4,6 +4,7 @@ from pysmt.shortcuts import And
 from programs.analysis.nuxmv_model import NuXmvModel
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
+from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
 from programs.util import label_pred
 from prop_lang.biop import BiOp
@@ -200,6 +201,9 @@ class MealyMachine:
                                                                              if r != q]))
                                                   for q in program.states])
 
+        # TODO this needs to be optimised, do it in turns like predicate_abstraction()
+        #  without this we will have repetition in controller transitions
+
         while len(current_states) > 0:
             next_states = []
             for (mm_s, p_s) in current_states:
@@ -215,25 +219,31 @@ class MealyMachine:
                             compatible = smt_checker.check(formula)
                             if compatible:
                                 env_states.append((m_tgt, p_t.tgt))
-                                new_env_transitions.append(p_t)
+                                new_env_transitions.append(Transition((mm_s, p_s), p_t.condition, p_t.action, p_t.output, (m_tgt, p_t.tgt)))
 
-                for (m_env_tgt, p_env_tgt) in env_states:
+                for (m_env_tgt, p_env_tgt) in set(env_states):
                     for (m_cond, m_tgt) in self.con_transitions[m_env_tgt]:
                         for p_t in predicate_abstraction.con_transitions:
                             if p_t.src == p_env_tgt:
-                                formula2 = conjunct_formula_set([m_cond, p_t.condition])
-                                formula2 = And(*formula2.to_smt(symbol_table))
-                                compatible = smt_checker.check(formula2)
-                                if compatible:
-                                    next_states.append((m_tgt, p_t.tgt))
-                                    new_con_transitions.append(p_t)
+                                try:
+                                    formula2 = conjunct_formula_set([m_cond, p_t.condition])
+                                    formula2 = And(*formula2.to_smt(symbol_table))
+                                    compatible = smt_checker.check(formula2)
+                                    if compatible:
+                                        next_states.append((m_tgt, p_t.tgt))
+                                        new_con_transitions.append(Transition((m_env_tgt, p_env_tgt), p_t.condition, p_t.action, p_t.output, (m_tgt, p_t.tgt)))
+                                except Exception as e:
+                                    raise e
 
-            done_states += current_states
-            current_states = set([x for x in next_states if x not in done_states])
+            done_states += [str(s) for s in current_states]
+            current_states = set([x for x in next_states if str(x) not in done_states])
+
+        # TODO need to check that if counter-strategy, then it s complete for controller
+        #  and if strategy then complete for environment
 
         predicate_abstraction.new_env_transitions = new_env_transitions
         predicate_abstraction.con_transitions = new_con_transitions
-        return Program("Strategy", predicate_abstraction.states, predicate_abstraction.initial_state,
+        return Program("Strategy", [s for t in (new_con_transitions + new_env_transitions) for s in [t.src, t.tgt]], (self.init_st, predicate_abstraction.initial_state),
                        predicate_abstraction.valuation, list(set(new_env_transitions)), list(set(new_con_transitions)),
                        predicate_abstraction.env_events, predicate_abstraction.con_events,
                        predicate_abstraction.out_events)
