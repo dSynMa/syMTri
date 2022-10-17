@@ -66,7 +66,8 @@ class MealyMachine:
                 to_replace += [BiOp(pred_var, ":=", pred)]
 
         dot = Digraph(name="MealyMachine",
-                      graph_attr=[("overlap", "scalexy"), ("splines", "true"), ("rankdir", "LR"), ("ranksep", "0.8"),
+                      graph_attr=[("overlap", "scalexy"), ("splines", "true"), #("rankdir", "LR"),
+                                  ("ranksep", "0.8"),
                                   ("nodesep", "0.5")],
                       node_attr=[("shape", "circle")],
                       edge_attr=[("fontname", "mono")],
