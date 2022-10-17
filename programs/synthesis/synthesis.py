@@ -149,18 +149,17 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 if use_liveness:
                     # ground transitions in the counterexample loop
                     # on the environment and controller events in the counterexample
-                    loop_before_exit = ground_transitions_and_flatten(program, counterexample_loop)
+                    loop_before_exit = ground_transitions_and_flatten(program, counterexample_loop[:-1])
+                    exit_transitions = ground_transitions_and_flatten(program, [counterexample_loop[-1]])
 
                     entry_predicate_grounded = ground_predicate_on_bool_vars(program, entry_predicate,
                                                                              counterexample_loop[0][-1][1]).simplify()
-                    # exit_predicate_grounded = concretize_and_ground_predicate(program, last_transitions[-1][0].condition, counterexample_loop[-1][-1][1])
-                    exit_predicate_grounded = true()
 
                     ranking, invars = liveness_refinement(symbol_table,
                                                           program,
                                                           entry_predicate_grounded,
                                                           loop_before_exit,
-                                                          exit_predicate_grounded)
+                                                          exit_transitions)
                     rankings.append((ranking, invars))
                     if len(invars) > 0:
                         raise NotImplementedError(
