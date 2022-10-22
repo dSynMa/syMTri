@@ -1,7 +1,7 @@
 from typing import Tuple
 
 from programs.abstraction.predicate_abstraction import predicate_abstraction, abstraction_to_ltl
-from programs.analysis.refinement import safety_refinement, liveness_refinement, use_liveness_refinement
+from programs.abstraction.refinement import safety_refinement, liveness_refinement, use_liveness_refinement
 from programs.program import Program
 from programs.synthesis import ltl_synthesis
 from programs.synthesis.ltl_synthesis import syfco_ltl, syfco_ltl_in, syfco_ltl_out
@@ -147,25 +147,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(ce, program, symbol_table)
 
                 if use_liveness:
-                    # ground transitions in the counterexample loop
-                    # on the environment and controller events in the counterexample
-                    loop_before_exit = ground_transitions_and_flatten(program, counterexample_loop[:-1])
-                    exit_transitions = ground_transitions_and_flatten(program, [counterexample_loop[-1]])
-
-                    entry_predicate_grounded = ground_predicate_on_bool_vars(program, entry_predicate,
-                                                                             counterexample_loop[0][-1][1]).simplify()
-
-                    ranking, invars = liveness_refinement(symbol_table,
-                                                          program,
-                                                          entry_predicate_grounded,
-                                                          loop_before_exit,
-                                                          exit_transitions)
+                    ranking, invars = liveness_step(program, counterexample_loop, symbol_table, entry_predicate)
                     rankings.append((ranking, invars))
-                    if len(invars) > 0:
-                        raise NotImplementedError(
-                            "Ranking function comes with invar, what shall we do here? " + ranking + "\n" + ", ".join(
-                                [str(invar) for invar in invars]))
-
                     new_transition_predicates = [x for r, _ in rankings for x in
                                                  [BiOp(add_prev_suffix(program, r), ">", r),
                                                   BiOp(add_prev_suffix(program, r), "<", r)
@@ -214,7 +197,30 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                             "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
                                                                                                 "previous predicates.\n"
                                                                                                 "Counterexample was:\n" + "\n".join(
-                                [str(t[0]) + "\n var values: " + ", ".join([str(v) + "=" + t[1][str(v)] for v in t[0].condition.variablesin() + [v for v in t[1].keys() if str(v).startswith("mon_")] + [v for v in program.env_events + program.con_events]]) for ts in transitions_without_stutter for t in ts])
+                                [str(t[0]) + "\n var values: " + ", ".join([str(v) + "=" + t[1][str(v)] for v in set(t[0].condition.variablesin() + [v for v in list(t[1].keys()) if str(v).startswith("mon_")] + [v for v in program.env_events + program.con_events])]) for ts in transitions_without_stutter for t in ts])
                        )
 
                     state_predicates = list(new_all_preds)
+
+
+def liveness_step(program, counterexample_loop, symbol_table, entry_predicate):
+    # ground transitions in the counterexample loop
+    # on the environment and controller events in the counterexample
+    loop_before_exit = ground_transitions_and_flatten(program, counterexample_loop[:-1])
+    exit_transitions = ground_transitions_and_flatten(program, [counterexample_loop[-1]])
+
+    entry_predicate_grounded = ground_predicate_on_bool_vars(program, entry_predicate,
+                                                             counterexample_loop[0][-1][1]).simplify()
+
+    ranking, invars = liveness_refinement(symbol_table,
+                                          program,
+                                          entry_predicate_grounded,
+                                          loop_before_exit,
+                                          exit_transitions)
+    if len(invars) > 0:
+        raise NotImplementedError(
+            "Ranking function comes with invar, what shall we do here? " + ranking + "\n" + ", ".join(
+                [str(invar) for invar in invars]))
+
+    return ranking, invars
+
