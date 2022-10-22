@@ -131,8 +131,9 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                             break
 
                     if not ok:
-                        raise Exception(
-                            "I have no idea what's gone wrong. "
+                        print(
+                            "Warning: Model checking says counterstrategy is fine, but something has gone wrong with projection "
+                            "onto the predicate abstraction, and I have no idea why. "
                             "The counterstrategy has no outgoing transition from this monitor state: "
                             + ", ".join([str(p) for p in list(t.tgt)]))
 
