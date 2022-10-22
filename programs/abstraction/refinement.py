@@ -205,9 +205,7 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
     return c_code
 
 
-def use_liveness_refinement(ce: [dict], program, symbol_table):
-    assert len(ce) > 0
-
+def use_liveness_refinement_state(ce: [dict], symbol_table):
     counterstrategy_states_con = [key for dict in ce for key, value in dict.items()
                                   if dict["turn"] == "env" and key.startswith("st_") and value == "TRUE"]
 
@@ -226,22 +224,90 @@ def use_liveness_refinement(ce: [dict], program, symbol_table):
                 raise Exception("Something weird here.")
 
             first_index = indices_of_prev_visits[0]
+
+            return True, first_index
+        else:
+            return False, None
+    else:
+        return False, None
+
+def use_liveness_refinement_trans(ce: [dict], symbol_table):
+    counterstrategy_trans_con = []
+
+    for i, state in enumerate(ce):
+        if ce[i]["turn"] == "con":
+            true_guards = [k.replace("counterstrategy_guard_", "") for k in ce[i].keys()
+                           if k.startswith("counterstrategy_guard_")
+                           and ce[i][k] == "TRUE"]
+            true_acts = [k.replace("counterstrategy_act_", "") for k in ce[i].keys()
+                         if k.startswith("counterstrategy_act_")
+                         and ce[i][k] == "TRUE"]
+            trans = [i for i in true_guards if i in true_acts]
+            counterstrategy_trans_con += [set(trans)]
+        elif i == len(ce) - 1:
+            true_guards = [k.replace("counterstrategy_guard_", "") for k in ce[i].keys()
+                           if k.startswith("counterstrategy_guard_")
+                           and ce[i][k] == "TRUE"]
+            counterstrategy_trans_con += [set(true_guards)]
+
+    last_trans = counterstrategy_trans_con[-1]
+    if any(x for x in last_trans if any(y for y in counterstrategy_trans_con[:-1] if x in y)):
+        indices_of_prev_visits = [i for i, x in enumerate(counterstrategy_trans_con[:-1]) if
+                                  any(i for i in last_trans if i in x)]
+        corresponding_ce_state = [ce[(i)] for i in (indices_of_prev_visits)]
+        var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
+                           for i in range(0, len(corresponding_ce_state) - 1)]
+        var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in var_differences]
+        var_differences = [[v for v in vs if v in symbol_table.keys()] for vs in var_differences]
+        if any([x for xs in var_differences for x in xs if
+                re.match("(int(eger)?|nat(ural)?|real)", symbol_table[x].type)]):
+
+            if not len(indices_of_prev_visits) > 0:
+                raise Exception("Something weird here.")
+
+            first_index = indices_of_prev_visits[0]
+
+            return True, first_index
+        else:
+            return False, None
+    else:
+        return False, None
+
+
+def use_liveness_refinement(ce: [dict], program, symbol_table):
+    assert len(ce) > 0
+
+    yes = False
+
+    yes_state, first_index_state = use_liveness_refinement_state(ce, symbol_table)
+    if yes_state:
+        yes = True
+        first_index = first_index_state
+    else:
+        yes_trans, first_index_trans = use_liveness_refinement_trans(ce, symbol_table)
+        if yes_trans:
+            yes = True
+            first_index = first_index_trans
+
+    if yes:
+        ce_prog_loop_trans = prog_transition_indices_and_state_from_ce(ce[first_index + 1:])
+        ce_prog_loop_tran_concretised = concretize_transitions(program, ce_prog_loop_trans)
+
+        if first_index != 0:
             ce_prog_init_trans = prog_transition_indices_and_state_from_ce(ce[0:first_index])
             ce_prog_init_trans_concretised = concretize_transitions(program, ce_prog_init_trans)
-            ce_prog_loop_trans = prog_transition_indices_and_state_from_ce(ce[first_index + 1:])
-            ce_prog_loop_tran_concretised = concretize_transitions(program, ce_prog_loop_trans)
             entry_predicate = interpolation(program,
                                             [x for xs in ce_prog_init_trans_concretised for x in xs]
                                             + [x for xs in ce_prog_loop_tran_concretised[:-1] for x in xs],
                                             ce_prog_loop_tran_concretised[len(ce_prog_loop_tran_concretised) - 1][0],
                                             first_index,
                                             symbol_table)
-
-            if entry_predicate == None:
-                raise Exception("Something weird here. Entry predicate to loop is None.")
-
-            return True, ce_prog_loop_tran_concretised, entry_predicate
         else:
-            return False, None, None
+            entry_predicate = true()
+
+        if entry_predicate == None:
+            raise Exception("Something weird here. Entry predicate to loop is None.")
+
+        return True, ce_prog_loop_tran_concretised, entry_predicate
     else:
         return False, None, None
