@@ -102,8 +102,9 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         print(mm.to_dot(pred_list))
 
         symbol_table_preds = {str(label_pred(v, pred_list)):TypedValuation(str(label_pred(v, pred_list)), "bool", true()) for v in pred_list}
-        controller_projected_on_program = mm.project_controller_on_program(program, abstract_program, pred_list,
-                                                                           symbol_table | symbol_table_preds)
+        symbol_table_prevs = {tv.name+"_prev":TypedValuation(tv.name+"_prev", tv.type, tv.value) for tv in program.valuation}
+        controller_projected_on_program = mm.project_controller_on_program(program, abstract_program, state_predicates,
+                                                                           transition_predicates, symbol_table | symbol_table_preds)
 
         print(controller_projected_on_program.to_dot())
 
@@ -162,7 +163,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
                     new_all_trans_preds = {x.simplify() for x in new_transition_predicates}
                     new_all_trans_preds = reduce_up_to_iff(transition_predicates, list(new_all_trans_preds),
-                                                           symbol_table)
+                                                           symbol_table | symbol_table_prevs)
 
                     if len(new_all_trans_preds) == len(transition_predicates):
                         print("I did something wrong, "
