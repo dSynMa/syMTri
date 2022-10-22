@@ -81,7 +81,7 @@ class Program:
                       engine='dot',
                       format='svg')
 
-        to_str = lambda x: ", ".join([str(v) for v in list(x)]) if hasattr(x, "__iter__") else str(x)
+        to_str = lambda x: ", ".join([str(v) for v in list(x)]) if not isinstance(x, str) and hasattr(x, "__iter__") else str(x)
 
         dot.node("init", "", [("shape", "point")])
         for s in self.states:
