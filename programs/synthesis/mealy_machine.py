@@ -116,7 +116,7 @@ class MealyMachine:
 
         for src in self.con_transitions.keys():
             for (con_behaviour, con_tgt) in self.con_transitions[src]:
-                guard = "turn = con & " + str(src) + " & " \
+                guard = str(src) + " & " \
                         + str(con_behaviour.to_nuxmv())
 
                 if len(self.env_transitions.get(con_tgt)) == 0:
@@ -135,7 +135,7 @@ class MealyMachine:
         while i < len(guards):
             define += [self.name + "_guard_" + str(i) + " := " + guards[i]]
             define += [self.name + "_act_" + str(i) + " := " + acts[i]]
-            transitions.append("(" + self.name + "_guard_" + str(i) + " & " + self.name + "_act_" + str(i) + ")")
+            transitions.append(self.name + "_guard_" + str(i) + " & " + self.name + "_act_" + str(i))
             guard_ids.append(self.name + "_guard_" + str(i))
             i += 1
 
@@ -159,7 +159,8 @@ class MealyMachine:
         vars += [str(var) + " : boolean" for var in pred_acts]
 
         init = [str(init_cond)]
-        transitions += ["turn != con & (identity_" + self.name + " & " + str(conjunct_formula_set(
+        transitions = ["turn = con & " + "((" + ")\n\t|\t(".join(transitions) + "))"] +\
+                      ["turn != con & (identity_" + self.name + " & " + str(conjunct_formula_set(
             [BiOp(UniOp("next", Variable("mon_" + e.name)), "=", Variable("mon_" + e.name)) for e in mon_events] +
             [BiOp(UniOp("next", Variable(p.name)), "=", Variable(p.name)) for p in pred_acts]).to_nuxmv()) + ")"]
         trans = ["(" + ")\n\t|\t(".join(transitions) + ")"]
