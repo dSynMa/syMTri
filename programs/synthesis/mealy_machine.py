@@ -27,7 +27,7 @@ class MealyMachine:
 
     def add_transitions(self, trans_dict: dict):
         int_st_index = 0
-        env_interm_states = {}
+        interm_states = {}
         for src_index, env_behaviour, tgt_index in trans_dict.keys():
             new_src = "st_" + str(src_index)
 
@@ -40,11 +40,11 @@ class MealyMachine:
             if new_src not in self.env_transitions.keys():
                 self.env_transitions[new_src] = set()
 
-            if (src_index, env_behaviour) in env_interm_states.keys():
-                new_intermed = env_interm_states.get((src_index, env_behaviour))
+            if (con_cond, new_tgt) in interm_states.keys():
+                 new_intermed = interm_states.get((con_cond, new_tgt))
             else:
                 new_intermed = "st__" + str(int_st_index)
-                env_interm_states[(src_index, env_behaviour)] = new_intermed
+                interm_states[(con_cond, new_tgt)] = new_intermed
                 int_st_index += 1
                 self.con_transitions[new_intermed] = set()
 
