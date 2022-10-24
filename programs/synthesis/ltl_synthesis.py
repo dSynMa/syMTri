@@ -79,6 +79,7 @@ def parse_hoa(output) -> Program:
         and not ln.startswith("REALIZABLE")
         and not ln.startswith("UNREALIZABLE")
     )
+    print(good_output)
     hoa: HOA = hoa_parser(good_output)
     ctrl_aps = ([ln for ln in output.split("\n")
                  if ln.startswith("controllable-AP")
