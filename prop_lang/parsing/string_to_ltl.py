@@ -29,7 +29,7 @@ def bracketed_ltl_expression():
 
 @generate
 def uni_ltl_expression():
-    op = yield regex("(G|X|F|!)") << spaces()
+    op = yield regex("(G|X|F(?!(alse|ALSE))|!)") << spaces()
     right = yield unit_ltl_expression << spaces()
     return UniOp(op, right)
 
