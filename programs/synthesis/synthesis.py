@@ -108,101 +108,97 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         print(controller_projected_on_program.to_dot())
 
-        if real:
-            system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
-            try:
-                there_is_mismatch_between_monitor_and_strategy(system, False, ltl_assumptions, ltl_guarantees)
-            except:
-                raise Exception("I have no idea what's gone wrong. Strix thinks the previous mealy machine is a "
-                                "controller, but nuxmv thinks it is non consistent with the monitor.")
+        system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
+        contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real, False, ltl_assumptions, ltl_guarantees)
 
-            return True, controller_projected_on_program
-        else:
-            system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
-            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, False, ltl_assumptions,
-                                                                                    ltl_guarantees)
+        if contradictory:
+            raise Exception("I have no idea what's gone wrong. Strix thinks the previous mealy machine is a " +
+                            ("controller" if real else "counterstrategy") + ", but nuxmv thinks it is non consistent with the monitor.")
 
-            if not there_is_mismatch:
-                for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
-                    ok = False
-                    for tt in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
-                        if t.tgt == tt.src:
-                            ok = True
-                            break
+        if not there_is_mismatch:
+            for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
+                ok = False
+                for tt in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
+                    if t.tgt == tt.src:
+                        ok = True
+                        break
 
-                    if not ok:
-                        print(
-                            "Warning: Model checking says counterstrategy is fine, but something has gone wrong with projection "
-                            "onto the predicate abstraction, and I have no idea why. "
-                            "The counterstrategy has no outgoing transition from this monitor state: "
-                            + ", ".join([str(p) for p in list(t.tgt)]))
-
+                if not ok:
+                    print(
+                        "Warning: Model checking says counterstrategy is fine, but something has gone wrong with projection "
+                        "onto the predicate abstraction, and I have no idea why. "
+                        "The " + ("controller" if real else "counterstrategy") + " has no outgoing transition from this monitor state: "
+                        + ", ".join([str(p) for p in list(t.tgt)]))
+            if real:
+                return True, controller_projected_on_program
+            else:
                 # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
                 return False, controller_projected_on_program
-            else:
-                ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(out)
-                transitions_without_stutter = concretize_transitions(program, transition_indices_and_state)
-                print("Counterexample is:\n" + "\n".join(
-                    [str(t[0]) + " var values: " + ", ".join([str(v) + "=" + t[1][str(v)] for v in t[0].condition.variablesin()]) for
-                     ts in transitions_without_stutter for t in ts]))
 
-                use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(ce, program, symbol_table)
+        else:
+            ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(out)
+            transitions_without_stutter = concretize_transitions(program, transition_indices_and_state)
+            print("Counterexample is:\n" + "\n".join(
+                [str(t[0]) + " var values: " + ", ".join([str(v) + "=" + t[1][str(v)] for v in t[0].condition.variablesin()]) for
+                 ts in transitions_without_stutter for t in ts]))
 
-                if use_liveness:
-                    ranking, invars = liveness_step(program, counterexample_loop, symbol_table, entry_predicate)
-                    rankings.append((ranking, invars))
-                    new_transition_predicates = [x for r, _ in rankings for x in
-                                                 [BiOp(add_prev_suffix(program, r), ">", r),
-                                                  BiOp(add_prev_suffix(program, r), "<", r)
-                                                  ]]
+            use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(ce, program, symbol_table)
 
-                    print(", ".join([str(p) for p in new_transition_predicates]))
-                    if new_transition_predicates == []:
-                        # raise Exception("No new transition predicates identified.")
-                        print("No transition predicates identified. So will try safety refinement.")
-                        use_liveness = False
+            if use_liveness:
+                ranking, invars = liveness_step(program, counterexample_loop, symbol_table, entry_predicate)
+                rankings.append((ranking, invars))
+                new_transition_predicates = [x for r, _ in rankings for x in
+                                             [BiOp(add_prev_suffix(program, r), ">", r),
+                                              BiOp(add_prev_suffix(program, r), "<", r)
+                                              ]]
 
-                    new_all_trans_preds = {x.simplify() for x in new_transition_predicates}
-                    new_all_trans_preds = reduce_up_to_iff(transition_predicates, list(new_all_trans_preds),
-                                                           symbol_table | symbol_table_prevs)
+                print(", ".join([str(p) for p in new_transition_predicates]))
+                if new_transition_predicates == []:
+                    # raise Exception("No new transition predicates identified.")
+                    print("No transition predicates identified. So will try safety refinement.")
+                    use_liveness = False
 
-                    if len(new_all_trans_preds) == len(transition_predicates):
-                        print("I did something wrong, "
-                                        "it turns out the new transition predicates "
-                                        "(" + ", ".join(
-                            [str(p) for p in new_transition_predicates]) + ") are a subset of "
-                                                                           "previous predicates.\n"
-                                                                           "Counterexample was:\n" + "\n".join(
-                            [str(t[0]) for ts in transitions_without_stutter for t in ts]))
-                        print("I will try safety refinement instead.")
-                        use_liveness = False
-                    # important to add this, since later on assumptions depend on position of predicates in list
-                    transition_predicates += new_transition_predicates
+                new_all_trans_preds = {x.simplify() for x in new_transition_predicates}
+                new_all_trans_preds = reduce_up_to_iff(transition_predicates, list(new_all_trans_preds),
+                                                       symbol_table | symbol_table_prevs)
 
-                if eager or not use_liveness:
-                    new_preds = safety_refinement(ce, transitions_without_stutter, symbol_table, program)
-                    print(", ".join([str(p) for p in new_preds]))
-                    if new_preds == []:
-                        raise Exception("No new state predicates identified.")
+                if len(new_all_trans_preds) == len(transition_predicates):
+                    print("I did something wrong, "
+                                    "it turns out the new transition predicates "
+                                    "(" + ", ".join(
+                        [str(p) for p in new_transition_predicates]) + ") are a subset of "
+                                                                       "previous predicates.\n"
+                                                                       "Counterexample was:\n" + "\n".join(
+                        [str(t[0]) for ts in transitions_without_stutter for t in ts]))
+                    print("I will try safety refinement instead.")
+                    use_liveness = False
+                # important to add this, since later on assumptions depend on position of predicates in list
+                transition_predicates += new_transition_predicates
 
-                    new_all_preds = {x.simplify() for x in new_preds}
-                    new_all_preds = reduce_up_to_iff(state_predicates,
-                                                     list(new_all_preds),
-                                                     symbol_table
-                                                     | {str(v): TypedValuation(str(v), symbol_table[str(v).removesuffix("_prev")].type, "true")
-                    for p in new_all_preds
-                    for v in p.variablesin()
-                    if str(v).endswith("prev")}) # TODO symbol_table needs to be updated with prevs
+            if eager or not use_liveness:
+                new_preds = safety_refinement(ce, transitions_without_stutter, symbol_table, program)
+                print(", ".join([str(p) for p in new_preds]))
+                if new_preds == []:
+                    raise Exception("No new state predicates identified.")
 
-                    if len(new_all_preds) == len(state_predicates):
-                        raise Exception(
-                            "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
-                                                                                                "previous predicates.\n"
-                                                                                                "Counterexample was:\n" + "\n".join(
-                                [str(t[0]) + "\n var values: " + ", ".join([str(v) + "=" + t[1][str(v)] for v in set(t[0].condition.variablesin() + [v for v in list(t[1].keys()) if str(v).startswith("mon_")] + [v for v in program.env_events + program.con_events])]) for ts in transitions_without_stutter for t in ts])
-                       )
+                new_all_preds = {x.simplify() for x in new_preds}
+                new_all_preds = reduce_up_to_iff(state_predicates,
+                                                 list(new_all_preds),
+                                                 symbol_table
+                                                 | {str(v): TypedValuation(str(v), symbol_table[str(v).removesuffix("_prev")].type, "true")
+                for p in new_all_preds
+                for v in p.variablesin()
+                if str(v).endswith("prev")}) # TODO symbol_table needs to be updated with prevs
 
-                    state_predicates = list(new_all_preds)
+                if len(new_all_preds) == len(state_predicates):
+                    raise Exception(
+                        "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
+                                                                                            "previous predicates.\n"
+                                                                                            "Counterexample was:\n" + "\n".join(
+                            [str(t[0]) + "\n var values: " + ", ".join([str(v) + "=" + t[1][str(v)] for v in set(t[0].condition.variablesin() + [v for v in list(t[1].keys()) if str(v).startswith("mon_")] + [v for v in program.env_events + program.con_events])]) for ts in transitions_without_stutter for t in ts])
+                   )
+
+                state_predicates = list(new_all_preds)
 
 
 def liveness_step(program, counterexample_loop, symbol_table, entry_predicate):

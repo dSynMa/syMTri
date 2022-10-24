@@ -308,17 +308,22 @@ def label_preds(ps, preds):
     return {label_pred(p, preds) for p in ps}
 
 
-def there_is_mismatch_between_monitor_and_strategy(system, livenesstosafety: bool, ltl_assumptions: Formula,
+def there_is_mismatch_between_monitor_and_strategy(system, controller : bool, livenesstosafety: bool, ltl_assumptions: Formula,
                                                    ltl_guarantees: Formula):
     print(system)
     model_checker = ModelChecker()
     # Sanity check
     result, out = model_checker.check(system, "F FALSE", None, livenesstosafety)
     if result:
-        raise Exception("Are you sure the counterstrategy given is complete?")
-    there_is_no_mismatch, out = model_checker.check(system, "G !mismatch", None, livenesstosafety)
+        print("Are you sure the counterstrategy given is complete?")
+        return True, None, out
 
-    return not there_is_no_mismatch, out
+    if not controller:
+        there_is_no_mismatch, out = model_checker.check(system, "G !mismatch", None, livenesstosafety)
+
+        return False, not there_is_no_mismatch, out
+    else:
+        return False, False, None
 
 
 def reduce_up_to_iff(old_preds, new_preds, symbol_table):
