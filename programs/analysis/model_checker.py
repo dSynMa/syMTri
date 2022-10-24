@@ -11,7 +11,7 @@ class ModelChecker:
             model.close()
 
             commands.write("go_msat\n")
-            call = 'check_ltlspec_ic3'
+            call = 'check_ltlspec_ic3 -i'
             if livenesstosafety != None and livenesstosafety:
                 call += ' -K 0 '
             if bound is not None:
