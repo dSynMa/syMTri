@@ -319,7 +319,6 @@ def abstraction_to_ltl_with_turns(pred_abstraction: Program):
 
 def abstraction_to_ltl(pred_abstraction: Program, state_predicates: [Formula], transition_predicates: [Formula]):
     predicates = state_predicates + transition_predicates
-    negation_closed_predicates = predicates + [neg(p) for p in predicates]
 
     init_transitions = [t for t in pred_abstraction.env_transitions if t.src == pred_abstraction.initial_state]
     init_cond_formula = disjunct_formula_set(
@@ -422,13 +421,13 @@ def tran_and_state_preds_after_con_env_step(env_trans: Transition):
                 keep_these += [neg(BiOp(p.left, ">", p.right)), neg(BiOp(p.left, "<", p.right))]
             else:
                 keep_these += [p]
-        elif isinstance(p, UniOp):
-            if p.right in tgt_tran_preds:
-                keep_these += [p.right]
-            else:
-                keep_these += [p]
 
     keep_these += [p for p in env_trans.tgt.predicates
-                      if [] == [v for v in p.variablesin() if v.name.endswith("_prev")]]
+                      if [] == [v for v in p.variablesin() if v.name.endswith("_prev")]
+                   or neg(p).simplify() not in keep_these]
+
+    for p in keep_these:
+        if neg(p) in keep_these:
+            print()
 
     return list(set(keep_these))
