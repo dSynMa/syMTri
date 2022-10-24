@@ -158,3 +158,8 @@ class BiOp(Formula):
             raise NotImplementedError(f"{self.op} unsupported")
         else:
             return op(left_expr, right_expr), And(left_invar, right_invar)
+
+    def replace_math_exprs(self, cnt):
+        new_left, dic_left = self.left.replace_math_exprs(cnt)
+        new_right, dic_right = self.right.replace_math_exprs(cnt + len(dic_left))
+        return BiOp(new_left, self.op, new_right), dic_left | dic_right

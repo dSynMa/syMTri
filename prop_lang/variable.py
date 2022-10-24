@@ -66,3 +66,6 @@ class Variable(Atom):
                                                LE(Symbol(self.name, INT), Int(upper)))
         else:
             raise NotImplementedError(f"Type {typed_val.type} unsupported.")
+
+    def replace_math_exprs(self, cnt):
+        return self, {}

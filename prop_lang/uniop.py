@@ -66,3 +66,7 @@ class UniOp(Formula):
             return Minus(Int(0), expr), invar
         else:
             raise NotImplementedError(f"{self.op} unsupported")
+
+    def replace_math_exprs(self, cnt):
+        new_right, dic = self.right.replace_math_exprs(cnt)
+        return UniOp(self.op, new_right), dic
