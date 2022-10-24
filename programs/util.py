@@ -17,7 +17,7 @@ from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct_formula_set, conjunct, neg, append_to_variable_name
+from prop_lang.util import conjunct_formula_set, conjunct, neg, append_to_variable_name, dnf
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
@@ -471,3 +471,12 @@ def ground_predicate_on_bool_vars(program, predicate, ce_state):
 
 def add_prev_suffix(program, formula):
     return append_to_variable_name(formula, [tv.name for tv in program.valuation], "_prev")
+
+
+def transition_up_to_dnf(transition: Transition):
+    dnf_condition = dnf(transition.condition)
+    if not (isinstance(dnf_condition, BiOp) and dnf_condition.op.startswith("|")):
+        return [transition]
+    else:
+        conds = dnf_condition.sub_formulas_up_to_associativity()
+        return [Transition(transition.src, cond, transition.action, transition.output, transition.tgt) for cond in conds]
