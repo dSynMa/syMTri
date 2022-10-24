@@ -233,7 +233,7 @@ class MealyMachine:
                             formula_smt = And(*formula.to_smt(symbol_table))
                             compatible = smt_checker.check(formula_smt)
                             if compatible:
-                                tentative_con_trans.append(Transition((mm_con_src, pa_con_src), pa_con_t.condition, pa_con_t.action, pa_con_t.output, (mm_con_tgt, pa_con_t.tgt)))
+                                tentative_con_trans.append(Transition((mm_con_src, pa_con_src), mm_con_cond, pa_con_t.action, pa_con_t.output, (mm_con_tgt, pa_con_t.tgt)))
 
                 for mm_con_trans in tentative_con_trans:
                     (mm_env_src, pa_env_src) = mm_con_trans.tgt
