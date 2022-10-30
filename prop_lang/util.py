@@ -9,7 +9,7 @@ from programs.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from prop_lang.parsing.string_to_ltl import string_to_ltl
+from parsing.string_to_ltl import string_to_ltl
 from prop_lang.uniop import UniOp
 from prop_lang.value import Value
 from prop_lang.variable import Variable

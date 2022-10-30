@@ -1,6 +1,6 @@
 import unittest
 
-from programs.parsing.string_to_program import string_to_program
+from parsing.string_to_program import string_to_program
 
 
 class MyTestCase(unittest.TestCase):

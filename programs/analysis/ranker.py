@@ -2,7 +2,7 @@ import os
 import subprocess
 from tempfile import NamedTemporaryFile
 
-from prop_lang.parsing.string_to_prop_logic import string_to_pl, string_to_mathexpr
+from parsing.string_to_prop_logic import string_to_prop, string_to_math_expression
 
 
 class Ranker:
@@ -35,8 +35,8 @@ class Ranker:
                             ",")
                         invars.remove('')
 
-                        return True, string_to_mathexpr(ranking_function).simplify(), [string_to_pl(invar) for invar in
-                                                                                       invars]
+                        return True, string_to_math_expression(ranking_function).simplify(), [string_to_prop(invar) for invar in
+                                                                                   invars]
                     except Exception as err:
                         raise Exception(str(err) + "\n\n" + out + "\n\n" + main_function)
                 else:

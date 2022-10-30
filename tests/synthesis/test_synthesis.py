@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from programs.parsing.string_to_program import string_to_program
+from parsing.string_to_program import string_to_program
 from programs.synthesis.synthesis import abstract_synthesis_loop
 from prop_lang.uniop import UniOp
 from prop_lang.value import Value

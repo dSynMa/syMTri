@@ -10,7 +10,7 @@ from programs.synthesis.mealy_machine import MealyMachine
 from programs.util import synthesis_problem_to_TLSF_script
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from prop_lang.parsing.hoaparser_label_expression_to_prop_logic import hoaparser_label_expression_to_pl
+from parsing.hoaparser_label_expression_to_prop_logic import hoaparser_label_expression_to_pl
 from prop_lang.util import true
 from prop_lang.variable import Variable
 

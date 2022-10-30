@@ -14,7 +14,7 @@ from programs.util import symbol_table_from_program, create_nuxmv_model_for_comp
     concretize_transitions, ground_transitions_and_flatten
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from prop_lang.parsing.string_to_ltl import string_to_ltl
+from parsing.string_to_ltl import string_to_ltl
 from prop_lang.util import neg, G, F, implies, conjunct, X, true
 from prop_lang.variable import Variable
 

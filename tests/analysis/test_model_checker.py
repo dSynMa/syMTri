@@ -1,7 +1,7 @@
 from unittest import TestCase
 
 from programs.analysis.model_checker import ModelChecker
-from programs.parsing.string_to_program import string_to_program
+from parsing.string_to_program import string_to_program
 from programs.util import create_nuxmv_model
 
 

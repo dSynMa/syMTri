@@ -1,7 +1,7 @@
 import argparse
 
 from programs.analysis.model_checker import ModelChecker
-from programs.parsing.string_to_program import string_to_program
+from parsing.string_to_program import string_to_program
 from programs.synthesis.synthesis import synthesize
 # inputs: date_file ltl_file
 from programs.util import create_nuxmv_model, check_determinism
