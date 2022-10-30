@@ -13,7 +13,7 @@ from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_
     concretize_transitions, transition_up_to_dnf
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from parsing.string_to_prop_logic import string_to_prop
+from parsing.string_to_prop_logic import string_to_prop, string_to_math_expression
 from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean
 from prop_lang.value import Value
 from prop_lang.variable import Variable
@@ -130,7 +130,7 @@ def liveness_refinement(symbol_table, program, entry_predicate, unfolded_loop, e
             if not success:
                 print("Could not find a ranking function for: \n" + c_code)
                 text = raw_input("Any suggestions?")
-                ranking_function, invars = string_to_mathexpr(text), []
+                ranking_function, invars = string_to_math_expression(text), []
 
             return ranking_function, invars
         except Exception as e:
