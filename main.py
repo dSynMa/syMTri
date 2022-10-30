@@ -4,7 +4,7 @@ from programs.analysis.model_checker import ModelChecker
 from programs.parsing.string_to_program import string_to_program
 from programs.synthesis.synthesis import synthesize
 # inputs: date_file ltl_file
-from programs.util import create_nuxmv_model
+from programs.util import create_nuxmv_model, check_determinism
 
 
 def main():
@@ -31,6 +31,7 @@ def main():
     date_file = open(args.program, "r").read()
 
     date = string_to_program(date_file)
+    check_determinism(date)
 
     if args.translate is not None:
         if args.translate.lower() == "dot":
