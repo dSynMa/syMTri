@@ -10,7 +10,7 @@ from programs.program import Program
 from programs.transition import Transition
 from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_on_ce_state_with_index, \
     project_ce_state_onto_ev, get_differently_value_vars, prog_transition_indices_and_state_from_ce, \
-    concretize_transitions
+    concretize_transitions, transition_up_to_dnf
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.parsing.string_to_ltl import string_to_ltl
@@ -33,16 +33,18 @@ def safety_refinement(ce: [dict], prefix_pairs: [[(Transition, dict)]], symbol_t
         concurring_transitions = [(Transition(program.initial_state, true(), [], [], program.initial_state), ce[0])]
 
     for i in range(0, len(disagreed_on)):
-        for j in reversed(range(0, len(concurring_transitions) + i + 1)):
-            C = interpolation(program, concurring_transitions + disagreed_on[0:i], disagreed_on[i], j, symbol_table)
-            if C is None:
-                print("I think that interpolation is being checked against formulas that are not contradictory.")
-                break
-            # if B is itself inconsistent
-            if isinstance(C, Value) and C.is_true():
-                break
-            elif isinstance(C, Value) and C.is_false():
-                break
+        up_to_dnf = transition_up_to_dnf(disagreed_on[i][0])
+        for l in range(0, len(up_to_dnf)):
+            for j in reversed(range(0, len(concurring_transitions) + i + 1)):
+                C = interpolation(program, concurring_transitions + disagreed_on[0:i], (up_to_dnf[l], disagreed_on[i][1]), j, symbol_table)
+                if C is None:
+                    print("I think that interpolation is being checked against formulas that are not contradictory.")
+                    break
+                # if B is itself inconsistent
+                if isinstance(C, Value) and C.is_true():
+                    break
+                elif isinstance(C, Value) and C.is_false():
+                    break
 
             if isinstance(C, BiOp) and C.op[0] == "&":
                 Cs |= set(C.sub_formulas_up_to_associativity())
