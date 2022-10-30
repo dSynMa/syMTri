@@ -63,12 +63,26 @@ class Program:
 
     def add_env_transition(self, src, condition: Formula, action: [BiOp], output: [BiOp], tgt):
         assert len({x for x in output if x not in self.out_events}) == 0
-        self.env_transitions.append(Transition(src, condition, action, output, tgt))
+        t = Transition(src, condition, action, output, tgt)
+
+        if src in self.state_to_env:
+            self.state_to_env[src] = [t]
+        else:
+            self.state_to_env[src].append(t)
+
+        self.env_transitions.append(t)
         self.states.add(src)
         self.states.add(tgt)
 
     def add_con_transition(self, src, condition: Formula, action: Formula, tgt):
-        self.con_transitions.append(Transition(src, condition, action, [], tgt))
+        t = Transition(src, condition, action, [], tgt)
+
+        if src in self.state_to_env:
+            self.state_to_con[src] = [t]
+        else:
+            self.state_to_con[src].append(t)
+
+        self.con_transitions.append(t)
         self.states.add(src)
         self.states.add(tgt)
 
