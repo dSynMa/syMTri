@@ -45,10 +45,10 @@ def safety_refinement(ce: [dict], prefix_pairs: [[(Transition, dict)]], symbol_t
                 elif isinstance(C, Value) and C.is_false():
                     break
 
-            if isinstance(C, BiOp) and C.op[0] == "&":
-                Cs |= set(C.sub_formulas_up_to_associativity())
-            else:
-                Cs |= {C}
+                if isinstance(C, BiOp) and C.op[0] == "&":
+                    Cs |= set(C.sub_formulas_up_to_associativity())
+                else:
+                    Cs |= {C}
 
     return Cs
 
