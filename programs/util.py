@@ -348,7 +348,6 @@ def reduce_up_to_iff(old_preds, new_preds, symbol_table):
 
 
 def has_equiv_pred(p, preds, symbol_table):
-    smt_checker = SMTChecker()
     for pp in preds:
         if p is pp:
             return True
@@ -480,3 +479,32 @@ def transition_up_to_dnf(transition: Transition):
     else:
         conds = dnf_condition.sub_formulas_up_to_associativity()
         return [Transition(transition.src, cond, transition.action, transition.output, transition.tgt) for cond in conds]
+
+
+def check_determinism(program):
+    env_state_dict = {s:[t.condition for t in program.env_transitions if t.src == s] for s in program.states}
+
+    symbol_table = symbol_table_from_program(program)
+
+    for (s, conds) in env_state_dict.items():
+        sat_conds = [cond for cond in conds if smt_checker.check(And(*cond.to_smt(symbol_table)))]
+        for cond in conds:
+            if cond not in sat_conds:
+                print("WARNING: " + str(cond) + " is not satisfiable, see transitions from state " + str(s))
+
+        for i, cond in enumerate(sat_conds):
+            for cond2 in sat_conds[i+1:]:
+                if smt_checker.check(And(*(cond.to_smt(symbol_table) + cond2.to_smt(symbol_table)))):
+                    print("WARNING: " + str(cond) + " and " + str(cond2) + " are satisfiable together, see environment transitions from state " + str(s))
+
+    con_state_dict = {s:[t.condition for t in program.con_transitions if t.src == s] for s in program.states}
+
+    for (s, conds) in con_state_dict.items():
+        sat_conds = [cond for cond in conds if smt_checker.check(And(*cond.to_smt(symbol_table)))]
+        for cond in conds:
+            if cond not in sat_conds:
+                print("WARNING: " + str(cond) + " is not satisfiable, see transitions from state " + str(s))
+        for i, cond in enumerate(sat_conds):
+            for cond2 in sat_conds[i+1:]:
+                if smt_checker.check(And(*(cond.to_smt(symbol_table) + cond2.to_smt(symbol_table)))):
+                    print("WARNING: " + str(cond) + " and " + str(cond2) + " are satisfiable together, see controller transitions from state " + str(s))
