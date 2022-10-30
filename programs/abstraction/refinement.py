@@ -168,10 +168,10 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
         acts = "\n\t\t".join([str(act.left) + " = " + str(act.right) + ";" for act in t.action if
                                     not is_boolean(act.left, program.valuation)])
 
-        if isinstance(string_to_ltl(cond_simpl).simplify(), Value):
-            if string_to_ltl(cond_simpl).simplify().is_false():
+        if isinstance(string_to_prop(cond_simpl).simplify(), Value):
+            if string_to_prop(cond_simpl).simplify().is_false():
                 choices += ["break;"]
-            elif string_to_ltl(cond_simpl).simplify().is_true():
+            elif string_to_prop(cond_simpl).simplify().is_true():
                 choices += ["\t" + acts]
         else:
             choices += ["\tif(" + cond_simpl + ") {" + acts + "}\n\t else break;"]
