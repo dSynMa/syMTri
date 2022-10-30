@@ -21,6 +21,7 @@ from prop_lang.util import conjunct_formula_set, conjunct, neg, append_to_variab
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
+smt_checker = SMTChecker()
 
 def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, strategy_model: NuXmvModel, mon_events,
                                                   pred_list):
