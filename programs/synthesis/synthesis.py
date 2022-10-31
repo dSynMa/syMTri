@@ -103,10 +103,6 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         symbol_table_preds = {str(label_pred(v, pred_list)):TypedValuation(str(label_pred(v, pred_list)), "bool", true()) for v in pred_list}
         symbol_table_prevs = {tv.name+"_prev":TypedValuation(tv.name+"_prev", tv.type, tv.value) for tv in program.valuation}
-        controller_projected_on_program = mm.project_controller_on_program(program, abstract_program, state_predicates,
-                                                                           transition_predicates, symbol_table | symbol_table_preds)
-
-        print(controller_projected_on_program.to_dot())
 
         system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
         contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real, False, ltl_assumptions, ltl_guarantees)
@@ -116,6 +112,13 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                             ("controller" if real else "counterstrategy") + ", but nuxmv thinks it is non consistent with the monitor.")
 
         if not there_is_mismatch:
+            controller_projected_on_program = mm.project_controller_on_program(program, abstract_program,
+                                                                               state_predicates,
+                                                                               transition_predicates,
+                                                                               symbol_table | symbol_table_preds)
+
+            print(controller_projected_on_program.to_dot())
+
             for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
                 ok = False
                 for tt in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
