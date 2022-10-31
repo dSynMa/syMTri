@@ -326,7 +326,7 @@ def label_pred(p, preds):
 
 
 def stringify_pred(p):
-    return Variable("_" +
+    return Variable("pred_" +
                     str(p)
                     .replace(" ", "")
                     .replace("_", "")
