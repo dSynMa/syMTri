@@ -11,11 +11,11 @@ class AbstractState:
 
     def __eq__(self, other):
         if isinstance(other, AbstractState):
-            return self.state == other.state and self.predicates == other.predicates
+            return self.state == other.state and frozenset(self.predicates) == frozenset(other.predicates)
         return NotImplemented
 
     def __hash__(self):
-        return hash(frozenset((hash(self.state), sum(map(hash, self.predicates)))))
+        return hash(frozenset((hash(self.state), frozenset(self.predicates))))
 
     def unpack(self):
         return self.state, self.predicates
