@@ -91,6 +91,9 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
 
     predicates = state_predicates + transition_predicates
     negation_closed_predicates = predicates + [neg(p) for p in predicates]
+
+    to_program_transitions = {t:[] for t in (orig_env_transitions + orig_con_transitions)}
+
     # initial transitions rule
     # TODO this should only be computed once, if predicate set updated it can be done incrementally
     for t in orig_env_transitions:
@@ -117,7 +120,11 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
                     new_output = set(t.output)
                     new_output |= {neg(o) for o in program.out_events if o not in t.output}
                     new_output = list(new_output)
-                    env_transitions.add(Transition(init_st, events, [], new_output, next_state))
+
+                    abs_t = Transition(init_st, events, [], new_output, next_state)
+
+                    to_program_transitions[t].append(abs_t)
+                    env_transitions.add(abs_t)
 
     con_turn_flag = True
 
@@ -165,7 +172,11 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
                             new_output = set(t.output)
                             new_output |= {neg(o) for o in program.out_events if o not in t.output}
                             new_output = list(new_output)
-                            new_transitions.add(Transition(abs_st, context_Evs, [], new_output, next_state))
+
+                            abs_t = Transition(abs_st, context_Evs, [], new_output, next_state)
+                            to_program_transitions[t].append(abs_t)
+                            new_transitions.add(abs_t)
+
                             if con_turn_flag and next_state not in done_states_env:
                                 next_states.add(next_state)
                             elif not con_turn_flag and next_state not in done_states_con:
@@ -216,7 +227,7 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
     return Program("pred_abst_" + program.name, states | {init_st}, init_st, [],
                    new_env_transitions,
                    new_con_transitions, program.env_events,
-                   program.con_events, program.out_events)
+                   program.con_events, program.out_events), to_program_transitions
 
 
 def merge_transitions(transitions: [Transition], symbol_table):

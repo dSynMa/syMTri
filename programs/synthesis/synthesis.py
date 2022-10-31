@@ -69,7 +69,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                  + [Variable(s) for s in program.states]
 
     while True:
-        abstract_program = predicate_abstraction(program, state_predicates, transition_predicates, symbol_table, True)
+        abstract_program, to_program_transitions = predicate_abstraction(program, state_predicates, transition_predicates, symbol_table, True)
         print(abstract_program.to_dot())
 
         pred_list = state_predicates + transition_predicates
