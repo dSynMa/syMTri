@@ -12,7 +12,8 @@ from programs.util import symbol_table_from_program, create_nuxmv_model_for_comp
     there_is_mismatch_between_monitor_and_strategy, \
     parse_nuxmv_ce_output_finite, reduce_up_to_iff, \
     add_prev_suffix, label_pred, ground_predicate_on_bool_vars, \
-    concretize_transitions, ground_transitions_and_flatten
+    concretize_transitions, ground_transitions_and_flatten, ce_state_to_predicate_abstraction_trans, \
+    check_for_nondeterminism_last_step
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from parsing.string_to_ltl import string_to_ltl
@@ -175,7 +176,12 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(ce, program, symbol_table)
 
             if use_liveness:
-                ranking, invars = liveness_step(program, counterexample_loop, symbol_table, entry_predicate)
+                try:
+                    ranking, invars = liveness_step(program, counterexample_loop, symbol_table, entry_predicate)
+                except Exception as e:
+                    check_for_nondeterminism_last_step(ce, program, True, e)
+                    raise e
+
                 rankings.append((ranking, invars))
                 new_transition_predicates = [x for r, _ in rankings for x in
                                              [BiOp(add_prev_suffix(program, r), ">", r),
@@ -207,7 +213,10 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program)
                 print(", ".join([str(p) for p in new_preds]))
                 if new_preds == []:
-                    raise Exception("No new state predicates identified.")
+                    e =  Exception("No new state predicates identified.")
+                    check_for_nondeterminism_last_step(ce, program, True, e)
+                    raise e
+
 
                 new_all_preds = {x.simplify() for x in new_preds}
                 new_all_preds = reduce_up_to_iff(state_predicates,
@@ -219,10 +228,12 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 if str(v).endswith("prev")}) # TODO symbol_table needs to be updated with prevs
 
                 if len(new_all_preds) == len(state_predicates):
-                    raise Exception(
+                    e =  Exception(
                         "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
                                                                                             "previous predicates."
                    )
+                    check_for_nondeterminism_last_step(ce, program, True, e)
+                    raise e
 
                 state_predicates = list(new_all_preds)
 
