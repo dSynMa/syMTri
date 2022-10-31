@@ -99,6 +99,34 @@ def symbol_table_from_program(program: Program):
     return symbol_table
 
 
+def ce_state_to_predicate_abstraction_trans(ltl_to_program_transitions, symbol_table, mon_state, con_state, env_state):
+    # ltl_to_program_transitions is a dict of the form {now: {(con_ev, env_ev) : [(con_trans, env_trans)]}}
+
+    con_start = conjunct_formula_set([Variable(key.removeprefix("mon_")) for key, value in mon_state.items() if
+                                      (key.startswith("mon_") or key.startswith("pred_")) and value == "TRUE"]
+                                     + [neg(Variable(key.removeprefix("mon_"))) for key, value in mon_state.items() if
+                                        (key.startswith("mon_") or key.startswith("pred_")) and value == "FALSE"])
+    env_start = conjunct_formula_set([Variable(key.removeprefix("mon_")) for key, value in con_state.items() if
+                                      (key.startswith("mon_") or key.startswith("pred_")) and value == "TRUE"]
+                                     + [neg(Variable(key.removeprefix("mon_"))) for key, value in con_state.items() if
+                                        (key.startswith("mon_") or key.startswith("pred_")) and value == "FALSE"])
+    env_end = conjunct_formula_set([Variable(key.removeprefix("mon_")) for key, value in env_state.items() if
+                                    (key.startswith("mon_") or key.startswith("pred_")) and value == "TRUE"]
+                                   + [neg(Variable(key.removeprefix("mon_"))) for key, value in env_state.items() if
+                                      (key.startswith("mon_") or key.startswith("pred_")) and value == "FALSE"])
+
+    for abs_con_start in ltl_to_program_transitions.keys():
+        if abs_con_start == "init":
+            continue
+        if smt_checker.check(And(*(conjunct(abs_con_start, con_start).to_smt(symbol_table)))):
+            for (abs_env_start, abs_env_end) in ltl_to_program_transitions[abs_con_start].keys():
+                if smt_checker.check(And(*(conjunct(abs_env_start, env_start).to_smt(symbol_table)))):
+                    if smt_checker.check(And(*(conjunct(abs_env_end, env_end).to_smt(symbol_table)))):
+                        return ltl_to_program_transitions[abs_con_start][(abs_env_start, abs_env_end)]
+
+    return []
+
+
 def parse_nuxmv_ce_output_finite(out: str):
     prefix, _ = get_ce_from_nuxmv_output(out)
 
