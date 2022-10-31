@@ -1,4 +1,4 @@
-from typing import re
+import re
 
 from parsec import *
 from tatsu.grammars import Grammar
@@ -10,8 +10,7 @@ from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
 from prop_lang.value import Value
 from prop_lang.variable import Variable
-
-from tatsu import parse
+from tatsu.tool import compile
 
 GRAMMAR = '''
     @@grammar::PROPLOGIC
@@ -93,8 +92,6 @@ GRAMMAR = '''
     atom = /\_?[a-zA-Z][a-zA-Z0-9\_\-]*/;
     number = /\d+|\d+\.\d+/;
 '''
-
-from tatsu.tool import compile
 
 parser: Grammar = compile(GRAMMAR)
 math_config = ParserConfig(start='math_expression_eof')
