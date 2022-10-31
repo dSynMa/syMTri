@@ -213,10 +213,10 @@ def use_liveness_refinement_state(ce: [dict], symbol_table):
     counterstrategy_states_con = [key for dict in ce for key, value in dict.items()
                                   if dict["turn"] == "env" and key.startswith("st_") and value == "TRUE"]
 
-    last_state = counterstrategy_states_con[len(counterstrategy_states_con) - 1]
-    if last_state in counterstrategy_states_con[:-1]:
-        indices_of_prev_visits = [i for i, x in enumerate(counterstrategy_states_con[:-1]) if x == last_state]
-        corresponding_ce_state = [ce[(3 * i)] for i in (indices_of_prev_visits)] + [ce[len(ce) - 2]]
+    last_cs_state = counterstrategy_states_con[len(counterstrategy_states_con) - 1]
+    if last_cs_state in counterstrategy_states_con[:-1]:
+        indices_of_visits = [i for i, x in enumerate(counterstrategy_states_con) if x == last_cs_state]
+        corresponding_ce_state = [ce[(3 * i)] for i in (indices_of_visits)] #
         var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
                            for i in range(0, len(corresponding_ce_state) - 1)]
         var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in var_differences]
@@ -224,10 +224,10 @@ def use_liveness_refinement_state(ce: [dict], symbol_table):
         if any([x for xs in var_differences for x in xs if
                 re.match("(int(eger)?|nat(ural)?|real)", symbol_table[x].type)]):
 
-            if not len(indices_of_prev_visits) > 0:
+            if not len(indices_of_visits) > 0:
                 raise Exception("Something weird here.")
 
-            first_index = indices_of_prev_visits[0]
+            first_index = indices_of_visits[0]
 
             return True, first_index
         else:
@@ -256,7 +256,7 @@ def use_liveness_refinement_trans(ce: [dict], symbol_table):
 
     last_trans = counterstrategy_trans_con[-1]
     if any(x for x in last_trans if any(y for y in counterstrategy_trans_con[:-1] if x in y)):
-        indices_of_prev_visits = [i for i, x in enumerate(counterstrategy_trans_con[:-1]) if
+        indices_of_prev_visits = [i for i, x in enumerate(counterstrategy_trans_con) if
                                   any(i for i in last_trans if i in x)]
         corresponding_ce_state = [ce[(i)] for i in (indices_of_prev_visits)]
         var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
