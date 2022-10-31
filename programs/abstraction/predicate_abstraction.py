@@ -2,6 +2,7 @@ from itertools import chain, combinations
 
 from pysmt.shortcuts import And, Not, TRUE
 
+from parsing.string_to_prop_logic import string_to_prop
 from programs.abstraction.abstract_state import AbstractState
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
@@ -9,7 +10,6 @@ from programs.transition import Transition
 from programs.util import label_preds, add_prev_suffix
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from parsing.string_to_ltl import string_to_ltl
 from prop_lang.uniop import UniOp
 from prop_lang.util import conjunct, neg, conjunct_formula_set, conjunct_typed_valuation_set, disjunct_formula_set, \
     implies, G, X
@@ -254,10 +254,8 @@ def merge_transitions(transitions: [Transition], symbol_table):
         ## simplify when doing disjunct, after lex ordering
         ## also, may consider when enumerating possible event sets starting with missing some evetns and seeing how many transitions they match, if only then can stop adding to it
         try:
-            # TODO using string_to_ltl here since it can deal with unbracketed combinations, e.g. a | b | c
-            #  string_to_pl needs to be extended to handle this too
             new_transitions.append(
-                Transition(trans_here[0].src, string_to_ltl(str(conditions_simplified_fnode)), [], trans_here[0].output,
+                Transition(trans_here[0].src, string_to_prop(str(conditions_simplified_fnode)), [], trans_here[0].output,
                            trans_here[0].tgt))
         except Exception as e:
             raise e
