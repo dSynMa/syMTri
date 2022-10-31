@@ -13,7 +13,7 @@ class Test(TestCase):
             program = string_to_program(data)
             model_checker = ModelChecker()
             nuxmv_model = create_nuxmv_model(program.to_nuXmv_with_turns())
-            abstraction, to_program_transitions = predicate_abstraction(program, [], [], symbol_table_from_program(program), False)
+            abstraction, _, _ = predicate_abstraction(program, [], [], symbol_table_from_program(program), False)
             ltl_abstraction = abstraction_to_ltl_with_turns(abstraction)
             print(ltl_abstraction)
             out = model_checker.check(nuxmv_model, str(ltl_abstraction), None, False)
