@@ -434,7 +434,7 @@ def abstraction_to_ltl(pred_abstraction: Program, env_to_program_transitions, co
 
         con_env_transitions += [G(implies(now, disjunct_formula_set(next))).to_nuxmv()]
 
-    # TODO this set is needed when we have transition predicates
+    # TODO this set is only needed when we have transition predicates
     transition_cond = sorted(set(con_env_transitions), key=lambda x: str(x))
 
     return [init_cond, at_least_and_at_most_one_state] + transition_cond, ltl_to_program_transitions
