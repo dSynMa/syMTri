@@ -127,6 +127,27 @@ def ce_state_to_predicate_abstraction_trans(ltl_to_program_transitions, symbol_t
     return []
 
 
+def check_for_nondeterminism_last_step(ce, program, raise_exception : bool, exception):
+    transitions = program.env_transitions + program.con_transitions
+
+    before_mon_trans = ce[-2]
+    guards = []
+    for (key, value) in before_mon_trans.items():
+        if key.startswith("guard_") and value == "TRUE":
+            guards.append(transitions[int(key.replace("guard_", ""))])
+
+    if len(guards) > 1:
+        message = ("Nondeterminism in last step of counterexample; monitor has choice between: \n"
+                        + "\n".join([str(t) for t in guards])
+                        + "\nWe do not handle this yet."
+                        + "\nIf you suspect the problem to be realisabile, "
+                        + "give control to the environment of the transitions (e.g., with a new variable).\n"
+                        + "Otherwise, if you suspect unrealisability, give control of the transitions to the controller.")
+        if raise_exception:
+            raise Exception(message) from exception
+        else:
+            print("WARNING: " + message)
+
 def parse_nuxmv_ce_output_finite(out: str):
     prefix, _ = get_ce_from_nuxmv_output(out)
 
