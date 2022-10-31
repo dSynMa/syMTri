@@ -558,3 +558,10 @@ def check_determinism(program):
             for cond2 in sat_conds[i+1:]:
                 if smt_checker.check(And(*(cond.to_smt(symbol_table) + cond2.to_smt(symbol_table)))):
                     print("WARNING: " + str(cond) + " and " + str(cond2) + " are satisfiable together, see controller transitions from state " + str(s))
+
+
+def safe_update(d, k, v_arr):
+    if k in d.keys():
+        d[k] = d[k] + v_arr
+    else:
+        d[k] = v_arr
