@@ -27,3 +27,6 @@ class Transition:
 
     def __hash__(self):
         return hash((self.src, self.condition, frozenset(self.action), frozenset(self.output), self.tgt))
+
+    def with_condition(self, new_condition):
+        return Transition(self.src, new_condition, self.action, self.output, self.tgt)
