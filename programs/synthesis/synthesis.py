@@ -6,6 +6,7 @@ from programs.program import Program
 from programs.synthesis import ltl_synthesis
 from programs.synthesis.ltl_synthesis import syfco_ltl, syfco_ltl_in, syfco_ltl_out
 from programs.synthesis.mealy_machine import MealyMachine
+from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
 from programs.util import symbol_table_from_program, create_nuxmv_model_for_compatibility_checking, \
     there_is_mismatch_between_monitor_and_strategy, \
@@ -196,9 +197,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                     "it turns out the new transition predicates "
                                     "(" + ", ".join(
                         [str(p) for p in new_transition_predicates]) + ") are a subset of "
-                                                                       "previous predicates.\n"
-                                                                       "Counterexample was:\n" + "\n".join(
-                        [str(t[0]) for ts in transitions_without_stutter for t in ts]))
+                                                                       "previous predicates.")
                     print("I will try safety refinement instead.")
                     use_liveness = False
                 # important to add this, since later on assumptions depend on position of predicates in list
@@ -222,9 +221,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 if len(new_all_preds) == len(state_predicates):
                     raise Exception(
                         "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
-                                                                                            "previous predicates.\n"
-                                                                                            "Counterexample was:\n" + "\n".join(
-                            [str(t[0]) + "\n var values: " + ", ".join([str(v) + "=" + t[1][str(v)] for v in set(t[0].condition.variablesin() + [v for v in list(t[1].keys()) if str(v).startswith("mon_")] + [v for v in program.env_events + program.con_events])]) for ts in transitions_without_stutter for t in ts])
+                                                                                            "previous predicates."
                    )
 
                 state_predicates = list(new_all_preds)
@@ -251,3 +248,33 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_predicate):
 
     return ranking, invars
 
+
+def write_counterexample(program,
+                         agreed_on_transitions : [(Transition, dict)],
+                         disagreed_on_transitions: ([Transition], dict),
+                         monitor_actually_took: [([Transition], [Transition])]):
+
+    print("Mismatch:")
+    print("Agreed on transitions:")
+    for trans, state in ([(t,s) for ts in agreed_on_transitions for (t,s) in ts]):
+        vs = set(trans.condition.variablesin()
+                 + [v for v in list(state.keys()) if str(v).startswith("mon_")]
+                 + [v for v in list(state.keys()) if str(v).startswith("pred_")]
+                 + [v for v in program.env_events + program.con_events])
+
+        print(str(trans) + " var values: " + ", ".join([str(v) + "=" + state[str(v)] for v in vs]))
+
+    print("Environment wanted to take one of these:")
+
+    state = disagreed_on_transitions[1]
+    vs = []
+    for trans in disagreed_on_transitions[0]:
+        vs += set(trans.condition.variablesin()
+                 + [v for v in list(state.keys()) if str(v).startswith("mon_")]
+                 + [v for v in list(state.keys()) if str(v).startswith("pred_")]
+                 + [v for v in program.env_events + program.con_events])
+        print(str(trans))
+    print("with state: " + ", ".join([str(v) + "=" + state[str(v)] for v in vs]))
+
+    print("Monitor actually took:")
+    print(str(monitor_actually_took[0][0]))
