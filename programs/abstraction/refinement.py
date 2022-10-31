@@ -19,23 +19,23 @@ from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 
-def safety_refinement(ce: [dict], prefix_pairs: [[(Transition, dict)]], symbol_table, program) -> [FNode]:
+def safety_refinement(ce: [dict], agreed_on_transitions: [[(Transition, dict)]], disagreed_on_transitions: ([Transition], dict), symbol_table, program) -> [FNode]:
     # we collect interpolants in this set
     Cs = set()
 
-    concurring_transitions = [x for xs in prefix_pairs[:-1] for x in xs]
-    disagreed_on = prefix_pairs[len(prefix_pairs) - 1]
+    concurring_transitions = [x for xs in agreed_on_transitions for x in xs]
 
     # this is a hack to ensure correct behaviour when there is a mismatch with only transition (disagreed_on)
     # since interpolation requires len(concurring_transitions) to be at least one 1
     if concurring_transitions == []:
         concurring_transitions = [(Transition(program.initial_state, true(), [], [], program.initial_state), ce[0])]
 
-    for i in range(0, len(disagreed_on)):
-        up_to_dnf = transition_up_to_dnf(disagreed_on[i][0])
+    for t in disagreed_on_transitions[0]:
+        # TODO is this enough, or do we need to dnf the agreed on transitions also?
+        up_to_dnf = transition_up_to_dnf(t.with_condition(neg(t.condition)))
         for l in range(0, len(up_to_dnf)):
-            for j in reversed(range(0, len(concurring_transitions) + i + 1)):
-                C = interpolation(program, concurring_transitions + disagreed_on[0:i], (up_to_dnf[l], disagreed_on[i][1]), j, symbol_table)
+            for j in reversed(range(0, len(concurring_transitions))):
+                C = interpolation(program, concurring_transitions, (up_to_dnf[l], disagreed_on_transitions[1]), j, symbol_table)
                 if C is None:
                     print("I think that interpolation is being checked against formulas that are not contradictory.")
                     break

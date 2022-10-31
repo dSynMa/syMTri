@@ -69,11 +69,11 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                  + [Variable(s) for s in program.states]
 
     while True:
-        abstract_program, to_program_transitions = predicate_abstraction(program, state_predicates, transition_predicates, symbol_table, True)
+        abstract_program, env_to_program_transitions, con_to_program_transitions = predicate_abstraction(program, state_predicates, transition_predicates, symbol_table, True)
         print(abstract_program.to_dot())
 
         pred_list = state_predicates + transition_predicates
-        abstraction = abstraction_to_ltl(abstract_program, state_predicates, transition_predicates)
+        abstraction, ltl_to_program_transitions = abstraction_to_ltl(abstract_program, env_to_program_transitions, con_to_program_transitions, state_predicates, transition_predicates)
         print(", ".join(map(str, abstraction)))
 
         pred_name_dict = {p: label_pred(p, pred_list) for p in pred_list}
@@ -137,10 +137,36 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         else:
             ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(out)
-            transitions_without_stutter = concretize_transitions(program, transition_indices_and_state)
-            print("Counterexample is:\n" + "\n".join(
-                [str(t[0]) + " var values: " + ", ".join([str(v) + "=" + t[1][str(v)] for v in t[0].condition.variablesin()]) for
-                 ts in transitions_without_stutter for t in ts]))
+            check_for_nondeterminism_last_step(ce, program, False, None)
+            transitions_without_stutter_monitor_took = concretize_transitions(program, transition_indices_and_state)
+            last_desired_env_con_env_trans : [(Transition, Transition)] = ce_state_to_predicate_abstraction_trans(ltl_to_program_transitions, symbol_table | symbol_table_preds, ce[-4], ce[-3], ce[-2])
+
+            agreed_on_transitions = transitions_without_stutter_monitor_took[:-1]
+            disagreed_on_transitions = []
+            monitor_actually_took = transitions_without_stutter_monitor_took[-1]
+
+            if len(monitor_actually_took) == 1:
+                (tran, state) = monitor_actually_took[0]
+                if tran in program.con_transitions:
+                    disagreed_on_transitions += ([t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in last_desired_env_con_env_trans[i][0]], state)
+                elif tran in program.env_transitions:
+                    disagreed_on_transitions += ([t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in last_desired_env_con_env_trans[i][1]], state)
+                else:
+                    raise Exception("I don't know what kind of transition this is: " + str(tran))
+            else:
+                con_trans, con_state = monitor_actually_took[0]
+                env_trans, env_state = monitor_actually_took[1]
+                all_with_matching_con_trans = [i for i in range(len(last_desired_env_con_env_trans)) if last_desired_env_con_env_trans[i][0] == con_trans]
+                if all_with_matching_con_trans == []:
+                    monitor_actually_took = monitor_actually_took[:-1]
+                    disagreed_on_transitions += ([t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in last_desired_env_con_env_trans[i][0]], con_state)
+                else:
+                    agreed_on_transitions += [monitor_actually_took[0]]
+                    monitor_actually_took = monitor_actually_took[1:]
+                    disagreed_on_transitions += ([t.with_condition(t.condition) for i in all_with_matching_con_trans for t in last_desired_env_con_env_trans[i][1]], env_state)
+
+
+            write_counterexample(program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
 
             use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(ce, program, symbol_table)
 
@@ -176,7 +202,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 transition_predicates += new_transition_predicates
 
             if eager or not use_liveness:
-                new_preds = safety_refinement(ce, transitions_without_stutter, symbol_table, program)
+                new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program)
                 print(", ".join([str(p) for p in new_preds]))
                 if new_preds == []:
                     raise Exception("No new state predicates identified.")
