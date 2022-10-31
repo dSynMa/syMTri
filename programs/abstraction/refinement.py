@@ -143,22 +143,25 @@ def liveness_refinement(symbol_table, program, entry_predicate, unfolded_loop, e
 def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_before_exit: [Transition],
               exit_cond: Formula):
     # params
-    param_list = ", ".join([symbol_table[str(v)].type + " " + str(v)
-                            for v in {v.name for v in program.valuation}
+    params = list(set(symbol_table[str(v)].type + " " + str(v)
+                            for v in {v.name for v in program.valuation} | set(entry_predicate.variablesin())
                             if
-                            not is_boolean(v, program.valuation) and v in [str(vv) for t in loop_before_exit for vv in
+                            not is_boolean(v, program.valuation) and [str(vv) for t in loop_before_exit for vv in
                                                                            (t.condition.variablesin()
+                                                                            + entry_predicate.variablesin()
                                                                             + [act.left for act in t.action]
                                                                             + [a for act in t.action for a in
-                                                                               act.right.variablesin()])]])
+                                                                               act.right.variablesin()])]))
+    param_list = ", ".join(params)
     param_list = param_list.replace("integer", "int") \
         .replace("natural", "int") \
         .replace("nat", "int") \
         .replace("real", "double")
 
-    init = ["if(!(" + " && ".join([v + " >= 0 " for v in symbol_table.keys() if
-                                     not v.endswith("_prev") and symbol_table[v].type in ["natural",
-                                                                                          "nat"]]) + ")) return;"]
+    natural_conditions = [v.split(" ")[1] + " >= 0 " for v in params if
+                                     not v.endswith("_prev") and symbol_table[v.split(" ")[1]].type in ["natural",
+                                                                                          "nat"]]
+    init = ["if(!(" + " && ".join(natural_conditions) + ")) return;" if len(natural_conditions) > 0 else ""]
 
     choices = []
 
