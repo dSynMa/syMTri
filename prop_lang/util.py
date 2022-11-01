@@ -10,6 +10,7 @@ from prop_lang.atom import Atom
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from parsing.string_to_ltl import string_to_ltl
+from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
 from prop_lang.value import Value
 from prop_lang.variable import Variable
@@ -208,7 +209,8 @@ def only_dis_or_con_junctions(f: Formula):
             return BiOp(only_dis_or_con_junctions(BiOp(f.left, "->", f.right)), "&", only_dis_or_con_junctions(BiOp(f.right, "->", f.left)))
         else:
             # check if math expr? math expr should be abstracted out before manipulating formulas also for dnf
-            raise Exception("I do not know how to handle " + f.op)
+            print("only_dis_or_con_junctions: I do not know how to handle " + str(f) + ", treating it as math expression.")
+            return MathExpr(f)
     else:
         return f
 
