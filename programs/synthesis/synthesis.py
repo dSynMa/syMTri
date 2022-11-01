@@ -58,6 +58,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         Tuple[bool, MealyMachine]:
     # TODO add check that monitor is deterministic under given ltl assumptions
     eager = False
+    keep_only_bool_interpolants = True
 
     symbol_table = symbol_table_from_program(program)
     ltl = implies(ltl_assumptions, ltl_guarantees).simplify()
@@ -212,7 +213,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
             if eager or not use_liveness:
                 new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program)
-                print(", ".join([str(p) for p in new_preds]))
+                print("Found: " + ", ".join([str(p) for p in new_preds]))
                 if len(new_preds) == 0:
                     e =  Exception("No state predicates identified.")
                     check_for_nondeterminism_last_step(ce, program, True, e)
@@ -235,6 +236,12 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                    )
                     check_for_nondeterminism_last_step(ce, program, True, e)
                     raise e
+
+                if keep_only_bool_interpolants:
+                    bool_interpolants = [p for p in new_preds if p not in state_predicates and p in new_all_preds and 0 == len([v for v in p.variablesin() if symbol_table[str(v)].type != "bool" and symbol_table[str(v)].type != "boolean"])]
+                    if len(bool_interpolants) > 0:
+                        new_all_preds = [p for p in new_all_preds if p in bool_interpolants or p in state_predicates]
+                print("Using: " + ", ".join([str(p) for p in new_all_preds if p not in state_predicates]))
 
                 state_predicates = list(new_all_preds)
 
