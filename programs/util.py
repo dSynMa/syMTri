@@ -474,27 +474,39 @@ def concretize_transitions(program, indices_and_state_list):
     first_transition_index = int(indices_and_state_list[0][0])
     if first_transition_index != -1:
         concretized += [[(transitions[first_transition_index], indices_and_state_list[0][1])]]
-    for i in range(1, len(indices_and_state_list)):
+    for i in range(1, len(indices_and_state_list) - 2):
         if i % 2 == 0:
             continue
         trans_here = []
         trans_index_con = int(indices_and_state_list[i][0])
         if trans_index_con != -1:
             trans_here += [(transitions[trans_index_con], indices_and_state_list[i][1])]
-        if i + 1 < len(indices_and_state_list):
+        if i + 1 < len(indices_and_state_list) - 2:
             trans_index_env = int(indices_and_state_list[i + 1][0])
             if trans_index_env != -1:
                 trans_here += [(transitions[int(trans_index_env)], indices_and_state_list[i + 1][1])]
         if len(trans_here) > 0:
             concretized += [trans_here]
 
-    if indices_and_state_list[-1][0] == '-1':
-        if len(concretized) == 0:
-            state = program.initial_state
-        else:
-            state = concretized[-1][-1][0].tgt
-        concretized += [[(stutter_transition(program, state, False), indices_and_state_list[-1][1]),
-                         (stutter_transition(program, state, True), indices_and_state_list[-1][1])]]
+    # for last two transitions
+    con_from_state = concretized[-1][-1][0].tgt
+    con_trans = stutter_transition(program, con_from_state, False) \
+        if indices_and_state_list[-2][0] == '-1' \
+        else transitions[int(indices_and_state_list[-2][0])]
+
+    if con_trans == None:
+        raise Exception("No controller stutter transition found for state " + str(con_from_state))
+
+    env_from_state = con_trans.tgt
+    env_trans = stutter_transition(program, env_from_state, True) \
+        if indices_and_state_list[-1][0] == '-1' \
+        else transitions[int(indices_and_state_list[-1][0])]
+
+    if env_trans == None:
+        raise Exception("No controller stutter transition found for state " + str(con_from_state))
+
+    concretized += [[(con_trans, indices_and_state_list[-2][1]), (env_trans, indices_and_state_list[-1][1])]]
+
     return concretized
 
 
