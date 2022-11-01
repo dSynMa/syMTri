@@ -178,36 +178,37 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             if use_liveness:
                 try:
                     ranking, invars = liveness_step(program, counterexample_loop, symbol_table, entry_predicate)
+
+                    rankings.append((ranking, invars))
+                    new_transition_predicates = [x for r, _ in rankings for x in
+                                                 [BiOp(add_prev_suffix(program, r), ">", r),
+                                                  BiOp(add_prev_suffix(program, r), "<", r)
+                                                  ]]
+
+                    print(", ".join([str(p) for p in new_transition_predicates]))
+                    if new_transition_predicates == []:
+                        # raise Exception("No new transition predicates identified.")
+                        print("No transition predicates identified. So will try safety refinement.")
+                        use_liveness = False
+
+                    new_all_trans_preds = {x.simplify() for x in new_transition_predicates}
+                    new_all_trans_preds = reduce_up_to_iff(transition_predicates, list(new_all_trans_preds),
+                                                           symbol_table | symbol_table_prevs)
+
+                    if len(new_all_trans_preds) == len(transition_predicates):
+                        print("I did something wrong, "
+                                        "it turns out the new transition predicates "
+                                        "(" + ", ".join(
+                            [str(p) for p in new_transition_predicates]) + ") are a subset of "
+                                                                           "previous predicates.")
+                        print("I will try safety refinement instead.")
+                        use_liveness = False
+                    # important to add this, since later on assumptions depend on position of predicates in list
+                    transition_predicates += new_transition_predicates
                 except Exception as e:
-                    check_for_nondeterminism_last_step(ce, program, True, e)
-                    raise e
-
-                rankings.append((ranking, invars))
-                new_transition_predicates = [x for r, _ in rankings for x in
-                                             [BiOp(add_prev_suffix(program, r), ">", r),
-                                              BiOp(add_prev_suffix(program, r), "<", r)
-                                              ]]
-
-                print(", ".join([str(p) for p in new_transition_predicates]))
-                if new_transition_predicates == []:
-                    # raise Exception("No new transition predicates identified.")
-                    print("No transition predicates identified. So will try safety refinement.")
-                    use_liveness = False
-
-                new_all_trans_preds = {x.simplify() for x in new_transition_predicates}
-                new_all_trans_preds = reduce_up_to_iff(transition_predicates, list(new_all_trans_preds),
-                                                       symbol_table | symbol_table_prevs)
-
-                if len(new_all_trans_preds) == len(transition_predicates):
-                    print("I did something wrong, "
-                                    "it turns out the new transition predicates "
-                                    "(" + ", ".join(
-                        [str(p) for p in new_transition_predicates]) + ") are a subset of "
-                                                                       "previous predicates.")
+                    print(e)
                     print("I will try safety refinement instead.")
                     use_liveness = False
-                # important to add this, since later on assumptions depend on position of predicates in list
-                transition_predicates += new_transition_predicates
 
             if eager or not use_liveness:
                 new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program)
