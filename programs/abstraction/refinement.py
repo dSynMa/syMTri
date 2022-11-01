@@ -31,22 +31,28 @@ def safety_refinement(ce: [dict], agreed_on_transitions: [[(Transition, dict)]],
         concurring_transitions = [(Transition(program.initial_state, true(), [], [], program.initial_state), ce[0])]
 
     for t in disagreed_on_transitions[0]:
+        neg_t = t.with_condition(neg(t.condition))
         # TODO is this enough, or do we need to dnf the agreed on transitions also?
-        up_to_dnf = transition_up_to_dnf(t.with_condition(neg(t.condition)))
-        for l in range(0, len(up_to_dnf)):
-            for j in reversed(range(0, len(concurring_transitions))):
-                C = interpolation(program, concurring_transitions, (up_to_dnf[l], disagreed_on_transitions[1]), j, symbol_table)
-                if C is None:
-                    print("I think that interpolation is being checked against formulas that are not contradictory.")
+        for j in reversed(range(0, len(concurring_transitions) + 1)):
+            Css = interpolation(program, concurring_transitions, (neg_t, disagreed_on_transitions[1]), j, symbol_table)
+            if Css is None:
+                print("I think that interpolation is being checked against formulas that are not contradictory.")
+                break
+            # if B is itself inconsistent
+            if len(Cs) == 1 and isinstance(list(Cs)[0], Value):
+                if list(Cs)[0].is_true():
                     break
-                # if B is itself inconsistent
-                if isinstance(C, Value) and C.is_true():
-                    break
-                elif isinstance(C, Value) and C.is_false():
+                elif list(Cs)[0].is_false():
                     break
 
+            for C in Css:
                 if isinstance(C, BiOp) and C.op[0] == "&":
                     Cs |= set(C.sub_formulas_up_to_associativity())
+                elif isinstance(C, Value):
+                    if C.is_true():
+                        continue
+                    elif C.is_false():
+                        continue
                 else:
                     Cs |= {C}
 
@@ -103,19 +109,30 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
                                                                len(concurring_transitions))
     neg_part_B += [grounded_condition]
 
-    path_formula_set_B += [neg(conjunct_formula_set(neg_part_B).simplify())]
-    path_formula_B = conjunct_formula_set(path_formula_set_B)
-
-    A = And(*conjunct(init_prop, path_formula_A).to_smt(new_symbol_table))
-    B = And(*path_formula_B.to_smt(new_symbol_table))
-
-    C = smt_checker.binary_interpolant(A, B, logic)
-
-    if C is not None:
-        Cf = fnode_to_formula(C).replace(reset_vars).simplify()
-        return Cf
+    B_to_dnf = dnf(neg(conjunct_formula_set(neg_part_B)))
+    if isinstance(B_to_dnf, BiOp):
+        Bs = B_to_dnf.sub_formulas_up_to_associativity()
     else:
+        Bs = [B_to_dnf]
+
+    Cs = set()
+
+    for BB in Bs:
+        path_formula_B = conjunct_formula_set(path_formula_set_B + [BB])
+
+        A = And(*conjunct(init_prop, path_formula_A).to_smt(new_symbol_table))
+        B = And(*path_formula_B.to_smt(new_symbol_table))
+
+        C = smt_checker.binary_interpolant(A, B, logic)
+
+        if C is not None:
+            Cf = fnode_to_formula(C).replace(reset_vars).simplify()
+            Cs |= {Cf}
+
+    if len(Cs) == 0:
         return None
+    else:
+        return Cs
 
 
 def liveness_refinement(symbol_table, program, entry_predicate, unfolded_loop, exit_transitions):
@@ -300,12 +317,13 @@ def use_liveness_refinement(ce: [dict], program, symbol_table):
         if first_index != 0:
             ce_prog_init_trans = prog_transition_indices_and_state_from_ce(ce[0:first_index])
             ce_prog_init_trans_concretised = concretize_transitions(program, ce_prog_init_trans)
-            entry_predicate = interpolation(program,
+            entry_predicate = disjunct_formula_set(
+                                    interpolation(program,
                                             [x for xs in ce_prog_init_trans_concretised for x in xs]
                                             + [x for xs in ce_prog_loop_tran_concretised[:-1] for x in xs],
                                             ce_prog_loop_tran_concretised[len(ce_prog_loop_tran_concretised) - 1][0],
                                             first_index,
-                                            symbol_table)
+                                            symbol_table))
         else:
             entry_predicate = true()
 
