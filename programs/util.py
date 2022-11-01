@@ -10,7 +10,6 @@ from pysmt.shortcuts import get_env, And, Not
 from programs.analysis.model_checker import ModelChecker
 from programs.analysis.nuxmv_model import NuXmvModel
 from programs.analysis.smt_checker import SMTChecker
-from programs.program import Program
 from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
 from prop_lang.biop import BiOp
@@ -88,7 +87,7 @@ def create_nuxmv_model(nuxmvModel):
     return text
 
 
-def symbol_table_from_program(program: Program):
+def symbol_table_from_program(program):
     symbol_table = dict()
     for state in program.states:
         symbol_table[state] = TypedValuation(state, "bool", None)
@@ -443,14 +442,14 @@ def synthesis_problem_to_TLSF_script(inputs, outputs, assumptions, guarantees):
     return info + main
 
 
-def stutter_transitions(program: Program, env: bool):
+def stutter_transitions(program, env: bool):
     stutter_transitions = []
     for state in program.states:
         stutter_transitions += [stutter_transition(program, state, env)]
     return stutter_transitions
 
 
-def stutter_transition(program: Program, state, env: bool):
+def stutter_transition(program, state, env: bool):
     transitions = program.env_transitions if env else program.con_transitions
     return Transition(state,
                       conjunct_formula_set([neg(t.condition)
