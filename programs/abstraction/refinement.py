@@ -230,10 +230,10 @@ def use_liveness_refinement_state(ce: [dict], symbol_table):
     counterstrategy_states_con = [key for dict in ce for key, value in dict.items()
                                   if dict["turn"] == "env" and key.startswith("st_") and value == "TRUE"]
 
-    last_cs_state = counterstrategy_states_con[len(counterstrategy_states_con) - 1]
+    last_cs_state = counterstrategy_states_con[-1]
     if last_cs_state in counterstrategy_states_con[:-1]:
         indices_of_visits = [i for i, x in enumerate(counterstrategy_states_con) if x == last_cs_state]
-        corresponding_ce_state = [ce[(3 * i)] for i in (indices_of_visits)] #
+        corresponding_ce_state = [ce[i] for i in range((3*min(*indices_of_visits)) + 1, (3*max(*indices_of_visits)) + 1)] #
         var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
                            for i in range(0, len(corresponding_ce_state) - 1)]
         var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in var_differences]
@@ -241,7 +241,7 @@ def use_liveness_refinement_state(ce: [dict], symbol_table):
         if any([x for xs in var_differences for x in xs if
                 re.match("(int(eger)?|nat(ural)?|real)", symbol_table[x].type)]):
 
-            if not len(indices_of_visits) > 0:
+            if len(indices_of_visits) == 0:
                 raise Exception("Something weird here.")
 
             first_index = indices_of_visits[0]
@@ -273,9 +273,9 @@ def use_liveness_refinement_trans(ce: [dict], symbol_table):
 
     last_trans = counterstrategy_trans_con[-1]
     if any(x for x in last_trans if any(y for y in counterstrategy_trans_con[:-1] if x in y)):
-        indices_of_prev_visits = [i for i, x in enumerate(counterstrategy_trans_con) if
+        indices_of_visits = [i for i, x in enumerate(counterstrategy_trans_con) if
                                   any(i for i in last_trans if i in x)]
-        corresponding_ce_state = [ce[(i)] for i in (indices_of_prev_visits)]
+        corresponding_ce_state = [ce[i] for i in range((3*min(*indices_of_visits)) + 1, (3*max(*indices_of_visits)) + 1)] #
         var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
                            for i in range(0, len(corresponding_ce_state) - 1)]
         var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in var_differences]
@@ -283,10 +283,10 @@ def use_liveness_refinement_trans(ce: [dict], symbol_table):
         if any([x for xs in var_differences for x in xs if
                 re.match("(int(eger)?|nat(ural)?|real)", symbol_table[x].type)]):
 
-            if not len(indices_of_prev_visits) > 0:
+            if len(indices_of_visits) == 0:
                 raise Exception("Something weird here.")
 
-            first_index = indices_of_prev_visits[0]
+            first_index = indices_of_visits[0]
 
             return True, first_index
         else:
@@ -313,6 +313,18 @@ def use_liveness_refinement(ce: [dict], program, symbol_table):
     if yes:
         ce_prog_loop_trans = prog_transition_indices_and_state_from_ce(ce[first_index + 1:])
         ce_prog_loop_tran_concretised = concretize_transitions(program, ce_prog_loop_trans)
+
+        # # sanity check
+        # trans_with_actions = [tuple[0]
+        #                       for ts in ce_prog_loop_tran_concretised[:-1] # last transition is just used for the exit condition
+        #                       for tuple in ts for act in tuple[0].action
+        #                       if act.left != act.right
+        #                       and symbol_table[str(act.left)].type != "boolean"
+        #                       and symbol_table[str(act.left)].type != "bool"]
+        # if 0 == len(trans_with_actions):
+        #     print("INFO: There was a loop in counterstrategy, but did not attempt liveness refinement because the "
+        #           "corresponding monitor transitions do not affect non-boolean variables.")
+        #     return False, None, None
 
         if first_index != 0:
             ce_prog_init_trans = prog_transition_indices_and_state_from_ce(ce[0:first_index + 1])
