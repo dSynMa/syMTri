@@ -213,8 +213,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             if eager or not use_liveness:
                 new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program)
                 print(", ".join([str(p) for p in new_preds]))
-                if new_preds == []:
-                    e =  Exception("No new state predicates identified.")
+                if len(new_preds) == 0:
+                    e =  Exception("No state predicates identified.")
                     check_for_nondeterminism_last_step(ce, program, True, e)
                     raise e
 
