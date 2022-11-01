@@ -161,12 +161,12 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             else:
                 con_trans, con_state = monitor_actually_took[0]
                 env_trans, env_state = monitor_actually_took[1]
-                all_with_matching_con_trans = [i for i in range(len(last_desired_env_con_env_trans)) if last_desired_env_con_env_trans[i][0] == con_trans]
-                if all_with_matching_con_trans == []:
+                all_with_matching_con_trans = [i for i in range(len(last_desired_env_con_env_trans)) for t in last_desired_env_con_env_trans[i][0] if t == con_trans]
+                if len(all_with_matching_con_trans) == 0:
                     monitor_actually_took = monitor_actually_took[:-1]
                     disagreed_on_transitions += ([t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in last_desired_env_con_env_trans[i][0]], con_state)
                 else:
-                    agreed_on_transitions += [monitor_actually_took[0]]
+                    agreed_on_transitions += [[monitor_actually_took[0]]]
                     monitor_actually_took = monitor_actually_took[1:]
                     disagreed_on_transitions += ([t.with_condition(t.condition) for i in all_with_matching_con_trans for t in last_desired_env_con_env_trans[i][1]], env_state)
 
