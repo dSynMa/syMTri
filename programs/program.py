@@ -5,6 +5,7 @@ from graphviz import Digraph
 from programs.analysis.nuxmv_model import NuXmvModel
 from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
+from programs.util import stutter_transition
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
@@ -210,13 +211,15 @@ class Program:
                                                                          [t.tgt, t.src]])
         for s in self.states:
             env_from_s = [t for t in self.env_transitions if t.src == s]
-            conds_env = [t.condition for t in env_from_s]
-            env_from_s += [Transition(s, neg(disjunct_formula_set(conds_env)), self.complete_action_set([]), [], s)]
+            env_stutter_from_s = stutter_transition(self, s, True)
+            if env_stutter_from_s != None:
+                env_from_s += [env_stutter_from_s]
             complete_env += env_from_s
 
             con_from_s = [t for t in self.con_transitions if t.src == s]
-            conds_con = [t.condition for t in con_from_s]
-            con_from_s += [Transition(s, neg(disjunct_formula_set(conds_con)), self.complete_action_set([]), [], s)]
+            con_stutter_from_s = stutter_transition(self, s, False)
+            if con_stutter_from_s != None:
+                con_from_s += [con_stutter_from_s]
             complete_con += con_from_s
 
         return complete_env, complete_con
