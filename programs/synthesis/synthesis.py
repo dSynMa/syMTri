@@ -157,9 +157,9 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             if len(monitor_actually_took) == 1:
                 (tran, state) = monitor_actually_took[0]
                 if tran in program.con_transitions:
-                    disagreed_on_transitions += ([t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in last_desired_env_con_env_trans[i][0]], state)
+                    disagreed_on_transitions += (list(set(t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in last_desired_env_con_env_trans[i][0])), state)
                 elif tran in program.env_transitions:
-                    disagreed_on_transitions += ([t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in last_desired_env_con_env_trans[i][1]], state)
+                    disagreed_on_transitions += (list(set(t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in last_desired_env_con_env_trans[i][1])), state)
                 else:
                     raise Exception("I don't know what kind of transition this is: " + str(tran))
             else:
@@ -168,11 +168,11 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 all_with_matching_con_trans = [i for i in range(len(last_desired_env_con_env_trans)) for t in last_desired_env_con_env_trans[i][0] if t == con_trans]
                 if len(all_with_matching_con_trans) == 0:
                     monitor_actually_took = monitor_actually_took[:-1]
-                    disagreed_on_transitions += ([t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in last_desired_env_con_env_trans[i][0]], con_state)
+                    disagreed_on_transitions += (list(set([t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in last_desired_env_con_env_trans[i][0]])), con_state)
                 else:
                     agreed_on_transitions += [[monitor_actually_took[0]]]
                     monitor_actually_took = monitor_actually_took[1:]
-                    disagreed_on_transitions += ([t.with_condition(t.condition) for i in all_with_matching_con_trans for t in last_desired_env_con_env_trans[i][1]], env_state)
+                    disagreed_on_transitions += (list(set([t.with_condition(t.condition) for i in all_with_matching_con_trans for t in last_desired_env_con_env_trans[i][1]])), env_state)
 
 
             write_counterexample(program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
