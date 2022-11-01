@@ -112,13 +112,14 @@ class MealyMachine:
 
         init_cond = disjunct_formula_set(init_conds)
 
-        guards = []
-        acts = []
+        guards_acts = {}
 
         for src in self.con_transitions.keys():
             for (con_behaviour, con_tgt) in self.con_transitions[src]:
                 guard = str(src) + " & " \
                         + str(con_behaviour.to_nuxmv())
+                if guard not in guards_acts.keys():
+                    guards_acts[guard] = list()
 
                 if len(self.env_transitions.get(con_tgt)) == 0:
                     raise Exception("Nothing to do in counter-strategy from state " + str(con_tgt))
@@ -126,16 +127,16 @@ class MealyMachine:
                 for (env_beh, env_tgt) in self.env_transitions.get(con_tgt):
                     act = conjunct_formula_set([UniOp("next", env_beh.replace(new_mon_events)),
                                                 UniOp("next", Variable(env_tgt))])
-                    guards.append(guard)
-                    acts.append(str(act))
+                    guards_acts[guard].append(act)
 
         define = []
         transitions = []
         guard_ids = []
         i = 0
-        while i < len(guards):
-            define += [self.name + "_guard_" + str(i) + " := " + guards[i]]
-            define += [self.name + "_act_" + str(i) + " := " + acts[i]]
+        guard_keys = list(guards_acts.keys())
+        while i < len(guard_keys):
+            define += [self.name + "_guard_" + str(i) + " := " + guard_keys[i]]
+            define += [self.name + "_act_" + str(i) + " := " + str(disjunct_formula_set(guards_acts[guard_keys[i]]))]
             transitions.append(self.name + "_guard_" + str(i) + " & " + self.name + "_act_" + str(i))
             guard_ids.append(self.name + "_guard_" + str(i))
             i += 1
