@@ -102,14 +102,8 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
     disagreed_on_transition = disagreed_on[0]
     disagreed_on_state = disagreed_on[1]
     projected_condition = disagreed_on_transition.condition.replace(ith_vars(len(concurring_transitions)))
-    grounded_condition = ground_formula_on_ce_state_with_index(projected_condition,
-                                                               project_ce_state_onto_ev(disagreed_on_state,
-                                                                                        program.env_events
-                                                                                        + program.con_events),
-                                                               len(concurring_transitions))
-    neg_part_B += [grounded_condition]
 
-    B_to_dnf = dnf(neg(conjunct_formula_set(neg_part_B)))
+    B_to_dnf = dnf(neg(projected_condition))
     if isinstance(B_to_dnf, BiOp):
         Bs = B_to_dnf.sub_formulas_up_to_associativity()
     else:
@@ -118,7 +112,13 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
     Cs = set()
 
     for BB in Bs:
-        path_formula_B = conjunct_formula_set(path_formula_set_B + [BB])
+        grounded_condition = ground_formula_on_ce_state_with_index(BB,
+                                                                   project_ce_state_onto_ev(disagreed_on_state,
+                                                                                            program.env_events
+                                                                                            + program.con_events),
+                                                                   len(concurring_transitions))
+
+        path_formula_B = conjunct_formula_set(path_formula_set_B + [grounded_condition])
 
         A = And(*conjunct(init_prop, path_formula_A).to_smt(new_symbol_table))
         B = And(*path_formula_B.to_smt(new_symbol_table))
