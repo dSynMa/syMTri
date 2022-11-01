@@ -102,6 +102,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         mealy = mm.to_nuXmv_with_turns(program.states, program.out_events, state_predicates, transition_predicates)
 
+        print("Strix thinks the current abstract problem is: " + ("realisable" if real else "unrealisable") + "! I will check..")
         print(mm.to_dot(pred_list))
 
         symbol_table_preds = {str(label_pred(v, pred_list)):TypedValuation(str(label_pred(v, pred_list)), "bool", true()) for v in pred_list}
@@ -115,6 +116,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                             ("controller" if real else "counterstrategy") + ", but nuxmv thinks it is non consistent with the monitor.")
 
         if not there_is_mismatch:
+            print("No mismatch found between " + ("strategy" if real else "counterstrategy") + " and program.")
+            print("Computing projection of controller onto predicate abstraction..")
             controller_projected_on_program = mm.project_controller_on_program(program, abstract_program,
                                                                                state_predicates,
                                                                                transition_predicates,
