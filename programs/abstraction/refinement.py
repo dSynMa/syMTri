@@ -315,7 +315,7 @@ def use_liveness_refinement(ce: [dict], program, symbol_table):
         ce_prog_loop_tran_concretised = concretize_transitions(program, ce_prog_loop_trans)
 
         if first_index != 0:
-            ce_prog_init_trans = prog_transition_indices_and_state_from_ce(ce[0:first_index])
+            ce_prog_init_trans = prog_transition_indices_and_state_from_ce(ce[0:first_index + 1])
             ce_prog_init_trans_concretised = concretize_transitions(program, ce_prog_init_trans)
             entry_predicate = disjunct_formula_set(
                                     interpolation(program,
