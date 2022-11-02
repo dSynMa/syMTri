@@ -136,7 +136,7 @@ class MealyMachine:
         guard_keys = list(guards_acts.keys())
         while i < len(guard_keys):
             define += [self.name + "_guard_" + str(i) + " := " + guard_keys[i]]
-            define += [self.name + "_act_" + str(i) + " := " + str(disjunct_formula_set(guards_acts[guard_keys[i]]))]
+            define += [self.name + "_act_" + str(i) + " := (" + ")\n\t| \t(".join(map(str, guards_acts[guard_keys[i]])) + ")"]
             transitions.append(self.name + "_guard_" + str(i) + " & " + self.name + "_act_" + str(i))
             guard_ids.append(self.name + "_guard_" + str(i))
             i += 1
