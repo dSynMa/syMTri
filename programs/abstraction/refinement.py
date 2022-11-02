@@ -192,7 +192,7 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
             elif string_to_prop(cond_simpl).simplify().is_true():
                 choices += ["\t" + acts]
         else:
-            choices += ["\tif(" + cond_simpl + ") {" + acts + "}\n\t else break;"]
+            choices += ["\tif(" + cond_simpl + ") {" + acts + "}\n\t\t else break;"]
         choices += ["\tif(!(" + safety + ")) break;"]
 
     exit_cond_simplified = str(exit_cond.simplify())\
@@ -205,8 +205,8 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
                                        .replace(" | ", " || ")
 
     #TODO check for satisfiability instead of equality of with true
-    choices = ["\n\t\tif(!(" + exit_cond_var_constraints + ")) break;" if exit_cond_var_constraints.lower() != "true" else ""] + choices
-    choices = ["\n\t\tif(" + exit_cond_simplified + ") break;" if exit_cond_simplified.lower() != "true" else ""] + choices
+    choices = ["\tif(!(" + exit_cond_var_constraints + ")) break;" if exit_cond_var_constraints.lower() != "true" else ""] + choices
+    choices = ["\tif(" + exit_cond_simplified + ") break;" if exit_cond_simplified.lower() != "true" else ""] + choices
 
     loop_code = "\n\tdo{\n\t" \
                 + "\n\t".join(choices) \
@@ -215,7 +215,7 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
     loop_code = "\n\tif(" + str(entry_predicate.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ", " || ") \
                 + "){" + loop_code + "\n\t}"
 
-    c_code = "#include<stdbool.h>\n\nvoid main(" + param_list + "){\n\t" + "\n\t".join(init) + loop_code + "\n}"
+    c_code = "#include<stdbool.h>\n\nvoid main(" + param_list + "){\n\t" + "\n\t".join(init).strip() + loop_code + "\n}"
     c_code = c_code.replace("TRUE", "true")
     c_code = c_code.replace("True", "true")
     c_code = c_code.replace("FALSE", "false")
