@@ -102,7 +102,6 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         mealy = mm.to_nuXmv_with_turns(program.states, program.out_events, state_predicates, transition_predicates)
 
-        print("Strix thinks the current abstract problem is: " + ("realisable" if real else "unrealisable") + "! I will check..")
         print(mm.to_dot(pred_list))
 
         symbol_table_preds = {str(label_pred(v, pred_list)):TypedValuation(str(label_pred(v, pred_list)), "bool", true()) for v in pred_list}
@@ -177,7 +176,12 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
             write_counterexample(program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
 
-            use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(ce, program, symbol_table)
+            try:
+                use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(ce, program, symbol_table)
+            except Exception as e:
+                print("WARNING: " + str(e))
+                print("I will try to use safety instead.")
+                use_liveness = False
 
             if use_liveness:
                 try:
@@ -220,6 +224,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 if len(new_preds) == 0:
                     e =  Exception("No state predicates identified.")
                     check_for_nondeterminism_last_step(ce, program, True, e)
+                    new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table,
+                                                  program)
                     raise e
 
 
@@ -233,7 +239,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 if str(v).endswith("prev")}) # TODO symbol_table needs to be updated with prevs
 
                 if len(new_all_preds) == len(state_predicates):
-                    e =  Exception(
+                    e = Exception(
                         "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
                                                                                             "previous predicates."
                    )
