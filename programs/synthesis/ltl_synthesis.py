@@ -55,9 +55,11 @@ def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variab
             output: str = so[1]
 
             if "UNREALIZABLE" in output:
+                print("INFO: Strix thinks the current abstract problem is unrealisable! I will check..")
                 mon = parse_hoa(output)
                 return False, mon
             elif "REALIZABLE" in output:
+                print("INFO: Strix thinks the current abstract problem is realisable! I will check..")
                 try:
                     mon = parse_hoa(output)
                     return True, mon
