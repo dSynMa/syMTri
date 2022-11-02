@@ -97,8 +97,6 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
                                     act.right.replace(ith_vars(i))) for act in
                                program.complete_action_set(concurring_transitions[i][0].action)]
 
-    neg_part_B = []
-
     disagreed_on_transition = disagreed_on[0]
     disagreed_on_state = disagreed_on[1]
     projected_condition = disagreed_on_transition.condition.replace(ith_vars(len(concurring_transitions)))
