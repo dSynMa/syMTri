@@ -105,7 +105,7 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
     projected_condition = disagreed_on_transition.condition.replace(ith_vars(len(concurring_transitions)))
 
     B_to_dnf = dnf(neg(projected_condition))
-    if isinstance(B_to_dnf, BiOp):
+    if isinstance(B_to_dnf, BiOp) and re.match("\|+", B_to_dnf.op):
         Bs = B_to_dnf.sub_formulas_up_to_associativity()
     else:
         Bs = [B_to_dnf]
