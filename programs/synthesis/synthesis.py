@@ -133,7 +133,9 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                         break
 
                 if not ok:
-                    print(
+                    print(controller_projected_on_program.to_dot())
+
+                    raise Exception(
                         "Warning: Model checking says counterstrategy is fine, but something has gone wrong with projection "
                         "onto the predicate abstraction, and I have no idea why. "
                         "The " + ("controller" if real else "counterstrategy") + " has no outgoing transition from this monitor state: "
