@@ -18,11 +18,8 @@ class Test(TestCase):
         with open('../examples/parallel/arbiter/program2.prog') as program_file:
             program = string_to_program(program_file.read())
             tlsf_file = '../examples/parallel/arbiter/controller.tlsf'
-            try:
-                (real, mm) = synthesize(program, None, tlsf_file, True)
-                self.fail()
-            except Exception as e:
-                self.assertTrue("Nondeterminism" in str(e))
+            (real, mm) = synthesize(program, None, tlsf_file, True)
+            self.assertTrue(real)
 
     def test_synthesize_3(self):
         with open('../examples/parallel/arbiter1/program.prog') as program_file:
