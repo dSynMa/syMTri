@@ -175,6 +175,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
 
             write_counterexample(program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
+            check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, False, None)
 
             try:
                 use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(ce, program, symbol_table)
@@ -222,10 +223,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program)
                 print("Found: " + ", ".join([str(p) for p in new_preds]))
                 if len(new_preds) == 0:
-                    e =  Exception("No state predicates identified.")
-                    check_for_nondeterminism_last_step(ce, program, True, e)
-                    new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table,
-                                                  program)
+                    e = Exception("No state predicates identified.")
+                    check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, True, e)
                     raise e
 
 
@@ -243,7 +242,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                         "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
                                                                                             "previous predicates."
                    )
-                    check_for_nondeterminism_last_step(ce, program, True, e)
+                    check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, True, e)
                     raise e
 
                 if keep_only_bool_interpolants:

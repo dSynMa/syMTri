@@ -126,12 +126,11 @@ def ce_state_to_predicate_abstraction_trans(ltl_to_program_transitions, symbol_t
     return []
 
 
-def check_for_nondeterminism_last_step(ce, program, raise_exception : bool, exception):
+def check_for_nondeterminism_last_step(state_before_mismatch, program, raise_exception : bool, exception):
     transitions = program.env_transitions + program.con_transitions
 
-    before_mon_trans = ce[-2]
     guards = []
-    for (key, value) in before_mon_trans.items():
+    for (key, value) in state_before_mismatch.items():
         if key.startswith("guard_") and value == "TRUE":
             guards.append(transitions[int(key.replace("guard_", ""))])
 
