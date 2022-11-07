@@ -91,11 +91,14 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
     path_formula_A = conjunct_formula_set(path_formula_set_A)
 
     path_formula_set_B = []
-    for i in range(cut_point, len(concurring_transitions)):
+    upper_bound = len(concurring_transitions)
+    i = cut_point
+    while i < upper_bound:
         path_formula_set_B += [BiOp(Variable(act.left.name + "_" + str(i + 1)),
                                     "=",
                                     act.right.replace(ith_vars(i))) for act in
                                program.complete_action_set(concurring_transitions[i][0].action)]
+        i += 1
 
     disagreed_on_transition = disagreed_on[0]
     disagreed_on_state = disagreed_on[1]
