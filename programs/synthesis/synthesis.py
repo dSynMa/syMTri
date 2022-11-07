@@ -243,6 +243,13 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                                                                             "previous predicates."
                    )
                     check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, True, e)
+                    print("For debugging:\nComputing projection of controller onto predicate abstraction..")
+                    controller_projected_on_program = mm.project_controller_on_program(program, abstract_program,
+                                                                                       state_predicates,
+                                                                                       transition_predicates,
+                                                                                       symbol_table | symbol_table_preds)
+
+                    print(controller_projected_on_program.to_dot())
                     raise e
 
                 if keep_only_bool_interpolants:
