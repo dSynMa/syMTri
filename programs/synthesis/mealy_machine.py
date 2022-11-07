@@ -41,11 +41,11 @@ class MealyMachine:
             if new_src not in self.env_transitions.keys():
                 self.env_transitions[new_src] = set()
 
-            if (con_cond, new_tgt) in interm_states.keys():
-                 new_intermed = interm_states.get((con_cond, new_tgt))
+            if (env_cond, new_src) in interm_states.keys():
+                 new_intermed = interm_states.get((env_cond, new_src))
             else:
                 new_intermed = "st__" + str(int_st_index)
-                interm_states[(con_cond, new_tgt)] = new_intermed
+                interm_states[(env_cond, new_src)] = new_intermed
                 int_st_index += 1
                 self.con_transitions[new_intermed] = set()
 
