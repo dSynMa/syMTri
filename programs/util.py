@@ -511,17 +511,18 @@ def concretize_transitions(program, indices_and_state_list):
 
 
 def ground_transitions_and_flatten(program, transitions_and_state_list):
+    return ground_transitions(program, [(t,s) for ts in transitions_and_state_list for t, s in ts])
+
+
+def ground_transitions(program, transition_and_state_list):
     grounded = []
-    for transition_st_list in transitions_and_state_list:
-        used_transitions_grounded = []
-        for transition, st in transition_st_list:
-            projected_condition = ground_predicate_on_bool_vars(program, transition.condition, st)
-            used_transitions_grounded += [Transition(transition.src,
-                                                     projected_condition,
-                                                     transition.action,
-                                                     transition.output,
-                                                     transition.tgt)]
-        grounded += used_transitions_grounded
+    for (t,st) in transition_and_state_list:
+        projected_condition = ground_predicate_on_bool_vars(program, t.condition, st)
+        grounded += [Transition(t.src,
+                                projected_condition,
+                                t.action,
+                                t.output,
+                                t.tgt)]
     return grounded
 
 
