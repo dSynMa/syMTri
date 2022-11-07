@@ -12,8 +12,8 @@ from programs.util import symbol_table_from_program, create_nuxmv_model_for_comp
     there_is_mismatch_between_monitor_and_strategy, \
     parse_nuxmv_ce_output_finite, reduce_up_to_iff, \
     add_prev_suffix, label_pred, ground_predicate_on_bool_vars, \
-    concretize_transitions, ground_transitions_and_flatten, ce_state_to_predicate_abstraction_trans, \
-    check_for_nondeterminism_last_step
+    concretize_transitions, ce_state_to_predicate_abstraction_trans, \
+    check_for_nondeterminism_last_step, ground_transitions
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from parsing.string_to_ltl import string_to_ltl
