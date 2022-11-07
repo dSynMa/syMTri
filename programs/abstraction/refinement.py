@@ -224,27 +224,21 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
     return c_code
 
 
-def use_liveness_refinement_state(ce: [dict], symbol_table):
-    counterstrategy_states_con = [key for dict in ce for key, value in dict.items()
-                                  if dict["turn"] == "env" and key.startswith("st_") and value == "TRUE"]
-
-    last_cs_state = counterstrategy_states_con[-1]
-    if last_cs_state in counterstrategy_states_con[:-1]:
-        indices_of_visits = [i for i, x in enumerate(counterstrategy_states_con) if x == last_cs_state]
-        corresponding_ce_state = [ce[i] for i in range((3*min(*indices_of_visits)) + 1, (3*max(*indices_of_visits)) + 1)] #
+def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, symbol_table):
+    previous_visits = [i for i, dict in enumerate(env_con_ce[:-1]) for key, value in dict.items()
+                                  if i != 0 and key == last_cs_state and value == "TRUE"]
+    if len(previous_visits) > 0:
+        corresponding_ce_state = [env_con_ce[i] for i in range(previous_visits[0], len(env_con_ce))]
         var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
                            for i in range(0, len(corresponding_ce_state) - 1)]
         var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in var_differences]
         var_differences = [[v for v in vs if v in symbol_table.keys()] for vs in var_differences]
-        if any([x for xs in var_differences for x in xs if
-                re.match("(int(eger)?|nat(ural)?|real)", symbol_table[x].type)]):
+        var_differences = [[] != [v for v in vs if
+                re.match("(int(eger)?|nat(ural)?|real|rational)", symbol_table[v].type)] for vs in var_differences]
+        if True in var_differences:
+            index_of_last_loop_entry = len(var_differences) - 1 - var_differences[::-1].index(True)
 
-            if len(indices_of_visits) == 0:
-                raise Exception("Something weird here.")
-
-            first_index = indices_of_visits[0]
-
-            return True, first_index
+            return True, previous_visits[index_of_last_loop_entry]
         else:
             return False, None
     else:
@@ -293,24 +287,18 @@ def use_liveness_refinement_trans(ce: [dict], symbol_table):
         return False, None
 
 
-def use_liveness_refinement(ce: [dict], program, symbol_table):
-    assert len(ce) > 0
-
+def use_liveness_refinement(program, agreed_on_transitions, disagreed_on_transitions, last_counterstrategy_state, symbol_table):
     yes = False
+    mon_transitions = [(y, st) for xs in agreed_on_transitions for y, st in xs]
+    ce = [x for xs in agreed_on_transitions for _, x in xs] + [disagreed_on_transitions[1]]
 
-    yes_state, first_index_state = use_liveness_refinement_state(ce, symbol_table)
+    yes_state, first_index_state = use_liveness_refinement_state(ce, last_counterstrategy_state, symbol_table)
     if yes_state:
         yes = True
         first_index = first_index_state
-    else:
-        yes_trans, first_index_trans = use_liveness_refinement_trans(ce, symbol_table)
-        if yes_trans:
-            yes = True
-            first_index = first_index_trans
 
     if yes:
-        ce_prog_loop_trans = prog_transition_indices_and_state_from_ce(ce[first_index + 1:])
-        ce_prog_loop_tran_concretised = concretize_transitions(program, ce_prog_loop_trans)
+        ce_prog_loop_tran_concretised = mon_transitions[first_index:]
 
         # # sanity check
         # trans_with_actions = [tuple[0]
@@ -324,18 +312,19 @@ def use_liveness_refinement(ce: [dict], program, symbol_table):
         #           "corresponding monitor transitions do not affect non-boolean variables.")
         #     return False, None, None
 
-        if first_index != 0:
-            ce_prog_init_trans = prog_transition_indices_and_state_from_ce(ce[0:first_index + 1])
-            ce_prog_init_trans_concretised = concretize_transitions(program, ce_prog_init_trans)
-            entry_predicate = disjunct_formula_set(
+        ce_prog_init_trans_concretised = mon_transitions[0:first_index]
+
+        last_trans = disagreed_on_transitions[0][0].with_condition(neg(disjunct_formula_set([t.condition for t in disagreed_on_transitions[0]])))
+
+        if len(ce_prog_init_trans_concretised) > 0:
+            entry_predicate = conjunct_formula_set(
                                     interpolation(program,
-                                            [x for xs in ce_prog_init_trans_concretised for x in xs]
-                                            + [x for xs in ce_prog_loop_tran_concretised[:-1] for x in xs],
-                                            ce_prog_loop_tran_concretised[len(ce_prog_loop_tran_concretised) - 1][0],
-                                            first_index,
-                                            symbol_table))
+                                            ce_prog_init_trans_concretised + ce_prog_loop_tran_concretised,
+                                                  (last_trans, disagreed_on_transitions[1]),
+                                                  len(ce_prog_init_trans_concretised),
+                                                  symbol_table))
         else:
-            entry_predicate = true()
+            entry_predicate = conjunct_formula_set([BiOp(Variable(tv.name), "=", Value(tv.value)) for tv in program.valuation])
 
         if entry_predicate == None:
             raise Exception("Something weird here. Entry predicate to loop is None.")
