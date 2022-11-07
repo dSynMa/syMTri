@@ -190,7 +190,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
             if use_liveness:
                 try:
-                    ranking, invars = liveness_step(program, counterexample_loop, symbol_table, entry_predicate)
+                    ranking, invars = liveness_step(program, counterexample_loop, symbol_table, entry_predicate, monitor_actually_took[0])
 
                     rankings.append((ranking, invars))
                     new_transition_predicates = [x for r, _ in rankings for x in
@@ -267,20 +267,19 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 state_predicates = list(new_all_preds)
 
 
-def liveness_step(program, counterexample_loop, symbol_table, entry_predicate):
+def liveness_step(program, counterexample_loop, symbol_table, entry_predicate, exit_transition):
     # ground transitions in the counterexample loop
     # on the environment and controller events in the counterexample
-    loop_before_exit = ground_transitions_and_flatten(program, counterexample_loop[:-1])
-    exit_transitions = ground_transitions_and_flatten(program, [counterexample_loop[-1]])
+    loop_before_exit = ground_transitions(program, counterexample_loop)
 
-    entry_predicate_grounded = ground_predicate_on_bool_vars(program, entry_predicate,
-                                                             counterexample_loop[0][-1][1]).simplify()
+    entry_predicate_grounded = ground_predicate_on_bool_vars(program, entry_predicate, counterexample_loop[0][1]).simplify()
+    exit_predicate_grounded = ground_predicate_on_bool_vars(program, exit_transition[0].condition, exit_transition[1]).simplify()
 
     ranking, invars = liveness_refinement(symbol_table,
                                           program,
                                           entry_predicate_grounded,
                                           loop_before_exit,
-                                          exit_transitions)
+                                          exit_predicate_grounded)
     if len(invars) > 0:
         raise NotImplementedError(
             "Ranking function comes with invar, what shall we do here? " + ranking + "\n" + ", ".join(
