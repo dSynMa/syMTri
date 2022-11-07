@@ -112,7 +112,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         if contradictory:
             raise Exception("I have no idea what's gone wrong. Strix thinks the previous mealy machine is a " +
-                            ("controller" if real else "counterstrategy") + ", but nuxmv thinks it is non consistent with the monitor.")
+                            ("controller" if real else "counterstrategy") + ", but nuxmv thinks it is non consistent with the monitor.\n"
+                                                                            "This may be a problem with nuXmv, e.g., it does not seem to play well with integer division.")
 
         if not there_is_mismatch:
             print("No mismatch found between " + ("strategy" if real else "counterstrategy") + " and program.")
