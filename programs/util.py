@@ -25,7 +25,7 @@ smt_checker = SMTChecker()
 def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmvModel, mon_events,
                                                   pred_list, include_mismatches_due_to_nondeterminism: bool):
 
-    program_model = program.to_nuXmv_with_turns(include_mismatches_due_to_nondeterminism)
+    program_model = program.to_nuXmv_with_turns(include_mismatches_due_to_nondeterminism, True)
 
     text = "MODULE main\n"
     vars = sorted(program_model.vars) \
@@ -134,7 +134,7 @@ def check_for_nondeterminism_last_step(state_before_mismatch, program, raise_exc
 
     guards = []
     for (key, value) in state_before_mismatch.items():
-        if key.startswith("guard_") and value == "TRUE":
+        if key.startswith("guard_") and value == "TRUE" and len(transitions) != int(key.replace("guard_", "")):
             guards.append(transitions[int(key.replace("guard_", ""))])
 
     if len(guards) > 1:
@@ -149,13 +149,13 @@ def check_for_nondeterminism_last_step(state_before_mismatch, program, raise_exc
         else:
             print("WARNING: " + message)
 
-def parse_nuxmv_ce_output_finite(out: str):
+def parse_nuxmv_ce_output_finite(transition_no, out: str):
     prefix, _ = get_ce_from_nuxmv_output(out)
 
-    return prefix, prog_transition_indices_and_state_from_ce(prefix)
+    return prefix, prog_transition_indices_and_state_from_ce(transition_no, prefix)
 
 
-def prog_transition_indices_and_state_from_ce(prefix):
+def prog_transition_indices_and_state_from_ce(transition_no, prefix):
     monitor_transitions_and_state = []
 
     for dic in prefix:
@@ -164,7 +164,9 @@ def prog_transition_indices_and_state_from_ce(prefix):
             for (key, value) in dic.items():
                 if key.startswith("guard_") and value == "TRUE":
                     if dic[key.replace("guard_", "act_")] == "TRUE":
-                        transition = key.replace("guard_", "")
+                        no = key.replace("guard_", "")
+                        if no != str(transition_no):
+                            transition = no
                         break
             dic_without_prev_vars = {key: value for key, value in dic.items() if not key.endswith("_prev")}
             monitor_transitions_and_state.append((transition, dic_without_prev_vars))

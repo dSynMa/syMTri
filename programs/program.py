@@ -121,7 +121,7 @@ class Program:
 
         return dot
 
-    def to_nuXmv_with_turns(self, include_mismatches_due_to_nondeterminism: bool):
+    def to_nuXmv_with_turns(self, include_mismatches_due_to_nondeterminism: bool, prefer_compatibility: bool):
         guards = []
         acts = []
         for env_transition in self.env_transitions:
@@ -152,14 +152,15 @@ class Program:
             acts.append(act)
 
         define = []
-        transitions = []
+        guard_and_act = []
         guard_ids = []
+
         i = 0
         while i < len(guards):
             define += ["guard_" + str(i) + " := " + guards[i]]
             define += ["act_" + str(i) + " := " + acts[i]]
-            transitions.append("(guard_" + str(i) + " & " + "act_" + str(i) + ")")
             guard_ids.append("guard_" + str(i))
+            guard_and_act.append("(guard_" + str(i) + " & " + "act_" + str(i) + ")")
             i += 1
 
         identity = []
@@ -173,7 +174,20 @@ class Program:
         define += ["identity_" + self.name + " := " + " & ".join(identity)]
 
         # if no guard holds, then keep the same state and output no monitor events
-        transitions.append("(!(" + " | ".join(guard_ids) + ") & identity_" + self.name + ")")
+        guards.append("!(" + " | ".join(guard_ids) + ")")
+        acts.append("identity_" + self.name)
+        define += ["guard_" + str(len(guards) - 1) + " := " + guards[len(guards) - 1]]
+        define += ["act_" + str(len(guards) - 1) + " := " + acts[len(guards) - 1]]
+
+        guard_and_act.append("(guard_" + str(len(guards) - 1) + " & " + "act_" + str(len(guards) - 1) + ")")
+
+        if not prefer_compatibility:
+            transitions = guard_and_act
+        else:
+            guard_act_and_compatible = ["(" + ga + " & (act_" + str(i) + " -> next(compatible)))" for i, ga in enumerate(guard_and_act)]
+            guard_and_not_compatible = ["(guard_" + str(i) + " & (act_" + str(i) + " -> next(compatible)))" for i in range(len(guards))]
+
+            transitions = ["(" + " | ".join(guard_act_and_compatible) + ")"] + ["(!(" + " | ".join(guard_and_not_compatible) + ") & (" + " | ".join(guard_and_act) + "))"]
 
         vars = ["turn : {env, mon, con}"]
         vars += [str(st) + " : boolean" for st in self.states]
