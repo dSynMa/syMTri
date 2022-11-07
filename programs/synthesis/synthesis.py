@@ -203,6 +203,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                         print("No transition predicates identified. So will try safety refinement.")
                         use_liveness = False
 
+                    print("Found: " + ", ".join([str(p) for p in new_transition_predicates]))
+
                     new_all_trans_preds = {x.simplify() for x in new_transition_predicates}
                     new_all_trans_preds = reduce_up_to_iff(transition_predicates, list(new_all_trans_preds),
                                                            symbol_table | symbol_table_prevs)
