@@ -425,18 +425,18 @@ def synthesis_problem_to_TLSF_script(inputs, outputs, assumptions, guarantees):
            "}\n"
 
     main = "MAIN {\n"
-    main += "\tINPUTS { "
-    main += ";\n".join(map(str, inputs))
-    main += " }\n"
-    main += "\tOUTPUTS { "
-    main += ";\n".join(map(str, outputs))
-    main += " }\n"
-    main += "\tASSUMPTIONS { "
-    main += ";\n\n".join(map(str, assumptions))
-    main += " }\n"
-    main += "\tGUARANTEES { "
-    main += ";\n\n".join(map(str, guarantees))
-    main += " }\n"
+    main += "\tINPUTS { \n\t\t"
+    main += ";\n\t\t".join(map(str, inputs))
+    main += "\n\t}\n"
+    main += "\tOUTPUTS { \n\t\t"
+    main += ";\n\t\t".join(map(str, outputs))
+    main += "\n\t}\n"
+    main += "\tASSUMPTIONS {\n\t\t"
+    main += ";\n\n\t\t".join(map(str, assumptions))
+    main += "\n\t}\n"
+    main += "\tGUARANTEES { \n\t\t"
+    main += ";\n\n\t\t".join(map(str, guarantees))
+    main += "\n\t}\n"
     main += "}"
 
     return info + main
