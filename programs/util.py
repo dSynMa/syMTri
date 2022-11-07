@@ -22,8 +22,11 @@ from prop_lang.variable import Variable
 
 smt_checker = SMTChecker()
 
-def create_nuxmv_model_for_compatibility_checking(program_model: NuXmvModel, strategy_model: NuXmvModel, mon_events,
-                                                  pred_list):
+def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmvModel, mon_events,
+                                                  pred_list, include_mismatches_due_to_nondeterminism: bool):
+
+    program_model = program.to_nuXmv_with_turns(include_mismatches_due_to_nondeterminism)
+
     text = "MODULE main\n"
     vars = sorted(program_model.vars) \
            + sorted([v for v in strategy_model.vars
