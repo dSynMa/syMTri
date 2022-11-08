@@ -51,7 +51,7 @@ class BiOp(Formula):
     # without already appearing variables
     def variablesin(self) -> [Variable]:
         vars = self.left.variablesin() + self.right.variablesin()
-        vars_unique = [v for (i,v) in enumerate(vars) if v not in vars[:i]]
+        vars_unique = [v for (i, v) in enumerate(vars) if v not in vars[:i]]
         return vars_unique
 
     def ground(self, context: [TypedValuation]):

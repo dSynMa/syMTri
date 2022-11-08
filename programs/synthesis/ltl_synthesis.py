@@ -5,12 +5,12 @@ from typing import Tuple
 from hoa.ast.boolean_expression import TrueFormula
 from hoa.parsers import HOAParser, HOA
 
+from parsing.hoaparser_label_expression_to_prop_logic import hoaparser_label_expression_to_pl
 from programs.program import Program
 from programs.synthesis.mealy_machine import MealyMachine
 from programs.util import synthesis_problem_to_TLSF_script
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from parsing.hoaparser_label_expression_to_prop_logic import hoaparser_label_expression_to_pl
 from prop_lang.util import true
 from prop_lang.variable import Variable
 
@@ -106,7 +106,7 @@ def parse_hoa(output) -> Program:
     trans = {}
 
     var_labels = [BiOp(Variable(i), ":=", Variable(ap)) for i, ap in
-                                  enumerate(hoa.header.propositions)]
+                  enumerate(hoa.header.propositions)]
 
     for st, edges in hoa.body.state2edges.items():
         for e in edges:

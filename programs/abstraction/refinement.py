@@ -4,22 +4,22 @@ from click._compat import raw_input
 from pysmt.fnode import FNode
 from pysmt.shortcuts import And
 
+from parsing.string_to_prop_logic import string_to_prop, string_to_math_expression
 from programs.analysis.ranker import Ranker
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
 from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_on_ce_state_with_index, \
-    project_ce_state_onto_ev, get_differently_value_vars, prog_transition_indices_and_state_from_ce, \
-    concretize_transitions, transition_up_to_dnf
+    project_ce_state_onto_ev, get_differently_value_vars
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from parsing.string_to_prop_logic import string_to_prop, string_to_math_expression
 from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean, dnf, disjunct_formula_set
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 
-def safety_refinement(ce: [dict], agreed_on_transitions: [[(Transition, dict)]], disagreed_on_transitions: ([Transition], dict), symbol_table, program) -> [FNode]:
+def safety_refinement(ce: [dict], agreed_on_transitions: [[(Transition, dict)]],
+                      disagreed_on_transitions: ([Transition], dict), symbol_table, program) -> [FNode]:
     # we collect interpolants in this set
     Cs = set()
 
@@ -154,19 +154,18 @@ def liveness_refinement(symbol_table, program, entry_predicate, unfolded_loop, e
         exceptions.append(e)
 
 
-
 def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_before_exit: [Transition],
               exit_cond: Formula):
     # params
     params = list(set(symbol_table[str(v)].type + " " + str(v)
-                            for v in {v.name for v in program.valuation} | set(entry_predicate.variablesin())
-                            if
-                            not is_boolean(v, program.valuation) and [str(vv) for t in loop_before_exit for vv in
-                                                                           (t.condition.variablesin()
-                                                                            + entry_predicate.variablesin()
-                                                                            + [act.left for act in t.action]
-                                                                            + [a for act in t.action for a in
-                                                                               act.right.variablesin()])]))
+                      for v in {v.name for v in program.valuation} | set(entry_predicate.variablesin())
+                      if
+                      not is_boolean(v, program.valuation) and [str(vv) for t in loop_before_exit for vv in
+                                                                (t.condition.variablesin()
+                                                                 + entry_predicate.variablesin()
+                                                                 + [act.left for act in t.action]
+                                                                 + [a for act in t.action for a in
+                                                                    act.right.variablesin()])]))
     param_list = ", ".join(params)
     param_list = param_list.replace("integer", "int") \
         .replace("natural", "int") \
@@ -174,17 +173,19 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
         .replace("real", "double")
 
     natural_conditions = [v.split(" ")[1] + " >= 0 " for v in params if
-                                     not v.endswith("_prev") and symbol_table[v.split(" ")[1]].type in ["natural",
-                                                                                          "nat"]]
+                          not v.endswith("_prev") and symbol_table[v.split(" ")[1]].type in ["natural",
+                                                                                             "nat"]]
     init = ["if(!(" + " && ".join(natural_conditions) + ")) return;" if len(natural_conditions) > 0 else ""]
 
     choices = []
 
     for t in loop_before_exit:
-        safety = str(t.condition.simplify().to_smt(symbol_table)[1]).replace(" = ", " == ").replace(" & ", " && ").replace(" | ", " || ")
+        safety = str(t.condition.simplify().to_smt(symbol_table)[1]).replace(" = ", " == ").replace(" & ",
+                                                                                                    " && ").replace(
+            " | ", " || ")
         cond_simpl = str(t.condition.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ", " || ")
         acts = "\n\t\t".join([str(act.left) + " = " + str(act.right) + ";" for act in t.action if
-                                    not is_boolean(act.left, program.valuation)])
+                              not is_boolean(act.left, program.valuation)])
 
         if isinstance(string_to_prop(cond_simpl).simplify(), Value):
             if string_to_prop(cond_simpl).simplify().is_false():
@@ -195,24 +196,26 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
             choices += ["\tif(" + cond_simpl + ") {" + acts + "}\n\t\t else break;"]
         choices += ["\tif(!(" + safety + ")) break;"]
 
-    exit_cond_simplified = str(exit_cond.simplify())\
-                                       .replace(" = ", " == ")\
-                                       .replace(" & ", " && ")\
-                                       .replace(" | ", " || ")
-    exit_cond_var_constraints = str(exit_cond.simplify().to_smt(symbol_table)[1])\
-                                       .replace(" = ", " == ")\
-                                       .replace(" & ", " && ")\
-                                       .replace(" | ", " || ")
+    exit_cond_simplified = str(exit_cond.simplify()) \
+        .replace(" = ", " == ") \
+        .replace(" & ", " && ") \
+        .replace(" | ", " || ")
+    exit_cond_var_constraints = str(exit_cond.simplify().to_smt(symbol_table)[1]) \
+        .replace(" = ", " == ") \
+        .replace(" & ", " && ") \
+        .replace(" | ", " || ")
 
-    #TODO check for satisfiability instead of equality of with true
-    choices = ["\tif(!(" + exit_cond_var_constraints + ")) break;" if exit_cond_var_constraints.lower() != "true" else ""] + choices
+    # TODO check for satisfiability instead of equality of with true
+    choices = [
+                  "\tif(!(" + exit_cond_var_constraints + ")) break;" if exit_cond_var_constraints.lower() != "true" else ""] + choices
     choices = ["\tif(" + exit_cond_simplified + ") break;" if exit_cond_simplified.lower() != "true" else ""] + choices
 
     loop_code = "\n\tdo{\n\t" \
                 + "\n\t".join(choices) \
                 + "\n\t} while(true);\n"
 
-    loop_code = "\n\tif(" + str(entry_predicate.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ", " || ") \
+    loop_code = "\n\tif(" + str(entry_predicate.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ",
+                                                                                                                  " || ") \
                 + "){" + loop_code + "\n\t}"
 
     c_code = "#include<stdbool.h>\n\nvoid main(" + param_list + "){\n\t" + "\n\t".join(init).strip() + loop_code + "\n}"
@@ -226,7 +229,7 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
 
 def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, symbol_table):
     previous_visits = [i for i, dict in enumerate(env_con_ce[:-1]) for key, value in dict.items()
-                                  if i != 0 and key == last_cs_state and value == "TRUE"]
+                       if i != 0 and key == last_cs_state and value == "TRUE"]
     if len(previous_visits) > 0:
         corresponding_ce_state = [env_con_ce[i] for i in range(previous_visits[0], len(env_con_ce))]
         var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
@@ -234,7 +237,8 @@ def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, symbol_tabl
         var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in var_differences]
         var_differences = [[v for v in vs if v in symbol_table.keys()] for vs in var_differences]
         var_differences = [[] != [v for v in vs if
-                re.match("(int(eger)?|nat(ural)?|real|rational)", symbol_table[v].type)] for vs in var_differences]
+                                  re.match("(int(eger)?|nat(ural)?|real|rational)", symbol_table[v].type)] for vs in
+                           var_differences]
         if True in var_differences:
             index_of_last_loop_entry = len(var_differences) - 1 - var_differences[::-1].index(True)
 
@@ -243,6 +247,7 @@ def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, symbol_tabl
             return False, None
     else:
         return False, None
+
 
 def use_liveness_refinement_trans(ce: [dict], symbol_table):
     counterstrategy_trans_con = []
@@ -266,8 +271,9 @@ def use_liveness_refinement_trans(ce: [dict], symbol_table):
     last_trans = counterstrategy_trans_con[-1]
     if any(x for x in last_trans if any(y for y in counterstrategy_trans_con[:-1] if x in y)):
         indices_of_visits = [i for i, x in enumerate(counterstrategy_trans_con) if
-                                  any(i for i in last_trans if i in x)]
-        corresponding_ce_state = [ce[i] for i in range((3*min(*indices_of_visits)) + 1, (3*max(*indices_of_visits)) + 1)] #
+                             any(i for i in last_trans if i in x)]
+        corresponding_ce_state = [ce[i] for i in
+                                  range((3 * min(*indices_of_visits)) + 1, (3 * max(*indices_of_visits)) + 1)]  #
         var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
                            for i in range(0, len(corresponding_ce_state) - 1)]
         var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in var_differences]
@@ -309,22 +315,23 @@ def use_liveness_refinement(program,
         ce_prog_init_trans_concretised = mon_transitions[0:first_index]
 
         if entry_predicate_as_interpolant:
-            last_trans = disagreed_on_transitions[0][0]\
+            last_trans = disagreed_on_transitions[0][0] \
                 .with_condition(
-                    neg(
-                        disjunct_formula_set(
-                            [t.condition for t in disagreed_on_transitions[0]]
-                            + [neg(t[0].condition) for t in monitor_actually_took])))
+                neg(
+                    disjunct_formula_set(
+                        [t.condition for t in disagreed_on_transitions[0]]
+                        + [neg(t[0].condition) for t in monitor_actually_took])))
 
             if len(ce_prog_init_trans_concretised) > 0:
                 entry_predicate = conjunct_formula_set(
-                                        interpolation(program,
-                                                ce_prog_init_trans_concretised + ce_prog_loop_tran_concretised,
-                                                      (last_trans, disagreed_on_transitions[1]),
-                                                      len(ce_prog_init_trans_concretised),
-                                                      symbol_table))
+                    interpolation(program,
+                                  ce_prog_init_trans_concretised + ce_prog_loop_tran_concretised,
+                                  (last_trans, disagreed_on_transitions[1]),
+                                  len(ce_prog_init_trans_concretised),
+                                  symbol_table))
             else:
-                entry_predicate = conjunct_formula_set([BiOp(Variable(tv.name), "=", Value(tv.value)) for tv in program.valuation])
+                entry_predicate = conjunct_formula_set(
+                    [BiOp(Variable(tv.name), "=", Value(tv.value)) for tv in program.valuation])
 
             if entry_predicate == None:
                 raise Exception("Something weird here. Entry predicate to loop is None.")

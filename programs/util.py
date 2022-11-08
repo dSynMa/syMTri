@@ -22,9 +22,9 @@ from prop_lang.variable import Variable
 
 smt_checker = SMTChecker()
 
+
 def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmvModel, mon_events,
                                                   pred_list, include_mismatches_due_to_nondeterminism: bool):
-
     program_model = program.to_nuXmv_with_turns(include_mismatches_due_to_nondeterminism, True)
 
     text = "MODULE main\n"
@@ -129,7 +129,7 @@ def ce_state_to_predicate_abstraction_trans(ltl_to_program_transitions, symbol_t
     return []
 
 
-def check_for_nondeterminism_last_step(state_before_mismatch, program, raise_exception : bool, exception):
+def check_for_nondeterminism_last_step(state_before_mismatch, program, raise_exception: bool, exception):
     transitions = program.env_transitions + program.con_transitions
 
     guards = []
@@ -139,15 +139,16 @@ def check_for_nondeterminism_last_step(state_before_mismatch, program, raise_exc
 
     if len(guards) > 1:
         message = ("Nondeterminism in last step of counterexample; monitor has choice between: \n"
-                        + "\n".join([str(t) for t in guards])
-                        + "\nWe do not handle this yet."
-                        + "\nIf you suspect the problem to be realisabile, "
-                        + "give control to the environment of the transitions (e.g., with a new variable).\n"
-                        + "Otherwise, if you suspect unrealisability, give control of the transitions to the controller.")
+                   + "\n".join([str(t) for t in guards])
+                   + "\nWe do not handle this yet."
+                   + "\nIf you suspect the problem to be realisabile, "
+                   + "give control to the environment of the transitions (e.g., with a new variable).\n"
+                   + "Otherwise, if you suspect unrealisability, give control of the transitions to the controller.")
         if raise_exception:
             raise Exception(message) from exception
         else:
             print("WARNING: " + message)
+
 
 def parse_nuxmv_ce_output_finite(transition_no, out: str):
     prefix, _ = get_ce_from_nuxmv_output(out)
@@ -361,7 +362,8 @@ def label_preds(ps, preds):
     return {label_pred(p, preds) for p in ps}
 
 
-def there_is_mismatch_between_monitor_and_strategy(system, controller : bool, livenesstosafety: bool, ltl_assumptions: Formula,
+def there_is_mismatch_between_monitor_and_strategy(system, controller: bool, livenesstosafety: bool,
+                                                   ltl_assumptions: Formula,
                                                    ltl_guarantees: Formula):
     print(system)
     model_checker = ModelChecker()
@@ -458,7 +460,7 @@ def stutter_transitions(program, env: bool):
 def stutter_transition(program, state, env: bool):
     transitions = program.env_transitions if env else program.con_transitions
     condition = conjunct_formula_set([neg(t.condition)
-                                            for t in transitions if t.src == state])
+                                      for t in transitions if t.src == state])
 
     if smt_checker.check(And(*condition.to_smt(symbol_table_from_program(program)))):
         return Transition(state,
@@ -526,12 +528,12 @@ def concretize_transitions(program, indices_and_state_list):
 
 
 def ground_transitions_and_flatten(program, transitions_and_state_list):
-    return ground_transitions(program, [(t,s) for ts in transitions_and_state_list for t, s in ts])
+    return ground_transitions(program, [(t, s) for ts in transitions_and_state_list for t, s in ts])
 
 
 def ground_transitions(program, transition_and_state_list):
     grounded = []
-    for (t,st) in transition_and_state_list:
+    for (t, st) in transition_and_state_list:
         projected_condition = ground_predicate_on_bool_vars(program, t.condition, st)
         grounded += [Transition(t.src,
                                 projected_condition,
@@ -562,11 +564,12 @@ def transition_up_to_dnf(transition: Transition):
         return [transition]
     else:
         conds = dnf_condition.sub_formulas_up_to_associativity()
-        return [Transition(transition.src, cond, transition.action, transition.output, transition.tgt) for cond in conds]
+        return [Transition(transition.src, cond, transition.action, transition.output, transition.tgt) for cond in
+                conds]
 
 
 def check_determinism(program):
-    env_state_dict = {s:[t.condition for t in program.env_transitions if t.src == s] for s in program.states}
+    env_state_dict = {s: [t.condition for t in program.env_transitions if t.src == s] for s in program.states}
 
     symbol_table = symbol_table_from_program(program)
 
@@ -577,11 +580,12 @@ def check_determinism(program):
                 print("WARNING: " + str(cond) + " is not satisfiable, see transitions from state " + str(s))
 
         for i, cond in enumerate(sat_conds):
-            for cond2 in sat_conds[i+1:]:
+            for cond2 in sat_conds[i + 1:]:
                 if smt_checker.check(And(*(cond.to_smt(symbol_table) + cond2.to_smt(symbol_table)))):
-                    print("WARNING: " + str(cond) + " and " + str(cond2) + " are satisfiable together, see environment transitions from state " + str(s))
+                    print("WARNING: " + str(cond) + " and " + str(
+                        cond2) + " are satisfiable together, see environment transitions from state " + str(s))
 
-    con_state_dict = {s:[t.condition for t in program.con_transitions if t.src == s] for s in program.states}
+    con_state_dict = {s: [t.condition for t in program.con_transitions if t.src == s] for s in program.states}
 
     for (s, conds) in con_state_dict.items():
         sat_conds = [cond for cond in conds if smt_checker.check(And(*cond.to_smt(symbol_table)))]
@@ -589,9 +593,10 @@ def check_determinism(program):
             if cond not in sat_conds:
                 print("WARNING: " + str(cond) + " is not satisfiable, see transitions from state " + str(s))
         for i, cond in enumerate(sat_conds):
-            for cond2 in sat_conds[i+1:]:
+            for cond2 in sat_conds[i + 1:]:
                 if smt_checker.check(And(*(cond.to_smt(symbol_table) + cond2.to_smt(symbol_table)))):
-                    print("WARNING: " + str(cond) + " and " + str(cond2) + " are satisfiable together, see controller transitions from state " + str(s))
+                    print("WARNING: " + str(cond) + " and " + str(
+                        cond2) + " are satisfiable together, see controller transitions from state " + str(s))
 
 
 def safe_update(d, k, v_arr):

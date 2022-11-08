@@ -1,10 +1,10 @@
 import parsec
 from parsec import generate, string, sepBy, spaces, regex
 
+from parsing.string_to_prop_logic import string_to_math_expression, string_to_prop
 from programs.program import Program
 from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
-from parsing.string_to_prop_logic import string_to_math_expression, string_to_prop
 from prop_lang.biop import BiOp
 from prop_lang.util import true
 from prop_lang.variable import Variable
@@ -163,9 +163,11 @@ def transition_parser():
     raw_cond = yield parsec.optional(spaces() >> regex("[^$#\]]+"), "true")
     cond = string_to_prop(raw_cond)
     yield spaces()
-    act = yield parsec.optional(string("$") >> spaces() >> assignments << spaces() << parsec.lookahead(regex("(#|\])")), [])
+    act = yield parsec.optional(string("$") >> spaces() >> assignments << spaces() << parsec.lookahead(regex("(#|\])")),
+                                [])
     yield spaces()
-    raw_events = yield parsec.optional(string("#") >> spaces() >> sepBy(regex("[^\],;]+") << spaces(), string(',') >> spaces()), [])
+    raw_events = yield parsec.optional(
+        string("#") >> spaces() >> sepBy(regex("[^\],;]+") << spaces(), string(',') >> spaces()), [])
     events = [Variable(e) for e in raw_events]
     yield spaces()
     yield string("]") >> spaces()
@@ -173,9 +175,11 @@ def transition_parser():
         cond = true()
     return Transition(source, cond, act, events, dest)
 
+
 @generate
 def assignments():
-    asss = yield sepBy(parsec.try_choice(bool_decl_parser_untyped, num_decl_parser_untyped), regex("(,|;)") >> spaces()) << parsec.optional(regex("(,|;)") >> spaces())
+    asss = yield sepBy(parsec.try_choice(bool_decl_parser_untyped, num_decl_parser_untyped),
+                       regex("(,|;)") >> spaces()) << parsec.optional(regex("(,|;)") >> spaces())
     if len(set([v.left for v in asss])) < len(asss):
         raise Exception("Variables can only be assigned once by a transition.")
     return asss

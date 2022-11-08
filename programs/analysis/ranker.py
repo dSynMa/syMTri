@@ -35,8 +35,9 @@ class Ranker:
                             ",")
                         invars.remove('')
 
-                        return True, string_to_math_expression(ranking_function).simplify(), [string_to_prop(invar) for invar in
-                                                                                   invars]
+                        return True, string_to_math_expression(ranking_function).simplify(), [string_to_prop(invar) for
+                                                                                              invar in
+                                                                                              invars]
                     except Exception as err:
                         raise Exception(str(err) + "\n\n" + out + "\n\n" + main_function)
                 else:

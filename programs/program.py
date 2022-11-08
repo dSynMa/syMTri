@@ -9,7 +9,7 @@ from programs.util import stutter_transition
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import neg, disjunct_formula_set, mutually_exclusive_rules
+from prop_lang.util import disjunct_formula_set, mutually_exclusive_rules
 from prop_lang.variable import Variable
 
 
@@ -96,7 +96,9 @@ class Program:
                       engine='dot',
                       format='svg')
 
-        to_str = lambda x: ", ".join([str(v) for v in list(x)]) if not isinstance(x, str) and hasattr(x, "__iter__") else str(x)
+        to_str = lambda x: ", ".join([str(v) for v in list(x)]) if not isinstance(x, str) and hasattr(x,
+                                                                                                      "__iter__") else str(
+            x)
 
         dot.node("init", "", [("shape", "point")])
         for s in self.states:
@@ -184,10 +186,13 @@ class Program:
         if not prefer_compatibility:
             transitions = guard_and_act
         else:
-            guard_act_and_compatible = ["(" + ga + " & (act_" + str(i) + " -> next(compatible)))" for i, ga in enumerate(guard_and_act)]
-            guard_and_not_compatible = ["(guard_" + str(i) + " & (act_" + str(i) + " -> next(compatible)))" for i in range(len(guards))]
+            guard_act_and_compatible = ["(" + ga + " & (act_" + str(i) + " -> next(compatible)))" for i, ga in
+                                        enumerate(guard_and_act)]
+            guard_and_not_compatible = ["(guard_" + str(i) + " & (act_" + str(i) + " -> next(compatible)))" for i in
+                                        range(len(guards))]
 
-            transitions = ["(" + " | ".join(guard_act_and_compatible) + ")"] + ["(!(" + " | ".join(guard_and_not_compatible) + ") & (" + " | ".join(guard_and_act) + "))"]
+            transitions = ["(" + " | ".join(guard_act_and_compatible) + ")"] + [
+                "(!(" + " | ".join(guard_and_not_compatible) + ") & (" + " | ".join(guard_and_act) + "))"]
 
         vars = ["turn : {env, mon, con}"]
         vars += [str(st) + " : boolean" for st in self.states]

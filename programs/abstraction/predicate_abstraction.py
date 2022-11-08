@@ -218,14 +218,15 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
 
     # simplification stage
     if simplified:
-        new_env_transitions, env_to_program_transitions = merge_transitions(env_transitions, symbol_table, env_to_program_transitions)
-        new_con_transitions, con_to_program_transitions = merge_transitions(con_transitions, symbol_table, con_to_program_transitions)
+        new_env_transitions, env_to_program_transitions = merge_transitions(env_transitions, symbol_table,
+                                                                            env_to_program_transitions)
+        new_con_transitions, con_to_program_transitions = merge_transitions(con_transitions, symbol_table,
+                                                                            con_to_program_transitions)
     else:
         new_env_transitions = env_transitions
         new_con_transitions = con_transitions
         env_to_program_transitions = env_to_program_transitions
         con_to_program_transitions = con_to_program_transitions
-
 
     return Program("pred_abst_" + program.name, states | {init_st}, init_st, [],
                    new_env_transitions,
@@ -258,11 +259,13 @@ def merge_transitions(transitions: [Transition], symbol_table, to_program_transi
         ## simplify when doing disjunct, after lex ordering
         ## also, may consider when enumerating possible event sets starting with missing some evetns and seeing how many transitions they match, if only then can stop adding to it
         try:
-            new_tran = Transition(trans_here[0].src, string_to_prop(str(conditions_simplified_fnode)), [], trans_here[0].output,
-                           trans_here[0].tgt)
+            new_tran = Transition(trans_here[0].src, string_to_prop(str(conditions_simplified_fnode)), [],
+                                  trans_here[0].output,
+                                  trans_here[0].tgt)
             new_transitions.append(new_tran)
 
-            safe_update(new_to_program_transitions, new_tran, set(t for tt in trans_here for t in to_program_transitions[tt]))
+            safe_update(new_to_program_transitions, new_tran,
+                        set(t for tt in trans_here for t in to_program_transitions[tt]))
         except Exception as e:
             raise e
     return new_transitions, new_to_program_transitions
@@ -332,7 +335,8 @@ def abstraction_to_ltl_with_turns(pred_abstraction: Program):
     return conjunct_formula_set([init_cond, at_least_one_state, at_most_one_state, transition_cond])
 
 
-def abstraction_to_ltl(pred_abstraction: Program, env_to_program_transitions, con_to_program_transitions, state_predicates: [Formula], transition_predicates: [Formula]):
+def abstraction_to_ltl(pred_abstraction: Program, env_to_program_transitions, con_to_program_transitions,
+                       state_predicates: [Formula], transition_predicates: [Formula]):
     predicates = state_predicates + transition_predicates
 
     ltl_to_program_transitions = {}
@@ -342,8 +346,8 @@ def abstraction_to_ltl(pred_abstraction: Program, env_to_program_transitions, co
     ltl_to_program_transitions["init"] = {}
     for t in init_transitions:
         cond = conjunct(conjunct_formula_set([Variable(t.tgt.state), t.condition] + t.output),
-                  conjunct_formula_set(sorted(label_preds(t.tgt.predicates, predicates), key=lambda x: str(x)))
-                  )
+                        conjunct_formula_set(sorted(label_preds(t.tgt.predicates, predicates), key=lambda x: str(x)))
+                        )
         init_cond_formula_sets.append(cond)
         safe_update(ltl_to_program_transitions["init"], cond, env_to_program_transitions[t])
 
@@ -406,14 +410,15 @@ def abstraction_to_ltl(pred_abstraction: Program, env_to_program_transitions, co
                 bookeeping_tran_preds = label_preds(tran_and_state_preds_after_con_env_step(et),
                                                     state_predicates + transition_predicates)
                 next_here = conjunct(conjunct_formula_set([Variable(et.tgt.state), et.condition] + et.output),
-                                        conjunct_formula_set(sorted(bookeeping_tran_preds, key=lambda x: str(x)))
-                                        )
+                                     conjunct_formula_set(sorted(bookeeping_tran_preds, key=lambda x: str(x)))
+                                     )
                 now_next += [X(next_here)]
 
                 try:
                     if now not in ltl_to_program_transitions.keys():
                         ltl_to_program_transitions[now] = {}
-                    safe_update(ltl_to_program_transitions[now], (cond, next_here), [(con_to_program_transitions[ct], env_to_program_transitions[et])])
+                    safe_update(ltl_to_program_transitions[now], (cond, next_here),
+                                [(con_to_program_transitions[ct], env_to_program_transitions[et])])
                 except Exception as e:
                     print(e)
                     raise e
@@ -455,7 +460,7 @@ def tran_and_state_preds_after_con_env_step(env_trans: Transition):
                 keep_these += [p]
 
     keep_these += [p for p in env_trans.tgt.predicates
-                      if [] == [v for v in p.variablesin() if v.name.endswith("_prev")]
+                   if [] == [v for v in p.variablesin() if v.name.endswith("_prev")]
                    or neg(p).simplify() not in keep_these]
 
     for p in keep_these:

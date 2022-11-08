@@ -3,6 +3,7 @@ import re
 from parsec import *
 from tatsu.grammars import Grammar
 from tatsu.infos import ParserConfig
+from tatsu.tool import compile
 
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
@@ -10,7 +11,6 @@ from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
 from prop_lang.value import Value
 from prop_lang.variable import Variable
-from tatsu.tool import compile
 
 GRAMMAR = '''
     @@grammar::PROPLOGIC
@@ -95,6 +95,7 @@ GRAMMAR = '''
 
 parser: Grammar = compile(GRAMMAR)
 math_config = ParserConfig(start='math_expression_eof')
+
 
 def tuple_to_formula(node) -> Formula:
     if isinstance(node, str):

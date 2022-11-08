@@ -1,9 +1,7 @@
-import re
+from tatsu import parse
 
 from parsing.string_to_prop_logic import *
 from prop_lang.uniop import UniOp
-
-from tatsu import parse
 
 GRAMMAR = '''
     @@grammar::LTL

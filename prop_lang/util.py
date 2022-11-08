@@ -1,15 +1,14 @@
 import re
 
 from pysmt.shortcuts import Solver
-
-from sympy.parsing.sympy_parser import parse_expr
 from sympy.logic.boolalg import to_dnf
+from sympy.parsing.sympy_parser import parse_expr
 
+from parsing.string_to_ltl import string_to_ltl
 from programs.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from parsing.string_to_ltl import string_to_ltl
 from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
 from prop_lang.value import Value
@@ -206,7 +205,8 @@ def only_dis_or_con_junctions(f: Formula):
         elif f.op in ["->", "=>"]:
             return BiOp(UniOp("!", only_dis_or_con_junctions(f.left)), "&", only_dis_or_con_junctions(f.right))
         elif f.op in ["<->", "<=>"]:
-            return BiOp(only_dis_or_con_junctions(BiOp(f.left, "->", f.right)), "&", only_dis_or_con_junctions(BiOp(f.right, "->", f.left)))
+            return BiOp(only_dis_or_con_junctions(BiOp(f.left, "->", f.right)), "&",
+                        only_dis_or_con_junctions(BiOp(f.right, "->", f.left)))
         else:
             # check if math expr? math expr should be abstracted out before manipulating formulas also for dnf
             # print("only_dis_or_con_junctions: I do not know how to handle " + str(f) + ", treating it as math expression.")
@@ -221,7 +221,7 @@ def dnf(f: Formula):
     for_sympi = parse_expr(str(simple_f_without_math).replace("!", "~"))
     in_dnf = to_dnf(for_sympi, True)
     in_dnf_formula = string_to_ltl(str(in_dnf).replace("~", "!"))
-    in_dnf_math_back = in_dnf_formula.replace([BiOp(key, ":=", value) for key,value in dic.items()])
+    in_dnf_math_back = in_dnf_formula.replace([BiOp(key, ":=", value) for key, value in dic.items()])
 
     return in_dnf_math_back
 

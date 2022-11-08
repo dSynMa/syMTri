@@ -42,7 +42,7 @@ class MealyMachine:
                 self.env_transitions[new_src] = set()
 
             if (env_cond, new_src) in interm_states.keys():
-                 new_intermed = interm_states.get((env_cond, new_src))
+                new_intermed = interm_states.get((env_cond, new_src))
             else:
                 new_intermed = "st__" + str(int_st_index)
                 interm_states[(env_cond, new_src)] = new_intermed
@@ -68,7 +68,7 @@ class MealyMachine:
                 to_replace += [BiOp(pred_var, ":=", pred)]
 
         dot = Digraph(name="MealyMachine",
-                      graph_attr=[("overlap", "scalexy"), ("splines", "true"), #("rankdir", "LR"),
+                      graph_attr=[("overlap", "scalexy"), ("splines", "true"),  # ("rankdir", "LR"),
                                   ("ranksep", "0.8"),
                                   ("nodesep", "0.5")],
                       node_attr=[("shape", "circle")],
@@ -136,7 +136,8 @@ class MealyMachine:
         guard_keys = list(guards_acts.keys())
         while i < len(guard_keys):
             define += [self.name + "_guard_" + str(i) + " := " + guard_keys[i]]
-            define += [self.name + "_act_" + str(i) + " := (" + ")\n\t| \t(".join(map(str, guards_acts[guard_keys[i]])) + ")"]
+            define += [
+                self.name + "_act_" + str(i) + " := (" + ")\n\t| \t(".join(map(str, guards_acts[guard_keys[i]])) + ")"]
             transitions.append(self.name + "_guard_" + str(i) + " & " + self.name + "_act_" + str(i))
             guard_ids.append(self.name + "_guard_" + str(i))
             i += 1
@@ -161,10 +162,12 @@ class MealyMachine:
         vars += [str(var) + " : boolean" for var in pred_acts]
 
         init = [str(init_cond)]
-        transitions = ["turn = con & " + "((" + ")\n\t|\t(".join(transitions) + "))"] +\
+        transitions = ["turn = con & " + "((" + ")\n\t|\t(".join(transitions) + "))"] + \
                       ["turn != con & (identity_" + self.name + " & " + str(conjunct_formula_set(
-            [BiOp(UniOp("next", Variable("mon_" + e.name)), "=", Variable("mon_" + e.name)) for e in mon_events] +
-            [BiOp(UniOp("next", Variable(p.name)), "=", Variable(p.name)) for p in pred_acts]).to_nuxmv()) + ")"]
+                          [BiOp(UniOp("next", Variable("mon_" + e.name)), "=", Variable("mon_" + e.name)) for e in
+                           mon_events] +
+                          [BiOp(UniOp("next", Variable(p.name)), "=", Variable(p.name)) for p in
+                           pred_acts]).to_nuxmv()) + ")"]
         trans = ["(" + ")\n\t|\t(".join(transitions) + ")"]
         invar = mutually_exclusive_rules(self.states)
         invar += mutually_exclusive_rules(["mon_" + s for s in mon_states])
@@ -177,7 +180,8 @@ class MealyMachine:
         return NuXmvModel(self.name, set(vars), define, init, invar, trans)
 
     # TODO this function needs to be optimised
-    def project_controller_on_program(self, program, predicate_abstraction: Program, state_preds, tran_preds, symbol_table):
+    def project_controller_on_program(self, program, predicate_abstraction: Program, state_preds, tran_preds,
+                                      symbol_table):
         symbol_table |= {tv.name + "_prev": TypedValuation(tv.name + "_prev", tv.type, tv.value) for tv in
                          program.valuation}
 
@@ -209,14 +213,17 @@ class MealyMachine:
             for pa_t in predicate_abstraction.env_transitions:
                 if pa_t.src == predicate_abstraction.initial_state:
                     formula = conjunct_formula_set(
-                        [m_cond.replace(replace_preds), pa_t.condition, at_least_one_state, at_most_one_state, Variable(pa_t.tgt.state)] +
+                        [m_cond.replace(replace_preds), pa_t.condition, at_least_one_state, at_most_one_state,
+                         Variable(pa_t.tgt.state)] +
                         pa_t.tgt.predicates +
                         pa_t.output)
                     formula_smt = And(*formula.to_smt(symbol_table))
                     compatible = smt_checker.check(formula_smt)
                     if compatible:
-                        new_env_transitions\
-                            .add(Transition((self.init_st, predicate_abstraction.initial_state), pa_t.condition, pa_t.action, pa_t.output, (mm_tgt, pa_t.tgt)))
+                        new_env_transitions \
+                            .add(
+                            Transition((self.init_st, predicate_abstraction.initial_state), pa_t.condition, pa_t.action,
+                                       pa_t.output, (mm_tgt, pa_t.tgt)))
                         current_states.append((mm_tgt, pa_t.tgt))
 
         done_states += [(self.init_st, predicate_abstraction.initial_state)]
@@ -234,7 +241,9 @@ class MealyMachine:
                             formula_smt = And(*formula.to_smt(symbol_table))
                             compatible = smt_checker.check(formula_smt)
                             if compatible:
-                                tentative_con_trans.append(Transition((mm_con_src, pa_con_src), mm_con_cond, pa_con_t.action, pa_con_t.output, (mm_con_tgt, pa_con_t.tgt)))
+                                tentative_con_trans.append(
+                                    Transition((mm_con_src, pa_con_src), mm_con_cond, pa_con_t.action, pa_con_t.output,
+                                               (mm_con_tgt, pa_con_t.tgt)))
 
                 for mm_con_trans in tentative_con_trans:
                     (mm_env_src, pa_env_src) = mm_con_trans.tgt
@@ -255,7 +264,9 @@ class MealyMachine:
                                     if compatible:
                                         next_states.append((mm_env_tgt, pa_env_t.tgt))
                                         new_con_transitions.add(mm_con_trans)
-                                        new_env_transitions.add(Transition((mm_env_src, pa_env_src), pa_env_t.condition, pa_env_t.action, pa_env_t.output, (mm_env_tgt, pa_env_t.tgt)))
+                                        new_env_transitions.add(
+                                            Transition((mm_env_src, pa_env_src), pa_env_t.condition, pa_env_t.action,
+                                                       pa_env_t.output, (mm_env_tgt, pa_env_t.tgt)))
                                 except Exception as e:
                                     raise e
 
@@ -267,7 +278,8 @@ class MealyMachine:
 
         predicate_abstraction.new_env_transitions = new_env_transitions
         predicate_abstraction.con_transitions = new_con_transitions
-        return Program("Strategy", [s for t in (new_con_transitions | new_env_transitions) for s in [t.src, t.tgt]], (self.init_st, predicate_abstraction.initial_state),
+        return Program("Strategy", [s for t in (new_con_transitions | new_env_transitions) for s in [t.src, t.tgt]],
+                       (self.init_st, predicate_abstraction.initial_state),
                        predicate_abstraction.valuation, list(set(new_env_transitions)), list(set(new_con_transitions)),
                        predicate_abstraction.env_events, predicate_abstraction.con_events,
                        predicate_abstraction.out_events)
