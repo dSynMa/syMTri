@@ -187,7 +187,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         try:
             last_counterstrategy_state = [key for key, v in ce[-1].items() if key.startswith("st_") and v == "TRUE"][0]
-            use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(program, agreed_on_transitions, disagreed_on_transitions, last_counterstrategy_state, symbol_table)
+            use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(program, agreed_on_transitions, disagreed_on_transitions, last_counterstrategy_state, monitor_actually_took, symbol_table)
         except Exception as e:
             print("WARNING: " + str(e))
             print("I will try to use safety instead.")

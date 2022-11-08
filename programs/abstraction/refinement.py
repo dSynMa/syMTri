@@ -287,7 +287,13 @@ def use_liveness_refinement_trans(ce: [dict], symbol_table):
         return False, None
 
 
-def use_liveness_refinement(program, agreed_on_transitions, disagreed_on_transitions, last_counterstrategy_state, symbol_table):
+def use_liveness_refinement(program,
+                            agreed_on_transitions,
+                            disagreed_on_transitions,
+                            last_counterstrategy_state,
+                            monitor_actually_took,
+                            symbol_table,
+                            entry_predicate_as_interpolant=False):
     yes = False
     mon_transitions = [(y, st) for xs in agreed_on_transitions for y, st in xs]
     ce = [x for xs in agreed_on_transitions for _, x in xs] + [disagreed_on_transitions[1]]
@@ -300,34 +306,34 @@ def use_liveness_refinement(program, agreed_on_transitions, disagreed_on_transit
     if yes:
         ce_prog_loop_tran_concretised = mon_transitions[first_index:]
 
-        # # sanity check
-        # trans_with_actions = [tuple[0]
-        #                       for ts in ce_prog_loop_tran_concretised[:-1] # last transition is just used for the exit condition
-        #                       for tuple in ts for act in tuple[0].action
-        #                       if act.left != act.right
-        #                       and symbol_table[str(act.left)].type != "boolean"
-        #                       and symbol_table[str(act.left)].type != "bool"]
-        # if 0 == len(trans_with_actions):
-        #     print("INFO: There was a loop in counterstrategy, but did not attempt liveness refinement because the "
-        #           "corresponding monitor transitions do not affect non-boolean variables.")
-        #     return False, None, None
-
         ce_prog_init_trans_concretised = mon_transitions[0:first_index]
 
-        last_trans = disagreed_on_transitions[0][0].with_condition(neg(disjunct_formula_set([t.condition for t in disagreed_on_transitions[0]])))
+        if entry_predicate_as_interpolant:
+            last_trans = disagreed_on_transitions[0][0]\
+                .with_condition(
+                    neg(
+                        disjunct_formula_set(
+                            [t.condition for t in disagreed_on_transitions[0]]
+                            + [neg(t[0].condition) for t in monitor_actually_took])))
 
-        if len(ce_prog_init_trans_concretised) > 0:
-            entry_predicate = conjunct_formula_set(
-                                    interpolation(program,
-                                            ce_prog_init_trans_concretised + ce_prog_loop_tran_concretised,
-                                                  (last_trans, disagreed_on_transitions[1]),
-                                                  len(ce_prog_init_trans_concretised),
-                                                  symbol_table))
-        else:
-            entry_predicate = conjunct_formula_set([BiOp(Variable(tv.name), "=", Value(tv.value)) for tv in program.valuation])
+            if len(ce_prog_init_trans_concretised) > 0:
+                entry_predicate = conjunct_formula_set(
+                                        interpolation(program,
+                                                ce_prog_init_trans_concretised + ce_prog_loop_tran_concretised,
+                                                      (last_trans, disagreed_on_transitions[1]),
+                                                      len(ce_prog_init_trans_concretised),
+                                                      symbol_table))
+            else:
+                entry_predicate = conjunct_formula_set([BiOp(Variable(tv.name), "=", Value(tv.value)) for tv in program.valuation])
 
-        if entry_predicate == None:
-            raise Exception("Something weird here. Entry predicate to loop is None.")
+            if entry_predicate == None:
+                raise Exception("Something weird here. Entry predicate to loop is None.")
+
+        if not entry_predicate_as_interpolant or str(entry_predicate).lower() == "true":
+            entry_predicate = conjunct_formula_set([BiOp(Variable(key), "=", Value(value))
+                                                    for tv in program.valuation
+                                                    for key, value in ce_prog_init_trans_concretised[-1][1].items()
+                                                    if key == tv.name])
 
         return True, ce_prog_loop_tran_concretised, entry_predicate
     else:
