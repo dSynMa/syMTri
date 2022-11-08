@@ -71,8 +71,9 @@ def tuple_to_formula(node) -> Formula:
     else:
         raise Exception("Invalid node: " + str(node))
 
+parser: Grammar = compile(GRAMMAR)
 
 def string_to_ltl(text: str) -> Formula:
-    ast = parse(GRAMMAR, text)
+    ast = parser.parse(text)
     formula = tuple_to_formula(ast)
     return formula
