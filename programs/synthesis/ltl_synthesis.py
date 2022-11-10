@@ -75,6 +75,11 @@ def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variab
 
 def parse_hoa(output) -> Program:
     hoa_parser = HOAParser()
+    if "UNREALIZABLE" in output:
+        counterstrategy = True
+    else:
+        counterstrategy = False
+
     good_output = "\n".join(
         ln for ln in output.split("\n")
         if not ln.startswith("controllable-AP")
@@ -88,12 +93,20 @@ def parse_hoa(output) -> Program:
                  ][0].strip().split()[1:])
     ctrl_aps = set(int(i) for i in ctrl_aps)
 
-    env_events = [
-        ap for i, ap in enumerate(hoa.header.propositions)
-        if i in ctrl_aps]
-    con_events = [
-        ap for i, ap in enumerate(hoa.header.propositions)
-        if i not in ctrl_aps]
+    if counterstrategy:
+        env_events = [
+            ap for i, ap in enumerate(hoa.header.propositions)
+            if i in ctrl_aps]
+        con_events = [
+            ap for i, ap in enumerate(hoa.header.propositions)
+            if i not in ctrl_aps]
+    else:
+        env_events = [
+            ap for i, ap in enumerate(hoa.header.propositions)
+            if i not in ctrl_aps]
+        con_events = [
+            ap for i, ap in enumerate(hoa.header.propositions)
+            if i in ctrl_aps]
 
     init_st = next(iter(hoa.header.start_states))
     if len(init_st) != 1:
@@ -101,7 +114,7 @@ def parse_hoa(output) -> Program:
     else:
         init_st = list(init_st)[0]
 
-    mon = MealyMachine("counterstrategy", init_st, env_events, con_events)
+    mon = MealyMachine("counterstrategy" if counterstrategy else "controller", init_st, env_events, con_events)
 
     trans = {}
 
