@@ -1,10 +1,10 @@
 import re
 
 from pysmt.shortcuts import Solver
-from sympy.logic.boolalg import to_dnf
+from sympy.logic.boolalg import to_dnf, simplify_logic
 from sympy.parsing.sympy_parser import parse_expr
 
-from parsing.string_to_ltl import string_to_ltl
+from parsing.string_to_prop_logic import string_to_prop
 from programs.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
 from prop_lang.biop import BiOp
@@ -223,9 +223,13 @@ def dnf(f: Formula):
         return dnf_cache[f]
     simple_f = only_dis_or_con_junctions(f)
     simple_f_without_math, dic = simple_f.replace_math_exprs(0)
-    for_sympi = parse_expr(str(simple_f_without_math).replace("!", "~"))
-    in_dnf = to_dnf(for_sympi, True)
-    in_dnf_formula = string_to_ltl(str(in_dnf).replace("~", "!"))
+    for_sympi = parse_expr(str(simple_f_without_math).replace("!", "~"), evaluate=True)
+    if isinstance(for_sympi, int):
+        return f
+    # if formula has more than 8 variables it can take a long time, dnf is exponential
+    in_dnf = to_dnf(simplify_logic(for_sympi), simplify=True, force=True)
+    print(str(f) + " after dnf becomes " + str(in_dnf).replace("~", "!"))
+    in_dnf_formula = string_to_prop(str(in_dnf).replace("~", "!"))
     in_dnf_math_back = in_dnf_formula.replace([BiOp(key, ":=", value) for key, value in dic.items()])
 
     dnf_cache[f] = in_dnf_math_back
