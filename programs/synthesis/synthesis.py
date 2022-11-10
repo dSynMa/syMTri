@@ -258,10 +258,14 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 use_liveness = False
 
         if eager or not use_liveness:
-            new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program)
+            new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program, use_dnf=False)
             print("Found: " + ", ".join([str(p) for p in new_preds]))
             if len(new_preds) == 0:
                 e = Exception("No state predicates identified.")
+                print("No state predicates identified.")
+                print("Trying again by putting interpolant B in DNF form and checking each disjunct separately. This may take some time...")
+                new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program, use_dnf=True)
+                print("Found: " + ", ".join([str(p) for p in new_preds]))
                 check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, True, e)
                 raise e
 
