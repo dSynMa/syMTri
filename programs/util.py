@@ -571,7 +571,7 @@ def transition_up_to_dnf(transition: Transition):
 def check_determinism(program):
     env_state_dict = {s: [t.condition for t in program.env_transitions if t.src == s] for s in program.states}
 
-    symbol_table = symbol_table_from_program(program)
+    symbol_table = program.symbol_table
 
     for (s, conds) in env_state_dict.items():
         sat_conds = [cond for cond in conds if smt_checker.check(And(*cond.to_smt(symbol_table)))]

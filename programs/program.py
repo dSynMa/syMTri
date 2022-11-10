@@ -21,6 +21,11 @@ class Program:
         self.name = name
         self.initial_state = init_st
         self.states: Set = set(sts)
+        self.valuation = init_val
+        self.env_events = env_events
+        self.con_events = con_events
+        self.out_events = out_events
+        self.symbol_table = symbol_table_from_program(self)
         self.local_vars = [Variable(tv.name) for tv in init_val]
         self.env_transitions = env_transitions
         self.state_to_env = lambda s: [t for t in env_transitions if t.src == s]

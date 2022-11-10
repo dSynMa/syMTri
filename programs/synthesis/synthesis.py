@@ -60,8 +60,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
     eager = False
     keep_only_bool_interpolants = True
 
-    symbol_table = symbol_table_from_program(program)
-    ltl = implies(ltl_assumptions, ltl_guarantees).simplify()
+    symbol_table = program.symbol_table
 
     state_predicates = []
     rankings = []
