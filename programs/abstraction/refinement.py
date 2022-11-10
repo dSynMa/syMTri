@@ -13,6 +13,7 @@ from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_
     project_ce_state_onto_ev, get_differently_value_vars
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
+from prop_lang.uniop import UniOp
 from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean, dnf, disjunct_formula_set
 from prop_lang.value import Value
 from prop_lang.variable import Variable
