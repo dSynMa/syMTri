@@ -7,7 +7,6 @@ from programs.synthesis.synthesis import synthesize
 
 class Test(TestCase):
     def test_synthesize_1(self):
-        print(os.curdir)
         with open('../examples/parallel/arbiter/program.prog') as program_file:
             program = string_to_program(program_file.read())
             tlsf_file = '../examples/parallel/arbiter/controller.tlsf'
