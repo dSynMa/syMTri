@@ -85,6 +85,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         print(", ".join(map(str, abstraction)))
 
         pred_name_dict = {p: label_pred(p, pred_list) for p in pred_list}
+        state_pred_label_to_formula = {label_pred(p, pred_list): p for p in state_predicates}
         pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
 
         predicate_constraints = []
@@ -210,11 +211,12 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         try:
             last_counterstrategy_state = [key for key, v in ce[-1].items() if key.startswith("st_") and v == "TRUE"][0]
-            use_liveness, counterexample_loop, entry_predicate = use_liveness_refinement(program, agreed_on_transitions,
-                                                                                         disagreed_on_transitions,
-                                                                                         last_counterstrategy_state,
-                                                                                         monitor_actually_took,
-                                                                                         symbol_table)
+            use_liveness, counterexample_loop, entry_predicate, entry_predicate_in_terms_of_preds \
+                = use_liveness_refinement(program, agreed_on_transitions,
+                                          disagreed_on_transitions,
+                                          last_counterstrategy_state,
+                                          monitor_actually_took,
+                                          symbol_table, state_pred_label_to_formula)
         except Exception as e:
             print("WARNING: " + str(e))
             print("I will try to use safety instead.")
@@ -222,7 +224,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         if use_liveness:
             try:
-                ranking, invars = liveness_step(program, counterexample_loop, symbol_table, entry_predicate,
+                ranking, invars = liveness_step(program, counterexample_loop, symbol_table,
+                                                entry_predicate, entry_predicate_in_terms_of_preds,
                                                 monitor_actually_took[0])
 
                 rankings.append((ranking, invars))
@@ -309,19 +312,24 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             state_predicates = list(new_all_preds)
 
 
-def liveness_step(program, counterexample_loop, symbol_table, entry_predicate, exit_transition):
+def liveness_step(program, counterexample_loop, symbol_table, entry_predicate, entry_predicate_in_terms_of_preds,
+                  exit_transition):
     # ground transitions in the counterexample loop
     # on the environment and controller events in the counterexample
     loop_before_exit = ground_transitions(program, counterexample_loop)
 
     entry_predicate_grounded = ground_predicate_on_bool_vars(program, entry_predicate,
                                                              counterexample_loop[0][1]).simplify()
+    entry_predicate_in_terms_of_preds_grounded = ground_predicate_on_bool_vars(program,
+                                                                               entry_predicate_in_terms_of_preds,
+                                                                               counterexample_loop[0][1]).simplify()
+
     exit_predicate_grounded = ground_predicate_on_bool_vars(program, exit_transition[0].condition,
                                                             exit_transition[1]).simplify()
 
     ranking, invars = liveness_refinement(symbol_table,
                                           program,
-                                          entry_predicate_grounded,
+                                          entry_predicate_grounded, entry_predicate_in_terms_of_preds_grounded,
                                           loop_before_exit,
                                           exit_predicate_grounded)
     if len(invars) > 0:

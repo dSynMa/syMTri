@@ -150,18 +150,25 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
         return Cs
 
 
-def liveness_refinement(symbol_table, program, entry_predicate, unfolded_loop, exit_predicate_grounded):
+def liveness_refinement(symbol_table, program, entry_predicate, entry_predicate_in_terms_of_preds, unfolded_loop,
+                        exit_predicate_grounded):
     exceptions = []
     try:
         # try to come up with a ranking function
-        c_code = loop_to_c(symbol_table, program, entry_predicate, unfolded_loop, exit_predicate_grounded)
+        c_code = loop_to_c(symbol_table, program, entry_predicate_in_terms_of_preds, unfolded_loop, exit_predicate_grounded)
         print(c_code)
         ranker = Ranker()
         success, ranking_function, invars = ranker.check(c_code)
         if not success:
-            print("Could not find a ranking function for: \n" + c_code)
-            text = raw_input("Any suggestions?")
-            ranking_function, invars = string_to_math_expression(text), []
+            c_code = loop_to_c(symbol_table, program, entry_predicate, unfolded_loop,
+                               exit_predicate_grounded)
+            print(c_code)
+            ranker = Ranker()
+            success, ranking_function, invars = ranker.check(c_code)
+            if not success:
+                print("Could not find a ranking function for: \n" + c_code)
+                text = raw_input("Any suggestions?")
+                ranking_function, invars = string_to_math_expression(text), []
 
         return ranking_function, invars
     except Exception as e:
@@ -312,8 +319,8 @@ def use_liveness_refinement(program,
                             disagreed_on_transitions,
                             last_counterstrategy_state,
                             monitor_actually_took,
-                            symbol_table,
-                            entry_predicate_as_interpolant=False):
+                            symbol_table, pred_label_to_formula,
+                            entry_predicate_as_interpolant=True):
     yes = False
     mon_transitions = [(y, st) for xs in agreed_on_transitions for y, st in xs]
     ce = [x for xs in agreed_on_transitions for _, x in xs] + [disagreed_on_transitions[1]]
@@ -356,6 +363,11 @@ def use_liveness_refinement(program,
                                                     for key, value in ce_prog_init_trans_concretised[-1][1].items()
                                                     if key == tv.name])
 
-        return True, ce_prog_loop_tran_concretised, entry_predicate
+        entry_preds = (
+            [(pred_label_to_formula[Variable(key)], value) for key, value in ce_prog_init_trans_concretised[-1][1].items() if
+             key.startswith("pred_")])
+        entry_predicate_in_terms_of_preds = conjunct_formula_set([p for (p, v) in entry_preds if v == "TRUE"] + [neg(p) for (p, v) in entry_preds if v == "FALSE"])
+
+        return True, ce_prog_loop_tran_concretised, entry_predicate, entry_predicate_in_terms_of_preds
     else:
-        return False, None, None
+        return False, None, None, None
