@@ -1,15 +1,19 @@
 from typing import Set
 
 from graphviz import Digraph
+from pysmt.shortcuts import And
 
+from parsing.string_to_prop_logic import string_to_prop
 from programs.analysis.nuxmv_model import NuXmvModel
+from programs.analysis.smt_checker import SMTChecker
 from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
-from programs.util import stutter_transition
+from programs.util import stutter_transition, symbol_table_from_program
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import disjunct_formula_set, mutually_exclusive_rules
+from prop_lang.util import disjunct_formula_set, mutually_exclusive_rules, conjunct_formula_set, conjunct, neg
+from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 
@@ -17,7 +21,7 @@ class Program:
 
     def __init__(self, name, sts, init_st, init_val: [TypedValuation],
                  env_transitions: [Transition], con_transitions: [Transition],
-                 env_events: [Variable], con_events: [Variable], out_events: [Variable]):
+                 env_events: [Variable], con_events: [Variable], out_events: [Variable], add_type_constraints=True, debug=True):
         self.name = name
         self.initial_state = init_st
         self.states: Set = set(sts)
@@ -27,70 +31,63 @@ class Program:
         self.out_events = out_events
         self.symbol_table = symbol_table_from_program(self)
         self.local_vars = [Variable(tv.name) for tv in init_val]
-        self.env_transitions = env_transitions
-        self.state_to_env = lambda s: [t for t in env_transitions if t.src == s]
-        self.state_to_con = lambda s: [t for t in con_transitions if t.src == s]
-        # type checking
-        for transition in env_transitions:
-            if not all(v in env_events + self.local_vars for v in transition.condition.variablesin()):
-                raise Exception("Conditions in environment transitions can only refer to environment events and "
-                                "local/internal variables: " + str(transition) + ".")
 
-            if not all(biop.left in self.local_vars for biop in transition.action):
-                raise Exception("Actions in environment transitions can only set "
-                                "local/internal variables: " + str(transition) + ".")
-            if not all(v in env_events + self.local_vars for biop in transition.action for v in
-                       biop.right.variablesin()):
-                raise Exception("Actions in environment transitions can only refer to environment or "
-                                "local/internal variables: " + str(transition) + ".")
-            if not all(v in out_events or (isinstance(v, UniOp) and v.simplify().right in out_events) for v in
-                       transition.output):
-                raise Exception("Outputs of environment transitions can only refer to monitor output variables: " + str(
-                    transition) + ".")
-
-        self.con_transitions = con_transitions
-        for transition in con_transitions:
-            if not all(v in con_events + self.local_vars for v in transition.condition.variablesin()):
-                raise Exception("Conditions in controller transitions can only refer to controller events and "
-                                "local/internal variables: " + str(transition) + ".")
-
-            if not all(biop.left in self.local_vars for biop in transition.action):
-                raise Exception("Actions in controller transitions can only set "
-                                "local/internal variables: " + str(transition) + ".")
-            if not all(v in (con_events + self.local_vars)
-                       for biop in transition.action for v in biop.right.variablesin()):
-                raise Exception("Actions in controller transitions can only refer to environment or"
-                                "local/internal variables: " + str(transition) + ".")
-
-        self.valuation = init_val
-        self.env_events = env_events
-        self.con_events = con_events
-        self.out_events = out_events
-
-    def add_env_transition(self, src, condition: Formula, action: [BiOp], output: [BiOp], tgt):
-        assert len({x for x in output if x not in self.out_events}) == 0
-        t = Transition(src, condition, action, output, tgt)
-
-        if src in self.state_to_env:
-            self.state_to_env[src] = [t]
+        if add_type_constraints:
+            self.env_transitions = list(map(self.add_type_constraints_to_guards, env_transitions))
+            self.con_transitions = list(map(self.add_type_constraints_to_guards, con_transitions))
         else:
-            self.state_to_env[src].append(t)
+            self.env_transitions = env_transitions
+            self.con_transitions = con_transitions
+        self.state_to_env = lambda s: [t for t in self.env_transitions if t.src == s]
+        self.state_to_con = lambda s: [t for t in self.con_transitions if t.src == s]
 
-        self.env_transitions.append(t)
-        self.states.add(src)
-        self.states.add(tgt)
+        if debug:
+            # type checking
+            for transition in self.env_transitions:
+                if not all(v in env_events + self.local_vars for v in transition.condition.variablesin()):
+                    raise Exception("Conditions in environment transitions can only refer to environment events and "
+                                    "local/internal variables: " + str(transition) + ".")
 
-    def add_con_transition(self, src, condition: Formula, action: Formula, tgt):
-        t = Transition(src, condition, action, [], tgt)
+                if not all(biop.left in self.local_vars for biop in transition.action):
+                    raise Exception("Actions in environment transitions can only set "
+                                    "local/internal variables: " + str(transition) + ".")
+                if not all(v in env_events + self.local_vars for biop in transition.action for v in
+                           biop.right.variablesin()):
+                    raise Exception("Actions in environment transitions can only refer to environment or "
+                                    "local/internal variables: " + str(transition) + ".")
+                if not all(v in out_events or (isinstance(v, UniOp) and v.simplify().right in out_events) for v in
+                           transition.output):
+                    raise Exception(
+                        "Outputs of environment transitions can only refer to monitor output variables: " + str(
+                            transition) + ".")
 
-        if src in self.state_to_env:
-            self.state_to_con[src] = [t]
+            for transition in self.con_transitions:
+                if not all(v in con_events + self.local_vars for v in transition.condition.variablesin()):
+                    raise Exception("Conditions in controller transitions can only refer to controller events and "
+                                    "local/internal variables: " + str(transition) + ".")
+
+                if not all(biop.left in self.local_vars for biop in transition.action):
+                    raise Exception("Actions in controller transitions can only set "
+                                    "local/internal variables: " + str(transition) + ".")
+                if not all(v in (con_events + self.local_vars)
+                           for biop in transition.action for v in biop.right.variablesin()):
+                    raise Exception("Actions in controller transitions can only refer to environment or"
+                                    "local/internal variables: " + str(transition) + ".")
+
+    def add_type_constraints_to_guards(self, transition: Transition):
+        type_constraints_before = conjunct_formula_set([string_to_prop(str(act.left.to_smt(self.symbol_table)[1]))
+                                                        for act in transition.action])
+        type_constraints = conjunct_formula_set([string_to_prop(str(act.left.to_smt(self.symbol_table)[1]))
+                                 .replace([BiOp(act.left, ":=", act.right)]) for act in transition.action])
+        if isinstance(type_constraints, Value):
+            return transition
+        new_cond = conjunct(type_constraints, transition.condition)
+        smt_checker = SMTChecker()
+        if smt_checker.check(And(*conjunct(type_constraints_before, new_cond).to_smt(self.symbol_table))) \
+                and smt_checker.check(And(*(conjunct_formula_set([neg(type_constraints), transition.condition, type_constraints_before]).to_smt(self.symbol_table)))):
+            return transition.with_condition(new_cond)
         else:
-            self.state_to_con[src].append(t)
-
-        self.con_transitions.append(t)
-        self.states.add(src)
-        self.states.add(tgt)
+            return transition
 
     def to_dot(self):
         dot = Digraph(name=self.name,
