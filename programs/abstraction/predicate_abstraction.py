@@ -231,7 +231,7 @@ def predicate_abstraction(program: Program, state_predicates: [Formula], transit
     return Program("pred_abst_" + program.name, states | {init_st}, init_st, [],
                    new_env_transitions,
                    new_con_transitions, program.env_events,
-                   program.con_events, program.out_events), env_to_program_transitions, con_to_program_transitions
+                   program.con_events, program.out_events, False), env_to_program_transitions, con_to_program_transitions
 
 
 def merge_transitions(transitions: [Transition], symbol_table, to_program_transitions):
