@@ -19,7 +19,7 @@ from prop_lang.variable import Variable
 
 
 def safety_refinement(ce: [dict], agreed_on_transitions: [[(Transition, dict)]],
-                      disagreed_on_transitions: ([Transition], dict), symbol_table, program) -> [FNode]:
+                      disagreed_on_transitions: ([Transition], dict), symbol_table, program, use_dnf=False) -> [FNode]:
     # we collect interpolants in this set
     Cs = set()
 
@@ -34,7 +34,7 @@ def safety_refinement(ce: [dict], agreed_on_transitions: [[(Transition, dict)]],
         neg_t = t.with_condition(neg(t.condition))
         # TODO is this enough, or do we need to dnf the agreed on transitions also?
         for j in reversed(range(0, len(concurring_transitions) + 1)):
-            Css = interpolation(program, concurring_transitions, (neg_t, disagreed_on_transitions[1]), j, symbol_table)
+            Css = interpolation(program, concurring_transitions, (neg_t, disagreed_on_transitions[1]), j, symbol_table, use_dnf=use_dnf)
             if Css is None:
                 print("I think that interpolation is being checked against formulas that are not contradictory.")
                 break
@@ -60,7 +60,7 @@ def safety_refinement(ce: [dict], agreed_on_transitions: [[(Transition, dict)]],
 
 
 def interpolation(program: Program, concurring_transitions: [(Transition, dict)], disagreed_on: (Transition, dict),
-                  cut_point: int, symbol_table):
+                  cut_point: int, symbol_table, use_dnf=False):
     assert cut_point <= len(concurring_transitions)
     assert len(concurring_transitions) > 0
 
@@ -103,23 +103,37 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
     disagreed_on_transition = disagreed_on[0]
     disagreed_on_state = disagreed_on[1]
     projected_condition = disagreed_on_transition.condition.replace(ith_vars(len(concurring_transitions)))
+    grounded_condition = ground_formula_on_ce_state_with_index(projected_condition,
+                                                               project_ce_state_onto_ev(disagreed_on_state,
+                                                                                        program.env_events
+                                                                                        + program.con_events),
+                                                               len(concurring_transitions))
 
-    B_to_dnf = dnf(neg(projected_condition))
-    if isinstance(B_to_dnf, BiOp) and re.match("\|+", B_to_dnf.op):
-        Bs = B_to_dnf.sub_formulas_up_to_associativity()
+    # some simplification before DNFing
+    if isinstance(grounded_condition, BiOp) and grounded_condition.op[0] == "&":
+        Bs = list(map(neg, grounded_condition.sub_formulas_up_to_associativity()))
+    elif isinstance(grounded_condition, UniOp) and grounded_condition.op == "!":
+        if isinstance(grounded_condition.right, BiOp) and grounded_condition.op[0] == "|":
+            Bs = grounded_condition.sub_formulas_up_to_associativity()
+        else:
+            Bs = [grounded_condition.right]
     else:
-        Bs = [B_to_dnf]
+        Bs = [neg(grounded_condition)]
+
+    if use_dnf:
+        new_Bs = []
+        for b in Bs:
+            after_dnf = dnf(b)
+            if isinstance(after_dnf, BiOp) and after_dnf.op[0] == "|":
+                new_Bs += after_dnf.sub_formulas_up_to_associativity()
+            else:
+                new_Bs += [after_dnf]
+        Bs = new_Bs
 
     Cs = set()
 
     for BB in Bs:
-        grounded_condition = ground_formula_on_ce_state_with_index(BB,
-                                                                   project_ce_state_onto_ev(disagreed_on_state,
-                                                                                            program.env_events
-                                                                                            + program.con_events),
-                                                                   len(concurring_transitions))
-
-        path_formula_B = conjunct_formula_set(path_formula_set_B + [grounded_condition])
+        path_formula_B = conjunct_formula_set(path_formula_set_B + [BB])
 
         A = And(*conjunct(init_prop, path_formula_A).to_smt(new_symbol_table))
         B = And(*path_formula_B.to_smt(new_symbol_table))
