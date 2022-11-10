@@ -125,7 +125,7 @@ class Program:
 
         return dot
 
-    def to_nuXmv_with_turns(self, include_mismatches_due_to_nondeterminism: bool, prefer_compatibility: bool):
+    def to_nuXmv_with_turns(self, include_mismatches_due_to_nondeterminism=False, prefer_compatibility=False):
         guards = []
         acts = []
         for env_transition in self.env_transitions:
