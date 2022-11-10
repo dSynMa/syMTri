@@ -215,13 +215,20 @@ def only_dis_or_con_junctions(f: Formula):
         return f
 
 
+dnf_cache = {}
+
+
 def dnf(f: Formula):
+    if f in dnf_cache.keys():
+        return dnf_cache[f]
     simple_f = only_dis_or_con_junctions(f)
     simple_f_without_math, dic = simple_f.replace_math_exprs(0)
     for_sympi = parse_expr(str(simple_f_without_math).replace("!", "~"))
     in_dnf = to_dnf(for_sympi, True)
     in_dnf_formula = string_to_ltl(str(in_dnf).replace("~", "!"))
     in_dnf_math_back = in_dnf_formula.replace([BiOp(key, ":=", value) for key, value in dic.items()])
+
+    dnf_cache[f] = in_dnf_math_back
 
     return in_dnf_math_back
 
