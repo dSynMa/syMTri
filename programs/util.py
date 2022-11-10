@@ -16,7 +16,7 @@ from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct_formula_set, conjunct, neg, append_to_variable_name, dnf
+from prop_lang.util import conjunct_formula_set, conjunct, neg, append_to_variable_name, dnf, disjunct_formula_set
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
