@@ -1,28 +1,92 @@
+import os
 from unittest import TestCase
 
-from programs.parsing.string_to_program import string_to_program
-from programs.synthesis.synthesis import abstract_synthesis_loop
-from prop_lang.uniop import UniOp
-from prop_lang.value import Value
+from parsing.string_to_program import string_to_program
+from programs.synthesis.synthesis import synthesize
 
 
 class Test(TestCase):
-    def test_abstract_synthesis_loop_realisable(self):
-        with open('../../examples/parallel/arbiter/program.prog') as file:
-            data = file.read()
-            program = string_to_program(data)
-            prop = UniOp("G", Value("true"))
-            real, _ = abstract_synthesis_loop(program, prop,
-                                              program.env_events + list(program.states) + program.out_events,
-                                              program.con_events, "shaunazzopardi/strix")
+    def test_synthesize_1(self):
+        with open('../examples/parallel/arbiter/program.prog') as program_file:
+            program = string_to_program(program_file.read())
+            tlsf_file = '../examples/parallel/arbiter/controller.tlsf'
+            (real, mm) = synthesize(program, None, tlsf_file, True)
             self.assertTrue(real)
 
-    def test_abstract_synthesis_loop_unrealisable(self):
-        with open('../../examples/parallel/arbiter/program.prog') as file:
-            data = file.read()
-            program = string_to_program(data)
-            prop = UniOp("G", Value("false"))
-            real, _ = abstract_synthesis_loop(program, prop,
-                                              program.env_events + list(program.states) + program.out_events,
-                                              program.con_events, "shaunazzopardi/strix")
+    def test_synthesize_2(self):
+        with open('../examples/parallel/arbiter/program2.prog') as program_file:
+            program = string_to_program(program_file.read())
+            tlsf_file = '../examples/parallel/arbiter/controller.tlsf'
+            (real, mm) = synthesize(program, None, tlsf_file, True)
+            self.assertTrue(real)
+
+    def test_synthesize_3(self):
+        with open('../examples/parallel/arbiter1/program.prog') as program_file:
+            program = string_to_program(program_file.read())
+            tlsf_file = '../examples/parallel/arbiter1/controller.tlsf'
+            (real, mm) = synthesize(program, None, tlsf_file, True)
             self.assertFalse(real)
+
+    def test_synthesize_4(self):
+        with open('../examples/parallel/arbiter2/program.prog') as program_file:
+            program = string_to_program(program_file.read())
+            tlsf_file = '../examples/parallel/arbiter2/controller.tlsf'
+            (real, mm) = synthesize(program, None, tlsf_file, True)
+            self.assertTrue(real)
+
+    def test_synthesize_5(self):
+        with open('../examples/parallel/arbiter3/program.prog') as program_file:
+            program = string_to_program(program_file.read())
+            tlsf_file = '../examples/parallel/arbiter3/controller.tlsf'
+            (real, mm) = synthesize(program, None, tlsf_file, True)
+            self.assertTrue(real)
+
+    def test_synthesize_6(self):
+        with open('../examples/parallel/arbiter3/program1.prog') as program_file:
+            program = string_to_program(program_file.read())
+            tlsf_file = '../examples/parallel/arbiter3/controller.tlsf'
+            (real, mm) = synthesize(program, None, tlsf_file, True)
+            self.assertFalse(real)
+
+    def test_synthesize_7(self):
+        with open('../examples/parallel/arbiter3/program2.prog') as program_file:
+            program = string_to_program(program_file.read())
+            tlsf_file = '../examples/parallel/arbiter3/controller.tlsf'
+            (real, mm) = synthesize(program, None, tlsf_file, True)
+            self.assertTrue(real)
+
+    def test_synthesize_7(self):
+        with open('../examples/parallel/arbiter3/program3.prog') as program_file:
+            program = string_to_program(program_file.read())
+            tlsf_file = '../examples/parallel/arbiter3/controller.tlsf'
+            (real, mm) = synthesize(program, None, tlsf_file, True)
+            self.assertFalse(real)
+
+    def test_synthesize_8(self):
+        with open('../examples/parallel/arbiter3/program4.prog') as program_file:
+            program = string_to_program(program_file.read())
+            tlsf_file = '../examples/parallel/arbiter3/controller.tlsf'
+            (real, mm) = synthesize(program, None, tlsf_file, True)
+            self.assertFalse(real)
+
+    def test_synthesize_9(self):
+        with open('../examples/parallel/arbiter3/program5.prog') as program_file:
+            program = string_to_program(program_file.read())
+            tlsf_file = '../examples/parallel/arbiter3/controller.tlsf'
+            (real, mm) = synthesize(program, None, tlsf_file, True)
+            self.assertTrue(real)
+
+    def test_synthesize_10(self):
+        with open('../examples/parallel/arbiter3/program_no_disj.prog') as program_file:
+            program = string_to_program(program_file.read())
+            tlsf_file = '../examples/parallel/arbiter3/controller.tlsf'
+            (real, mm) = synthesize(program, None, tlsf_file, True)
+            self.assertTrue(real)
+
+    def test_synthesize_11(self):
+        with open('../examples/parallel/arbiter3/programorig.prog') as program_file:
+            program = string_to_program(program_file.read())
+            tlsf_file = '../examples/parallel/arbiter3/controller.tlsf'
+            (real, mm) = synthesize(program, None, tlsf_file, True)
+            self.assertFalse(real)
+

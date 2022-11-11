@@ -22,7 +22,7 @@ program eventually__allow_grant {
     ENVIRONMENT TRANSITIONS {
         q0 -> q0 [!request $ cnt := cnt + 1],
         q0 -> q1 [request],
-        q1 -> q2 [cnt = 0 $ >> allow_grant]
+        q1 -> q2 [cnt == 0 $ # allow_grant]
     }
 
     CONTROLLER TRANSITIONS {

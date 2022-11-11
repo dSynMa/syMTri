@@ -4,14 +4,14 @@ from tempfile import NamedTemporaryFile
 
 
 class ModelChecker:
-    def check(self, nuxmv_script: str, ltl_spec, bound, livenesstosafety: bool):
+    def check(self, nuxmv_script: str, ltl_spec, bound, livenesstosafety=False):
         with NamedTemporaryFile('w', suffix='.smv', delete=False) as model, \
                 NamedTemporaryFile('w', suffix='.txt', delete=False) as commands:
             model.write(nuxmv_script)
             model.close()
 
             commands.write("go_msat\n")
-            call = 'check_ltlspec_ic3'
+            call = 'check_ltlspec_ic3 -i'
             if livenesstosafety != None and livenesstosafety:
                 call += ' -K 0 '
             if bound is not None:

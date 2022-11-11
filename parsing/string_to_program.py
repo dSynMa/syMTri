@@ -1,8 +1,11 @@
+import parsec
+from parsec import generate, string, sepBy, spaces, regex
+
+from parsing.string_to_prop_logic import string_to_math_expression, string_to_prop
 from programs.program import Program
 from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
-from prop_lang.parsing.string_to_assignments import *
-from prop_lang.parsing.string_to_prop_logic import prop_logic_expression
+from prop_lang.biop import BiOp
 from prop_lang.util import true
 from prop_lang.variable import Variable
 
@@ -41,7 +44,7 @@ def program_parser():
 def event_parser():
     yield spaces() >> string("{") >> spaces()
     events = yield sepBy(name << spaces(), regex("(,|;)") << spaces())
-    yield optional(regex("(,|;)"))
+    yield parsec.optional(regex("(,|;)"))
     yield spaces()
     yield string("}")
     yield spaces()
@@ -52,7 +55,7 @@ def event_parser():
 def state_parser():
     yield string("STATES") >> spaces() >> string("{") >> spaces()
     tagged_states = yield sepBy(tagged_state_parser << spaces(), regex("(,|;)") << spaces())
-    yield optional(regex("(,|;)"))
+    yield parsec.optional(regex("(,|;)"))
     yield spaces()
     yield string("}")
     yield spaces()
@@ -66,7 +69,7 @@ def state_parser():
 @generate
 def tagged_state_parser():
     state_name = yield state << spaces()
-    state_label = yield optional(string(":") >> spaces() >> regex("(init|flag)"), "")
+    state_label = yield parsec.optional(string(":") >> spaces() >> regex("(init|flag)"), "")
     return state_name, state_label
 
 
@@ -90,9 +93,12 @@ def flagging_states_parser():
 def bool_decl_parser():
     var = yield name << spaces() << string(":") << spaces()
     type = yield regex("bool(ean)?") << spaces()
-    yield spaces()
     yield string(":=") << spaces()
-    value = yield prop_logic_expression << spaces()
+    raw_value = yield regex("[^,;\}]+") << spaces()
+    try:
+        value = string_to_prop(raw_value)
+    except Exception as e:
+        yield parsec.fail_with(str(e))
     return TypedValuation(var, type, value)
 
 
@@ -103,17 +109,47 @@ def num_decl_parser():
         "(int(eger)?|nat(ural)?|bool(ean)?|real|([0-9]+|" + name_regex + ")+\.\.([0-9]+|" + name_regex + "))") << spaces()
     yield spaces()
     yield string(":=") << spaces()
-    value = yield math_expression << spaces()
+    raw_value = yield regex("[^,;\}]+") << spaces()
+    try:
+        value = string_to_math_expression(raw_value)
+    except Exception as e:
+        yield parsec.fail_with(str(e))
     return TypedValuation(var, type, value)
+
+
+@generate
+def bool_decl_parser_untyped():
+    var = yield name << spaces() << spaces()
+    yield string(":=") << spaces()
+    raw_value = yield regex("[^,;\]\#]+") << spaces()
+    try:
+        value = string_to_prop(raw_value)
+    except Exception as e:
+        yield parsec.fail_with(str(e))
+    return BiOp(Variable(var), ":=", value)
+
+
+@generate
+def num_decl_parser_untyped():
+    var = yield name << spaces() << spaces()
+    yield string(":=") << spaces()
+    raw_value = yield regex("[^,;\]\#]+") << spaces()
+    try:
+        value = string_to_math_expression(raw_value)
+    except Exception as e:
+        yield parsec.fail_with(str(e))
+    return BiOp(Variable(var), ":=", value)
 
 
 @generate
 def initial_val_parser():
     yield string("VALUATION") >> spaces() >> string("{") >> spaces()
-    vals = yield sepBy(try_choice(bool_decl_parser, num_decl_parser), regex("(,|;)") << spaces())
+    vals = yield sepBy(parsec.try_choice(bool_decl_parser, num_decl_parser), regex("(,|;)") << spaces())
     yield spaces()
-    yield optional(regex("(,|;)"))
+    yield parsec.optional(regex("(,|;)"))
     yield spaces() >> string("}")
+    if len(set([v.name for v in vals])) < len(vals):
+        raise Exception("Variables with same name in VALUATION.")
     return vals
 
 
@@ -124,16 +160,29 @@ def transition_parser():
     yield regex("-+>") >> spaces()
     dest = yield state << spaces()
     yield string("[") >> spaces()
-    cond = yield optional(prop_logic_expression, [])
+    raw_cond = yield parsec.optional(spaces() >> regex("[^$#\]]+"), "true")
+    cond = string_to_prop(raw_cond)
     yield spaces()
-    act = yield optional(string("$") >> spaces() >> assignments, [])
+    act = yield parsec.optional(string("$") >> spaces() >> assignments << spaces() << parsec.lookahead(regex("(#|\])")),
+                                [])
     yield spaces()
-    events = yield optional(string(">>") >> spaces() >> sepBy(variable << spaces(), string(',') >> spaces()), [])
+    raw_events = yield parsec.optional(
+        string("#") >> spaces() >> sepBy(regex("[^\],;]+") << spaces(), string(',') >> spaces()), [])
+    events = [Variable(e) for e in raw_events]
     yield spaces()
     yield string("]") >> spaces()
     if not cond:
         cond = true()
     return Transition(source, cond, act, events, dest)
+
+
+@generate
+def assignments():
+    asss = yield sepBy(parsec.try_choice(bool_decl_parser_untyped, num_decl_parser_untyped),
+                       regex("(,|;)") >> spaces()) << parsec.optional(regex("(,|;)") >> spaces())
+    if len(set([v.left for v in asss])) < len(asss):
+        raise Exception("Variables can only be assigned once by a transition.")
+    return asss
 
 
 @generate

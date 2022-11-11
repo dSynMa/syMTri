@@ -46,8 +46,13 @@ class BiOp(Formula):
     def __hash__(self):
         return hash((self.left, self.op, self.right))
 
+    # returns list of variables that appear in formula
+    # ordered as they appear in the formula
+    # without already appearing variables
     def variablesin(self) -> [Variable]:
-        return self.left.variablesin() + self.right.variablesin()
+        vars = self.left.variablesin() + self.right.variablesin()
+        vars_unique = [v for (i, v) in enumerate(vars) if v not in vars[:i]]
+        return vars_unique
 
     def ground(self, context: [TypedValuation]):
         return BiOp(self.left.ground(context), self.op, self.right.ground(context))
@@ -153,3 +158,8 @@ class BiOp(Formula):
             raise NotImplementedError(f"{self.op} unsupported")
         else:
             return op(left_expr, right_expr), And(left_invar, right_invar)
+
+    def replace_math_exprs(self, cnt):
+        new_left, dic_left = self.left.replace_math_exprs(cnt)
+        new_right, dic_right = self.right.replace_math_exprs(cnt + len(dic_left))
+        return BiOp(new_left, self.op, new_right), dic_left | dic_right

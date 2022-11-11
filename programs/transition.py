@@ -18,3 +18,15 @@ class Transition:
 
         return to_str(self.src) + " -> " + to_str(self.tgt) + " {" + str(self.condition) + " $ " + "; ".join(
             [str(x) for x in self.action]) + " >> " + "[" + ", ".join([str(x) for x in self.output]) + "]" + "}"
+
+    def __eq__(self, other):
+        """Overrides the default implementation"""
+        if isinstance(other, Transition):
+            return self.src == other.src and self.tgt == other.tgt and self.condition == other.condition and self.action == other.action and self.output == other.output
+        return NotImplemented
+
+    def __hash__(self):
+        return hash((self.src, self.condition, frozenset(self.action), frozenset(self.output), self.tgt))
+
+    def with_condition(self, new_condition):
+        return Transition(self.src, new_condition, self.action, self.output, self.tgt)

@@ -1,11 +1,15 @@
 import re
 
 from pysmt.shortcuts import Solver
+from sympy.logic.boolalg import to_dnf, simplify_logic
+from sympy.parsing.sympy_parser import parse_expr
 
+from parsing.string_to_prop_logic import string_to_prop
 from programs.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
+from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
 from prop_lang.value import Value
 from prop_lang.variable import Variable
@@ -188,6 +192,49 @@ def push_negation(f: Formula):
                     return UniOp(f.op, push_negation(f.right))
     else:
         return f
+
+
+def only_dis_or_con_junctions(f: Formula):
+    if isinstance(f, Atom):
+        return f
+    elif isinstance(f, UniOp):
+        return UniOp(f.op, only_dis_or_con_junctions(f.right))
+    elif isinstance(f, BiOp):
+        if f.op in ["&", "&&", "|", "||"]:
+            return BiOp(only_dis_or_con_junctions(f.left), f.op, only_dis_or_con_junctions(f.right))
+        elif f.op in ["->", "=>"]:
+            return BiOp(UniOp("!", only_dis_or_con_junctions(f.left)), "&", only_dis_or_con_junctions(f.right))
+        elif f.op in ["<->", "<=>"]:
+            return BiOp(only_dis_or_con_junctions(BiOp(f.left, "->", f.right)), "&",
+                        only_dis_or_con_junctions(BiOp(f.right, "->", f.left)))
+        else:
+            # check if math expr? math expr should be abstracted out before manipulating formulas also for dnf
+            # print("only_dis_or_con_junctions: I do not know how to handle " + str(f) + ", treating it as math expression.")
+            return MathExpr(f)
+    else:
+        return f
+
+
+dnf_cache = {}
+
+
+def dnf(f: Formula):
+    if f in dnf_cache.keys():
+        return dnf_cache[f]
+    simple_f = only_dis_or_con_junctions(f)
+    simple_f_without_math, dic = simple_f.replace_math_exprs(0)
+    for_sympi = parse_expr(str(simple_f_without_math).replace("!", "~"), evaluate=True)
+    if isinstance(for_sympi, int):
+        return f
+    # if formula has more than 8 variables it can take a long time, dnf is exponential
+    in_dnf = to_dnf(simplify_logic(for_sympi), simplify=True, force=True)
+    print(str(f) + " after dnf becomes " + str(in_dnf).replace("~", "!"))
+    in_dnf_formula = string_to_prop(str(in_dnf).replace("~", "!"))
+    in_dnf_math_back = in_dnf_formula.replace([BiOp(key, ":=", value) for key, value in dic.items()])
+
+    dnf_cache[f] = in_dnf_math_back
+
+    return in_dnf_math_back
 
 
 def append_to_variable_name(formula, vars_names, suffix):

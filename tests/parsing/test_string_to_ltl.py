@@ -1,17 +1,26 @@
 from unittest import TestCase
 
-import parsec
-
-from prop_lang.parsing.string_to_ltl import string_to_ltl
+from parsing.string_to_ltl import string_to_ltl
 
 
 class Test(TestCase):
-    def test_string_to_ltl_0(self):
-        try:
-            ltl = string_to_ltl("(a & (a)")
+    def test_string_to_ltl_00(self):
+        ltl = string_to_ltl("a | !a & p")
+        print(ltl)
+        ltl = string_to_ltl("(a & (a | (a | (a | (a | ((a | (a | (a | (a | !aa)))) | !a))))) | !a & (a & ((a | (a | (a | ((a & (a | aa) | !a & (a & aa)) | !a)))) | !a) | !a) & (a & (a | (a & (a | (a | (a | (a | (aa | !a))))) | !a & ((a & (a | (a & (a | aa) | !a & (a & aa))) | !a & (a | (a | aa))) | !a))) | !a & (a & (a | (a | (a | (a | (a | (aa | !a)))))) | !a & (a | ((a | (a | (a | aa))) | !a)))))")
+        print(ltl)
+        ltl = string_to_ltl("a | !a | p")
+        print(ltl)
+        ltl = string_to_ltl("a & a | !a")
+        print(ltl)
+        ltl = string_to_ltl("p & q -> r")
+        print(ltl)
+        ltl = string_to_ltl("p -> q & q")
+        print(ltl)
+        ltl = string_to_ltl("p -> (q & q) -> p")
+        print(ltl)
+        if ltl is None:
             self.fail()
-        except parsec.ParseError:
-            assert True
 
     def test_string_to_ltl_1(self):
         ltl = string_to_ltl("(a) & (a)")
@@ -44,7 +53,7 @@ class Test(TestCase):
             self.fail()
 
     def test_string_to_ltl_5(self):
-        ltl = string_to_ltl("(((done2 & !room1) | (done1 & room1)) & granting) & (cnt > 1) ")
+        ltl = string_to_ltl("(((done2 & !room1) | (done1 & room1)) & granting)")
         print(ltl)
         if ltl is None:
             self.fail()

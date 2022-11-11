@@ -60,3 +60,6 @@ class Value(Atom):
             return FALSE(), TRUE()
         else:
             return Int(int(self.name)), TRUE()
+
+    def replace_math_exprs(self, cnt):
+        return self, {}

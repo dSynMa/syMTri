@@ -2,7 +2,7 @@ import os
 import subprocess
 from tempfile import NamedTemporaryFile
 
-from prop_lang.parsing.string_to_prop_logic import string_to_pl, string_to_mathexpr
+from parsing.string_to_prop_logic import string_to_prop, string_to_math_expression
 
 
 class Ranker:
@@ -12,7 +12,7 @@ class Ranker:
             tmp.close()
 
             try:
-                cmd = "docker run " + " -v " + tmp.name + ":/workdir/prog.c" + " --entrypoint /bin/bash cpachecker -c " + \
+                cmd = "docker run -v " + tmp.name + ":/workdir/prog.c" + " -v ./output:/output" + " --entrypoint /bin/bash cpachecker -c " + \
                       '"(rm -r -f ./output); (/cpachecker/scripts/cpa.sh  -preprocess -terminationAnalysis /workdir/prog.c -spec /cpachecker/config/properties/termination.prp ' \
                       '&& cat output/terminationAnalysisResult.txt)"'
 
@@ -35,8 +35,9 @@ class Ranker:
                             ",")
                         invars.remove('')
 
-                        return True, string_to_mathexpr(ranking_function).simplify(), [string_to_pl(invar) for invar in
-                                                                                       invars]
+                        return True, string_to_math_expression(ranking_function).simplify(), [string_to_prop(invar) for
+                                                                                              invar in
+                                                                                              invars]
                     except Exception as err:
                         raise Exception(str(err) + "\n\n" + out + "\n\n" + main_function)
                 else:

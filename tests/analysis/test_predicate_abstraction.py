@@ -1,8 +1,8 @@
 from unittest import TestCase
 
 from programs.analysis.model_checker import ModelChecker
-from programs.analysis.predicate_abstraction import abstraction_to_ltl_with_turns, predicate_abstraction
-from programs.parsing.string_to_program import string_to_program
+from programs.abstraction.predicate_abstraction import abstraction_to_ltl_with_turns, predicate_abstraction
+from parsing.string_to_program import string_to_program
 from programs.util import create_nuxmv_model, symbol_table_from_program
 
 
@@ -13,7 +13,7 @@ class Test(TestCase):
             program = string_to_program(data)
             model_checker = ModelChecker()
             nuxmv_model = create_nuxmv_model(program.to_nuXmv_with_turns())
-            abstraction = predicate_abstraction(program, [], [], symbol_table_from_program(program), False)
+            abstraction, _, _ = predicate_abstraction(program, [], [], program.symbol_table, False)
             ltl_abstraction = abstraction_to_ltl_with_turns(abstraction)
             print(ltl_abstraction)
             out = model_checker.check(nuxmv_model, str(ltl_abstraction), None, False)

@@ -3,6 +3,7 @@ from typing import Any
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.value import Value
+from prop_lang.variable import Variable
 
 
 class MathExpr(Formula):
@@ -47,3 +48,6 @@ class MathExpr(Formula):
 
     def to_smt(self, symbol_table: Any):
         return self.formula.to_smt(symbol_table)
+
+    def replace_math_exprs(self, cnt):
+        return Variable("math_" + str(cnt)), {Variable("math_" + str(cnt)): self}

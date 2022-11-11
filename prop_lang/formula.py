@@ -40,3 +40,7 @@ class Formula(ABC):
     @abstractmethod
     def to_smt(self, symbol_table: Any) -> (FNode, FNode):
         pass
+
+    @abstractmethod
+    def replace_math_exprs(self, cnt):
+        pass
