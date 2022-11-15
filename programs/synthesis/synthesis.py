@@ -1,4 +1,5 @@
-from typing import Tuple
+from typing import Tuple, List
+
 
 from parsing.string_to_ltl import string_to_ltl
 from programs.abstraction.predicate_abstraction import predicate_abstraction, abstraction_to_ltl
@@ -17,15 +18,15 @@ from programs.util import symbol_table_from_program, create_nuxmv_model_for_comp
     check_for_nondeterminism_last_step, ground_transitions
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from prop_lang.util import neg, G, F, implies, conjunct, X, true
+from prop_lang.util import neg, G, F, implies, conjunct, X, true, Value
 from prop_lang.variable import Variable
 
 
-def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tuple[bool, Program]:
+def setup_synthesis(aut: Program, ltl_text: str, tlsf_path: str) -> Tuple[Formula | Value, Formula | BiOp, List, List]:
     if tlsf_path is not None:
         ltl_text = syfco_ltl(tlsf_path)
         if " Error\"" in ltl_text:
-            raise Exception("Error parsing " + tlsf_path + " see syfco error:\n" + ltl_text)
+            raise Exception(f"Error parsing {tlsf_path}, see syfco error:\n{ltl_text}")
         ltl_text = ltl_text.replace('"', "")
         in_acts_syfco = syfco_ltl_in(tlsf_path)
         out_acts_syfco = syfco_ltl_out(tlsf_path)
@@ -49,8 +50,15 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
         raise Exception("TLSF file has different output variables than the program.")
 
     in_acts += [Variable(e) for e in aut.states]
+    return ltl_assumptions, ltl_guarantees, in_acts, out_acts
 
+
+def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tuple[bool, Program]:
+    ltl_assumptions, ltl_guarantees, in_acts, out_acts = setup_synthesis(
+        aut, ltl_text, tlsf_path
+    )
     return abstract_synthesis_loop(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts, docker)
+
 
 def _notebook_setup(aut: Program, ltl_text: str, tlsf_path: str, docker: bool):
     if tlsf_path is not None:
@@ -162,8 +170,6 @@ def _notebook_iterate(
         print(e)
     finally:
         return success, mm
-
-
 
 
 def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable],
