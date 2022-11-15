@@ -62,6 +62,7 @@ GRAMMAR = '''
         | 'true'
         | 'false'
         | atom
+        | number
         ;
         
     math_expression
@@ -93,9 +94,11 @@ parser: Grammar = compile(GRAMMAR)
 math_config = ParserConfig(start='math_expression_eof')
 
 
-def tuple_to_formula(node) -> Formula:
+def tuple_to_formula(node, hoa_flag) -> Formula:
     if isinstance(node, str):
-        if re.match("(true|false|tt|ff|TRUE|FALSE|True|False|TT|FF)|[0-9]+(\.[0-9]+)?", node):
+        if re.match("(true|false|tt|ff|TRUE|FALSE|True|False|TT|FF)", node):
+            return Value(node)
+        elif not hoa_flag and re.match("[0-9]+(\.[0-9]+)?", node):
             return Value(node)
         else:
             return Variable(node)
@@ -133,6 +136,6 @@ def string_to_math_expression(text: str) -> MathExpr:
     return formula
 
 
-def string_to_prop(text: str) -> Formula:
-    formula = parser.parse(text, semantics=Semantics())
+def string_to_prop(text: str, hoa_flag=False) -> Formula:
+    formula = parser.parse(text, semantics=Semantics(hoa_flag=hoa_flag))
     return formula
