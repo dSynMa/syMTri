@@ -60,6 +60,56 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
     return abstract_synthesis_loop(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts, docker)
 
 
+def compute_abstraction(
+        program: Program,
+        ltl_assumptions: Formula,
+        ltl_guarantees: Formula,
+        in_acts: List[Variable],
+        out_acts: List[Variable],
+        docker: str,
+        state_predicates, transition_predicates) -> Tuple[bool, MealyMachine]:
+
+    (
+        abstract_program,
+        env_to_program_transitions,
+        con_to_program_transitions
+    ) = predicate_abstraction(
+        program,
+        state_predicates,
+        transition_predicates,
+        program.symbol_table,
+        True)
+
+    pred_list = state_predicates + transition_predicates
+    abstraction, ltl_to_program_transitions = abstraction_to_ltl(
+        abstract_program, env_to_program_transitions,
+        con_to_program_transitions, state_predicates,
+        transition_predicates)
+
+    print(", ".join(map(str, abstraction)))
+
+    pred_name_dict = {p: label_pred(p, pred_list) for p in pred_list}
+    pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
+
+    # TODO should be computed incrementally
+    predicate_constraints = []
+    i = 0
+    while i < len(transition_predicates):
+        dec = pred_name_dict[transition_predicates[i]]
+        inc = pred_name_dict[transition_predicates[i + 1]]
+        predicate_constraints += [X(G(neg(conjunct(dec, inc))))]
+
+        predicate_constraints += [implies(G(F(dec)), G(F(inc)))]
+        i += 2
+
+    (real, mm) = ltl_synthesis.ltl_synthesis(
+        predicate_constraints + abstraction,  # assumptions
+        [implies(ltl_assumptions, ltl_guarantees).simplify()], # ltl formula
+        in_acts + pred_acts,
+        out_acts,
+        docker)
+    return real, mm, pred_list, abstract_program, ltl_to_program_transitions
+
 
 def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable],
                             out_acts: [Variable], docker: str) -> \
@@ -76,47 +126,16 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
     rankings = []
     transition_predicates = []
 
-    mon_events = program.out_events \
-                 + [Variable(s) for s in program.states]
+    mon_events = program.out_events + [Variable(s) for s in program.states]
 
     while True:
 
-        ## Compute abstraction
-        abstract_program, env_to_program_transitions, con_to_program_transitions = predicate_abstraction(program,
-                                                                                                         state_predicates,
-                                                                                                         transition_predicates,
-                                                                                                         symbol_table,
-                                                                                                         True)
-        print(abstract_program.to_dot())
-
-        pred_list = state_predicates + transition_predicates
-        abstraction, ltl_to_program_transitions = abstraction_to_ltl(abstract_program, env_to_program_transitions,
-                                                                     con_to_program_transitions, state_predicates,
-                                                                     transition_predicates)
-        print(", ".join(map(str, abstraction)))
-
-        pred_name_dict = {p: label_pred(p, pred_list) for p in pred_list}
-        state_pred_label_to_formula = {label_pred(p, pred_list): p for p in state_predicates}
-        pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
-
-        # should be computed incrementally
-        predicate_constraints = []
-        i = 0
-        while i < len(transition_predicates):
-            dec = pred_name_dict[transition_predicates[i]]
-            inc = pred_name_dict[transition_predicates[i + 1]]
-            predicate_constraints += [X(G(neg(conjunct(dec, inc))))]
-
-            predicate_constraints += [implies(G(F(dec)), G(F(inc)))]
-            i += 2
-
-        assumptions = predicate_constraints + abstraction
-
-        (real, mm) = ltl_synthesis.ltl_synthesis(assumptions,
-                                                 [ltl],
-                                                 in_acts + pred_acts,
-                                                 out_acts,
-                                                 docker)
+        # Compute abstraction
+        (
+            real, mm, pred_list, abstract_program, ltl_to_program_transitions
+        ) = compute_abstraction(
+            program, ltl_assumptions, ltl_guarantees, in_acts, out_acts, "",
+            state_predicates, transition_predicates)
 
         ## checking for mismatch
         mealy = mm.to_nuXmv_with_turns(program.states, program.out_events, state_predicates, transition_predicates)
@@ -227,11 +246,12 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         write_counterexample(program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
         check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, False, None)
-
         ## end compute mismatch trace
+
 
         ## check if should use liveness or not
         try:
+            state_pred_label_to_formula = {label_pred(p, pred_list): p for p in state_predicates}
             last_counterstrategy_state = [key for key, v in ce[-1].items() if key.startswith("st_") and v == "TRUE"][0]
             use_liveness, counterexample_loop, entry_predicate, entry_predicate_in_terms_of_preds \
                 = use_liveness_refinement(program, agreed_on_transitions,
