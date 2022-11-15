@@ -70,6 +70,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                  + [Variable(s) for s in program.states]
 
     while True:
+
+        ## Compute abstraction
         abstract_program, env_to_program_transitions, con_to_program_transitions = predicate_abstraction(program,
                                                                                                          state_predicates,
                                                                                                          transition_predicates,
@@ -87,6 +89,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         state_pred_label_to_formula = {label_pred(p, pred_list): p for p in state_predicates}
         pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
 
+        # should be computed incrementally
         predicate_constraints = []
         i = 0
         while i < len(transition_predicates):
@@ -105,6 +108,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                                  out_acts,
                                                  docker)
 
+        ## checking for mismatch
         mealy = mm.to_nuXmv_with_turns(program.states, program.out_events, state_predicates, transition_predicates)
 
         print(mm.to_dot(pred_list))
@@ -119,7 +123,9 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real, False,
                                                                                                ltl_assumptions,
                                                                                                ltl_guarantees)
+        ## end checking for mismatch
 
+        ## deal with if there is nothing wrong
         if not there_is_mismatch or contradictory:
             print("No mismatch found between " + (
                 "strategy" if real else "counterstrategy") + " and program when excluding traces for which the monitor has a non-deterministic choice.")
@@ -139,10 +145,13 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 print("No mismatch found between " + (
                     "strategy" if real else "counterstrategy") + " and program even when including traces for which the monitor has a non-deterministic choice.")
                 print("Computing projection of controller onto predicate abstraction..")
-                controller_projected_on_program = mm.project_controller_on_program(program, abstract_program,
-                                                                                   state_predicates,
-                                                                                   transition_predicates,
-                                                                                   symbol_table | symbol_table_preds)
+
+                ## Finished
+                if program_on_env_side:
+                    controller_projected_on_program = mm.project_controller_on_program(program, abstract_program,
+                                                                                       state_predicates,
+                                                                                       transition_predicates,
+                                                                                       symbol_table | symbol_table_preds)
 
                 for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
                     ok = False
@@ -166,6 +175,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
                     return False, controller_projected_on_program
 
+        ## Compute mismatch trace
         ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(
             len(program.env_transitions) + len(program.con_transitions), out)
         transitions_without_stutter_monitor_took = concretize_transitions(program, transition_indices_and_state)
@@ -208,6 +218,9 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         write_counterexample(program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
         check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, False, None)
 
+        ## end compute mismatch trace
+
+        ## check if should use liveness or not
         try:
             last_counterstrategy_state = [key for key, v in ce[-1].items() if key.startswith("st_") and v == "TRUE"][0]
             use_liveness, counterexample_loop, entry_predicate, entry_predicate_in_terms_of_preds \
@@ -221,6 +234,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             print("I will try to use safety instead.")
             use_liveness = False
 
+        ## do liveness refinement
         if use_liveness:
             try:
                 ranking, invars = liveness_step(program, counterexample_loop, symbol_table,
@@ -259,6 +273,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 print("I will try safety refinement instead.")
                 use_liveness = False
 
+        ## do safety refinement
         if eager or not use_liveness:
             new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program, use_dnf=False)
             print("Found: " + ", ".join([str(p) for p in new_preds]))
