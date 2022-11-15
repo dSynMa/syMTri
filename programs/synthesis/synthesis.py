@@ -60,121 +60,12 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
     return abstract_synthesis_loop(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts, docker)
 
 
-def _notebook_setup(aut: Program, ltl_text: str, tlsf_path: str, docker: bool):
-    if tlsf_path is not None:
-        ltl_text = syfco_ltl(tlsf_path)
-        ltl_text = ltl_text.replace('"', "")
-        # TODO use below for sanity checking of monitor variables
-        in_acts = syfco_ltl_in(tlsf_path)
-        out_acts = syfco_ltl_out(tlsf_path)
-        print(ltl_text, in_acts, out_acts)
-
-    ltl = string_to_ltl(ltl_text)
-    in_acts = [e for e in aut.env_events + aut.out_events] + [e for e in aut.states]
-    out_acts = [e for e in aut.con_events]
-    symbol_table = symbol_table_from_program(aut)
-    preds = set()
-    liveness_assumptions = []
-    program_nuxmv_model = aut.to_nuXmv_with_turns()
-    mon_events = aut.out_events \
-                 + [Variable(s) for s in aut.states]
-    return (
-        symbol_table, preds, liveness_assumptions, program_nuxmv_model, mon_events,
-        ltl, in_acts, out_acts
-    )
-
-
-def _notebook_iterate(
-    program, symbol_table, preds, liveness_assumptions, program_nuxmv_model, mon_events,
-    ltl, in_acts, out_acts
-    ):
-    try:
-        pred_list = list(preds)
-        abstract_monitor = predicate_abstraction(program, pred_list, symbol_table)
-        print(abstract_monitor.to_dot())
-        #TODO add relations between norms to abstraction, e.g. G(p0 -> !p1), if [p0] = cnt = 0 and [p1] = cnt != 0
-        abstraction = abstraction_to_ltl(abstract_monitor, pred_list)
-        print(", ".join(map(str, abstraction)))
-
-        assumptions = abstraction
-        assumptions += liveness_assumptions
-
-        pred_acts = [Variable("pred_" + str(i)) for i in range(0, len(preds))]
-        pred_var_list = [label_pred_according_to_index(p, pred_list) for p in pred_list]
-
-        (real, mm) = strix_adapter.strix(assumptions, [ltl], in_acts + pred_acts, out_acts, docker)
-
-        if real:
-            mealy = mm.to_nuXmv_with_turns(mon_events + pred_var_list)
-            print(mm.to_dot())
-            mealy.invar += ['compatible']
-
-            # sanity check
-            system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
-            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system)
-
-            if there_is_mismatch:
-                raise Exception("I think there is a bug:"
-                                " Strix declares the problem to be realisable, but gives a controller that does not "
-                                "conform to monitor. \n" + out)
-
-            controller_projected_on_program = mm.project_controller_on_program(program, abstract_monitor, pred_list, symbol_table)
-            return (real, controller_projected_on_program)
-        else:
-            mealy = mm.to_nuXmv_with_turns(mon_events + pred_var_list)
-            print(mm.to_dot())
-
-            system = create_nuxmv_model_for_compatibility_checking(program_nuxmv_model, mealy, mon_events, pred_list)
-            there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system)
-
-            if not there_is_mismatch:
-                # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
-                #return False, mm
-                success = False
-            else:
-                ce, transition_indices = parse_nuxmv_ce_output_finite(out)
-                transitions = program.env_transitions + program.con_transitions
-                transitions_without_stutter = [transitions[int(t)] for t in transition_indices if t != '-1']
-
-                use_liveness = use_liveness_refinement(ce, symbol_table)
-                force_liveness = False
-
-                if not use_liveness:
-                    new_preds = safety_refinement(ce, transitions_without_stutter, symbol_table, program)
-                    print(", ".join([str(p) for p in new_preds]))
-                    if new_preds == []:
-                        raise Exception("No predicates identified, use liveness instead?")
-
-                    new_all_preds = {x.simplify() for x in new_preds}
-                    new_all_preds = reduce_up_to_iff(preds, list(new_all_preds), symbol_table)
-
-                    if len(new_all_preds) == len(preds):
-                        print("New predicates (" + ", ".join([str(p) for p in new_preds]) + ") are subset of "
-                                                                                            "previous predicates, attempting liveness instead.")
-                        force_liveness = True
-
-                    preds = new_all_preds
-
-                if use_liveness or force_liveness:
-                    last_transition = transitions_without_stutter[len(transitions_without_stutter) - 1]
-
-                    success, new_formula_or_ce = liveness_refinement(create_nuxmv_model(program_nuxmv_model),
-                                                                        last_transition)
-                    if success:
-                        liveness_assumptions.append(new_formula_or_ce)
-                    else:
-                        raise NotImplementedError(
-                            "Counterstrategy is trying to stay in a loop in a monitor that involves an infinite-state variable. "
-                            "The current heuristics are not enough to prove this impossible.")
-    except Exception as e:
-        print(e)
-    finally:
-        return success, mm
-
 
 def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable],
                             out_acts: [Variable], docker: str) -> \
         Tuple[bool, MealyMachine]:
+    
+    
     # TODO add check that monitor is deterministic under given ltl assumptions
     eager = False
     keep_only_bool_interpolants = True
