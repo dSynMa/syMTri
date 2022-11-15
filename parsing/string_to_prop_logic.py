@@ -46,11 +46,7 @@ GRAMMAR = '''
         | 'X' atomic
         | 'F' atomic
         | 'G' atomic
-        | '(' expression ')'
-        | atomic 'U' atomic
-        | atomic 'W' atomic
-        | atomic 'R' atomic
-        | atomic 'M' atomic
+        | '(' @:expression ')'
         | math_expression '<' math_expression
         | math_expression '<=' math_expression
         | math_expression '>' math_expression
@@ -104,30 +100,39 @@ def tuple_to_formula(node) -> Formula:
         else:
             return Variable(node)
     elif len(node) == 2:
-        return UniOp(node[0], tuple_to_formula(node[1]))
+        return UniOp(node[0], (node[1]))
     elif len(node) == 3:
         if node[0] == "(":
-            return tuple_to_formula(node[1])
+            return (node[1])
         else:
-            v0 = (tuple_to_formula(node[0]))
-            v2 = (tuple_to_formula(node[2]))
+            v0 = ((node[0]))
+            v2 = ((node[2]))
             if v0 == None or v2 == None:
                 print("None")
             if re.match("(\+|\-|\*|\/|<|>|<=|>=|==)", node[1]):
-                return MathExpr(BiOp(tuple_to_formula(node[0]), node[1], tuple_to_formula(node[2])))
+                return MathExpr(BiOp((node[0]), node[1], (node[2])))
             else:
-                return BiOp(tuple_to_formula(node[0]), node[1], tuple_to_formula(node[2]))
+                return BiOp((node[0]), node[1], (node[2]))
     else:
         raise Exception("Invalid node: " + str(node))
 
 
+class Semantics:
+    def __init__(self, hoa_flag=False):
+        self.hoa_flag = hoa_flag
+
+    def _default(self, ast):
+        if isinstance(ast, Formula):
+            return ast
+        else:
+            return tuple_to_formula(ast, self.hoa_flag)
+
+
 def string_to_math_expression(text: str) -> MathExpr:
-    ast = parser.parse(text, config=math_config)
-    formula = tuple_to_formula(ast)
+    formula = parser.parse(text, config=math_config, semantics=Semantics(False))
     return formula
 
 
 def string_to_prop(text: str) -> Formula:
-    ast = parser.parse(text)
-    formula = tuple_to_formula(ast)
+    formula = parser.parse(text, semantics=Semantics())
     return formula
