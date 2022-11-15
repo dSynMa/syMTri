@@ -65,15 +65,24 @@ def tuple_to_formula(node) -> Formula:
         else:
             return Variable(node)
     elif len(node) == 2:
-        return UniOp(node[0], tuple_to_formula(node[1]))
+        return UniOp(node[0], (node[1]))
     elif len(node) == 3:
-        return BiOp(tuple_to_formula(node[0]), node[1], tuple_to_formula(node[2]))
+        return BiOp((node[0]), node[1], (node[2]))
     else:
         raise Exception("Invalid node: " + str(node))
 
+
 parser: Grammar = compile(GRAMMAR)
 
+
+class Semantics:
+    def _default(self, ast):
+        if isinstance(ast, Formula):
+            return ast
+        else:
+            return tuple_to_formula(ast)
+
+
 def string_to_ltl(text: str) -> Formula:
-    ast = parser.parse(text)
-    formula = tuple_to_formula(ast)
+    formula = parser.parse(text, semantics=Semantics())
     return formula

@@ -2,10 +2,7 @@ import subprocess
 from tempfile import NamedTemporaryFile
 from typing import Tuple
 
-from hoa.ast.boolean_expression import TrueFormula
-from hoa.parsers import HOAParser, HOA
-
-from parsing.hoaparser_label_expression_to_prop_logic import hoaparser_label_expression_to_pl
+from parsing.hoa_parser import hoa_to_transitions
 from programs.program import Program
 from programs.synthesis.mealy_machine import MealyMachine
 from programs.util import synthesis_problem_to_TLSF_script
@@ -56,12 +53,12 @@ def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variab
 
             if "UNREALIZABLE" in output:
                 print("\nINFO: Strix thinks the current abstract problem is unrealisable! I will check..\n")
-                mon = parse_hoa(output)
+                mon = parse_hoa(env_events=in_act, con_events=out_act, output=output)
                 return False, mon
             elif "REALIZABLE" in output:
                 print("\nINFO: Strix thinks the current abstract problem is realisable! I will check..\n")
                 try:
-                    mon = parse_hoa(output)
+                    mon = parse_hoa(env_events=in_act, con_events=out_act, output=output)
                     return True, mon
                 except Exception as err:
                     raise err
@@ -73,76 +70,16 @@ def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variab
     pass
 
 
-def parse_hoa(output) -> Program:
-    hoa_parser = HOAParser()
+def parse_hoa(env_events, con_events, output) -> Program:
     if "UNREALIZABLE" in output:
         counterstrategy = True
     else:
         counterstrategy = False
 
-    good_output = "\n".join(
-        ln for ln in output.split("\n")
-        if not ln.startswith("controllable-AP")
-        and not ln.startswith("REALIZABLE")
-        and not ln.startswith("UNREALIZABLE")
-    )
-    print(good_output)
-    hoa: HOA = hoa_parser(good_output)
-    ctrl_aps = ([ln for ln in output.split("\n")
-                 if ln.startswith("controllable-AP")
-                 ][0].strip().split()[1:])
-    ctrl_aps = set(int(i) for i in ctrl_aps)
-
-    if counterstrategy:
-        env_events = [
-            ap for i, ap in enumerate(hoa.header.propositions)
-            if i in ctrl_aps]
-        con_events = [
-            ap for i, ap in enumerate(hoa.header.propositions)
-            if i not in ctrl_aps]
-    else:
-        env_events = [
-            ap for i, ap in enumerate(hoa.header.propositions)
-            if i not in ctrl_aps]
-        con_events = [
-            ap for i, ap in enumerate(hoa.header.propositions)
-            if i in ctrl_aps]
-
-    init_st = next(iter(hoa.header.start_states))
-    if len(init_st) != 1:
-        raise Exception("More than one initial state:\n" + good_output)
-    else:
-        init_st = list(init_st)[0]
+    init_st, trans = hoa_to_transitions(output)
 
     mon = MealyMachine("counterstrategy" if counterstrategy else "controller", init_st, env_events, con_events)
 
-    trans = {}
-
-    var_labels = [BiOp(Variable(i), ":=", Variable(ap)) for i, ap in
-                  enumerate(hoa.header.propositions)]
-
-    for st, edges in hoa.body.state2edges.items():
-        for e in edges:
-            if e.label == TrueFormula():
-                key = (st.index, true(), e.state_conj[0])
-                if key not in trans.keys():
-                    trans[key] = [true()]
-                else:
-                    trans[key] += [true()]
-            else:
-                assert e.label.SYMBOL == '&'
-
-                env = hoaparser_label_expression_to_pl(str(e.label.operands[0]))
-                env = env.replace(var_labels)
-
-                con = hoaparser_label_expression_to_pl("(& " + " ".join(map(str, e.label.operands[1:])) + ")")
-                con = con.replace(var_labels)
-
-                key = (st.index, env, e.state_conj[0])
-                if key not in trans.keys():
-                    trans[key] = [con]
-                else:
-                    trans[key] += [con]
     mon.add_transitions(trans)
     return mon
 
