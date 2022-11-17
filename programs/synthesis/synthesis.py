@@ -67,7 +67,8 @@ def compute_abstraction(
         in_acts: List[Variable],
         out_acts: List[Variable],
         docker: str,
-        state_predicates, transition_predicates) -> Tuple[bool, MealyMachine]:
+        state_predicates, transition_predicates,
+        notebook=False) -> Tuple[bool, MealyMachine]:
 
     (
         abstract_program,
@@ -86,7 +87,8 @@ def compute_abstraction(
         con_to_program_transitions, state_predicates,
         transition_predicates)
 
-    print(", ".join(map(str, abstraction)))
+    if not notebook:
+        print(", ".join(map(str, abstraction)))
 
     pred_name_dict = {p: label_pred(p, pred_list) for p in pred_list}
     pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
