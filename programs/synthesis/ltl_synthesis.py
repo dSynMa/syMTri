@@ -13,8 +13,7 @@ from prop_lang.variable import Variable
 
 
 def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variable], out_act: [Variable],
-                  strix_tlsf_command: str) -> Tuple[
-    bool, MealyMachine]:
+                  strix_tlsf_command: str) -> Tuple[bool, MealyMachine]:
     # prepare for tlsf
     in_acts_lowered = [str(a) for a in in_act]
     out_acts_lowered = [str(a) for a in out_act]
@@ -46,7 +45,8 @@ def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variab
             tmp.close()
 
             # cmd = strix_tlsf_command + " -v '" + tmp.name + "':./spec.tlsf -m both "
-            cmd = "docker run " + " -v " + tmp.name + ":/spec.tlsf" + " --entrypoint ./strix/scripts/strix_tlsf.sh strix_tlsf /spec.tlsf" + " -m both"
+            # cmd = "docker run " + " -v " + tmp.name + ":/spec.tlsf" + " --entrypoint ./strix/scripts/strix_tlsf.sh strix_tlsf /spec.tlsf" + " -m both"
+            cmd = f"strix_tlsf.sh {tmp.name} -m both"
 
             so = subprocess.getstatusoutput(cmd)
             output: str = so[1]
