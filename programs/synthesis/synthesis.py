@@ -1,5 +1,5 @@
 from typing import Tuple, List
-
+from dataclasses import dataclass
 
 from parsing.string_to_ltl import string_to_ltl
 from programs.abstraction.predicate_abstraction import predicate_abstraction, abstraction_to_ltl
@@ -20,6 +20,47 @@ from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.util import neg, G, F, implies, conjunct, X, true, Value
 from prop_lang.variable import Variable
+
+
+class Predicates:
+    # TODO turn into a dataclass
+    def __init__(self, state, transition) -> None:
+        self.state_predicates = state
+        self.transition_predicates = transition
+
+    def pred_list(self):
+        yield from self.state_predicates
+        yield from self.transition_predicates
+
+    def symbol_table_preds(self):
+        def str_label(v):
+            return str(label_pred(v, self.list()))
+
+        return {
+            str_label(v): TypedValuation(str_label(v), "bool", true())
+            for v in self.list(all)}
+
+
+@dataclass
+class Inputs:
+    program: Program
+    ltl_assumptions: Formula
+    ltl_guarantees: Formula
+    in_acts: List[Variable]
+    out_acts: List[Variable]
+
+    def ltl(self):
+        return implies(self.ltl_assumptions, self.ltl_guarantees).simplify()
+
+    def mon_events(self):
+        return self.program.out_events + [Variable(s) for s in self.program.states]
+
+    def symbol_table_prevs(self):
+        def _prev(name):
+            return f"{name}_prev"
+        return {
+            _prev(tv.name): TypedValuation(_prev(tv.name), tv.type, tv.value) 
+            for tv in self.program.valuation}
 
 
 def setup_synthesis(aut: Program, ltl_text: str, tlsf_path: str) -> Tuple[Formula | Value, Formula | BiOp, List, List]:
@@ -50,55 +91,52 @@ def setup_synthesis(aut: Program, ltl_text: str, tlsf_path: str) -> Tuple[Formul
         raise Exception("TLSF file has different output variables than the program.")
 
     in_acts += [Variable(e) for e in aut.states]
-    return ltl_assumptions, ltl_guarantees, in_acts, out_acts
+    inputs = Inputs(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts)
+
+    return inputs
 
 
 def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tuple[bool, Program]:
-    ltl_assumptions, ltl_guarantees, in_acts, out_acts = setup_synthesis(
+    ltl_assumptions, ltl_guarantees, in_acts, out_acts, inputs = setup_synthesis(
         aut, ltl_text, tlsf_path
     )
-    return abstract_synthesis_loop(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts, docker)
+    return abstract_synthesis_loop(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts, docker, inputs)
 
 
-def compute_abstraction(
-        program: Program,
-        ltl_assumptions: Formula,
-        ltl_guarantees: Formula,
-        in_acts: List[Variable],
-        out_acts: List[Variable],
-        docker: str,
-        state_predicates, transition_predicates,
-        notebook=False) -> Tuple[bool, MealyMachine]:
-
+def compute_abstraction(p: Predicates, inp: Inputs, docker: str, notebook=False) -> Tuple[bool, MealyMachine]:
+    # ltl_assumptions: Formula,
+    # ltl_guarantees: Formula,
+    # in_acts: List[Variable],
+    # out_acts: List[Variable],
+    # state_predicates, transition_predicates,
     (
         abstract_program,
         env_to_program_transitions,
         con_to_program_transitions
     ) = predicate_abstraction(
-        program,
-        state_predicates,
-        transition_predicates,
-        program.symbol_table,
+        inp.program,
+        p.state_predicates,
+        p.transition_predicates,
+        inp.program.symbol_table,
         True)
 
-    pred_list = state_predicates + transition_predicates
     abstraction, ltl_to_program_transitions = abstraction_to_ltl(
         abstract_program, env_to_program_transitions,
-        con_to_program_transitions, state_predicates,
-        transition_predicates)
+        con_to_program_transitions, p.state_predicates,
+        p.transition_predicates)
 
     if not notebook:
         print(", ".join(map(str, abstraction)))
 
-    pred_name_dict = {p: label_pred(p, pred_list) for p in pred_list}
+    pred_name_dict = {p: label_pred(p, p.list_all()) for p in p.pred_list()}
     pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
 
     # TODO should be computed incrementally
     predicate_constraints = []
     i = 0
-    while i < len(transition_predicates):
-        dec = pred_name_dict[transition_predicates[i]]
-        inc = pred_name_dict[transition_predicates[i + 1]]
+    while i < len(p.transition_predicates):
+        dec = pred_name_dict[p.transition_predicates[i]]
+        inc = pred_name_dict[p.transition_predicates[i + 1]]
         predicate_constraints += [X(G(neg(conjunct(dec, inc))))]
 
         predicate_constraints += [implies(G(F(dec)), G(F(inc)))]
@@ -106,18 +144,82 @@ def compute_abstraction(
 
     (real, mm) = ltl_synthesis.ltl_synthesis(
         predicate_constraints + abstraction,  # assumptions
-        [implies(ltl_assumptions, ltl_guarantees).simplify()], # ltl formula
-        in_acts + pred_acts,
-        out_acts,
+        # [implies(inp.ltl_assumptions, inp.ltl_guarantees).simplify()],  # ltl formula
+        [inp.ltl()],  # ltl formula
+        inp.in_acts + pred_acts,
+        inp.out_acts,
         docker)
-    return real, mm, pred_list, abstract_program, ltl_to_program_transitions
+    if not notebook:
+        print(mm.to_dot(p.pred_list()))
+    return real, mm, abstract_program, ltl_to_program_transitions
+
+
+def check_mismatch(p: Predicates, mm, real, inp: Inputs, abstract_program):
+    mealy = mm.to_nuXmv_with_turns(p.program.states, p.program.out_events, p.state_predicates, p.transition_predicates)
+    system = create_nuxmv_model_for_compatibility_checking(p.program, mealy, inp.mon_events(), p.pred_list(), False)
+    contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real, False, inp.ltl_assumptions, inp.ltl_guarantees)
+    
+    whatsitsname = "controller" if real else "counterstrategy"
+
+    ## deal with if there is nothing wrong
+    if not there_is_mismatch or contradictory:
+        print("No mismatch found between " + (
+            "strategy" if real else "counterstrategy") + " and program when excluding traces for which the monitor has a non-deterministic choice.")
+        print("Trying for when the monitor has a non-deterministic choice..")
+        system = create_nuxmv_model_for_compatibility_checking(p.program, mealy, inp.mon_events(), p.pred_list(), True)
+        contradictory, there_is_mismatch, out = \
+            there_is_mismatch_between_monitor_and_strategy(
+                system, real, False, inp.ltl_assumptions, inp.ltl_guarantees)
+
+        if contradictory:
+            raise Exception(
+                "I have no idea what's gone wrong. Strix thinks the previous mealy machine is a "
+                f"{whatsitsname}"
+                ", but nuxmv thinks it is non consistent with the monitor.\n"
+                "This may be a problem with nuXmv, e.g., it does not seem to play well with integer division.")
+
+        if not there_is_mismatch:
+            print(f"No mismatch found between {whatsitsname} and program even when including traces for which the monitor has a non-deterministic choice.")
+            print("Computing projection of controller onto predicate abstraction...")
+
+            ## Finished
+            # symbol_table_preds = {
+            #     str(label_pred(v, pred_list)): TypedValuation(str(label_pred(v, pred_list)), "bool", true()) for v in
+            #     pred_list}
+            # symbol_table_prevs = {tv.name + "_prev": TypedValuation(tv.name + "_prev", tv.type, tv.value) for tv in program.valuation}
+            controller_projected_on_program = mm.project_controller_on_program(
+                inp.program, abstract_program,
+                p.state_predicates,
+                p.transition_predicates,
+                p.program.symbol_table | p.symbol_table_preds())
+
+            for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
+                ok = False
+                for tt in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
+                    if t.tgt == tt.src:
+                        ok = True
+                        break
+                if not ok:
+                    print(controller_projected_on_program.to_dot())
+
+                    raise Exception(
+                        "Warning: Model checking says counterstrategy is fine, but something has gone wrong with projection "
+                        "onto the predicate abstraction, and I have no idea why. "
+                        f"The {whatsitsname} has no outgoing transition from this monitor state: "
+                        ", ".join([str(p) for p in list(t.tgt)]))
+            # if real:
+            #     return True, controller_projected_on_program
+            # else:
+            #     # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
+            #     return False, controller_projected_on_program
+    return there_is_mismatch, real, controller_projected_on_program, out
+    # return contradictory, there_is_mismatch, out, mealy
 
 
 def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable],
-                            out_acts: [Variable], docker: str) -> \
+                            out_acts: [Variable], docker: str, inp: Inputs) -> \
         Tuple[bool, MealyMachine]:
-    
-    
+
     # TODO add check that monitor is deterministic under given ltl assumptions
     eager = False
     keep_only_bool_interpolants = True
@@ -128,84 +230,29 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
     rankings = []
     transition_predicates = []
 
-    mon_events = program.out_events + [Variable(s) for s in program.states]
+    mon_events = inp.program.out_events + [Variable(s) for s in inp.program.states]
 
     while True:
 
+        stuff = Predicates(state_predicates, transition_predicates, program)
+
         # Compute abstraction
         (
-            real, mm, pred_list, abstract_program, ltl_to_program_transitions
+            real, mm, abstract_program, ltl_to_program_transitions
         ) = compute_abstraction(
-            program, ltl_assumptions, ltl_guarantees, in_acts, out_acts, "",
-            state_predicates, transition_predicates)
+            stuff, ltl_assumptions, ltl_guarantees, in_acts, out_acts, "")
 
-        ## checking for mismatch
-        mealy = mm.to_nuXmv_with_turns(program.states, program.out_events, state_predicates, transition_predicates)
+        (
+            there_is_mismatch, real, controller_projected_on_program, out
+        ) = check_mismatch(stuff, mm, mon_events, real, inp, abstract_program)
 
-        print(mm.to_dot(pred_list))
-
-        symbol_table_preds = {
-            str(label_pred(v, pred_list)): TypedValuation(str(label_pred(v, pred_list)), "bool", true()) for v in
-            pred_list}
-        symbol_table_prevs = {tv.name + "_prev": TypedValuation(tv.name + "_prev", tv.type, tv.value) for tv in
-                              program.valuation}
-
-        system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, False)
-        contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real, False,
-                                                                                               ltl_assumptions,
-                                                                                               ltl_guarantees)
-        ## end checking for mismatch
-
-        ## deal with if there is nothing wrong
-        if not there_is_mismatch or contradictory:
-            print("No mismatch found between " + (
-                "strategy" if real else "counterstrategy") + " and program when excluding traces for which the monitor has a non-deterministic choice.")
-            print("Trying for when the monitor has a non-deterministic choice..")
-            system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, True)
-            contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real, False,
-                                                                                                   ltl_assumptions,
-                                                                                                   ltl_guarantees)
-
-            if contradictory:
-                raise Exception("I have no idea what's gone wrong. Strix thinks the previous mealy machine is a " +
-                                (
-                                    "controller" if real else "counterstrategy") + ", but nuxmv thinks it is non consistent with the monitor.\n"
-                                                                                   "This may be a problem with nuXmv, e.g., it does not seem to play well with integer division.")
-
-            if not there_is_mismatch:
-                print("No mismatch found between " + (
-                    "strategy" if real else "counterstrategy") + " and program even when including traces for which the monitor has a non-deterministic choice.")
-                print("Computing projection of controller onto predicate abstraction..")
-
-                ## Finished
-                if program_on_env_side:
-                    controller_projected_on_program = mm.project_controller_on_program(program, abstract_program,
-                                                                                       state_predicates,
-                                                                                       transition_predicates,
-                                                                                       symbol_table | symbol_table_preds)
-
-                for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
-                    ok = False
-                    for tt in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
-                        if t.tgt == tt.src:
-                            ok = True
-                            break
-
-                    if not ok:
-                        print(controller_projected_on_program.to_dot())
-
-                        raise Exception(
-                            "Warning: Model checking says counterstrategy is fine, but something has gone wrong with projection "
-                            "onto the predicate abstraction, and I have no idea why. "
-                            "The " + (
-                                "controller" if real else "counterstrategy") + " has no outgoing transition from this monitor state: "
-                            + ", ".join([str(p) for p in list(t.tgt)]))
-                if real:
-                    return True, controller_projected_on_program
-                else:
-                    # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
-                    return False, controller_projected_on_program
-
+        if not there_is_mismatch:
+            if real:
+                return True, controller_projected_on_program
+            else:
+                # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
+                return False, controller_projected_on_program
+        
         ## Compute mismatch trace
         ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(
             len(program.env_transitions) + len(program.con_transitions), out)
@@ -267,6 +314,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             use_liveness = False
 
         ## do liveness refinement
+
         if use_liveness:
             try:
                 ranking, invars = liveness_step(program, counterexample_loop, symbol_table,
