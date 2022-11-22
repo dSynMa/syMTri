@@ -154,11 +154,22 @@ def compute_abstraction(p: Predicates, inp: Inputs, docker: str, notebook=False)
     return real, mm, abstract_program, ltl_to_program_transitions
 
 
-def check_mismatch(p: Predicates, mm, real, inp: Inputs, abstract_program):
+@dataclass
+class Counterexample:
+    program: Program
+    ce: Any
+    agreed_on: list
+    disagreed_on: list
+    monitor_actually_took: Any
+
+
+def check_mismatch(p: Predicates,
+                   mm: MealyMachine, real,
+                   inp: Inputs, abstract_program,
+                   ltl_to_program_transitions):
     mealy = mm.to_nuXmv_with_turns(p.program.states, p.program.out_events, p.state_predicates, p.transition_predicates)
     system = create_nuxmv_model_for_compatibility_checking(p.program, mealy, inp.mon_events(), p.pred_list(), False)
     contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real, False, inp.ltl_assumptions, inp.ltl_guarantees)
-    
     whatsitsname = "controller" if real else "counterstrategy"
 
     ## deal with if there is nothing wrong
@@ -205,58 +216,16 @@ def check_mismatch(p: Predicates, mm, real, inp: Inputs, abstract_program):
                         "onto the predicate abstraction, and I have no idea why. "
                         f"The {whatsitsname} has no outgoing transition from this monitor state: "
                         ", ".join([str(p) for p in list(t.tgt)]))
-            # if real:
-            #     return True, controller_projected_on_program
-            # else:
-            #     # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
-            #     return False, controller_projected_on_program
-    return there_is_mismatch, real, controller_projected_on_program, out
-    # return contradictory, there_is_mismatch, out, mealy
-
-
-def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable],
-                            out_acts: [Variable], docker: str, inp: Inputs) -> \
-        Tuple[bool, MealyMachine]:
-
-    # TODO add check that monitor is deterministic under given ltl assumptions
-    eager = False
-    keep_only_bool_interpolants = True
-
-    symbol_table = program.symbol_table
-
-    state_predicates = []
-    rankings = []
-    transition_predicates = []
-
-    mon_events = inp.program.out_events + [Variable(s) for s in inp.program.states]
-
-    while True:
-
-        stuff = Predicates(state_predicates, transition_predicates, program)
-
-        # Compute abstraction
-        (
-            real, mm, abstract_program, ltl_to_program_transitions
-        ) = compute_abstraction(
-            stuff, ltl_assumptions, ltl_guarantees, in_acts, out_acts, "")
-
-        (
-            there_is_mismatch, real, controller_projected_on_program, out
-        ) = check_mismatch(stuff, mm, mon_events, real, inp, abstract_program)
-
-        if not there_is_mismatch:
-            if real:
-                return True, controller_projected_on_program
-            else:
-                # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
-                return False, controller_projected_on_program
-        
+            if not there_is_mismatch:
+                # Quit early
+                return None, real, controller_projected_on_program, out
+       
         ## Compute mismatch trace
         ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(
-            len(program.env_transitions) + len(program.con_transitions), out)
-        transitions_without_stutter_monitor_took = concretize_transitions(program, transition_indices_and_state)
-        last_desired_env_con_env_trans: [(Transition, Transition)] = ce_state_to_predicate_abstraction_trans(
-            ltl_to_program_transitions, symbol_table | symbol_table_preds, ce[-4], ce[-3], ce[-2])
+            len(inp.program.env_transitions) + len(inp.program.con_transitions), out)
+        transitions_without_stutter_monitor_took = concretize_transitions(inp.program, transition_indices_and_state)
+        last_desired_env_con_env_trans: List[Tuple[Transition, Transition]] = ce_state_to_predicate_abstraction_trans(
+            ltl_to_program_transitions, inp.program.symbol_table | p.symbol_table_preds, ce[-4], ce[-3], ce[-2])
 
         agreed_on_transitions = transitions_without_stutter_monitor_took[:-1]
         disagreed_on_transitions = []
@@ -264,11 +233,11 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         if len(monitor_actually_took) == 1:
             (tran, state) = monitor_actually_took[0]
-            if tran in program.con_transitions:
+            if tran in inp.program.con_transitions:
                 disagreed_on_transitions += (list(set(
                     t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in
                     last_desired_env_con_env_trans[i][0])), state)
-            elif tran in program.env_transitions:
+            elif tran in inp.program.env_transitions:
                 disagreed_on_transitions += (list(set(
                     t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in
                     last_desired_env_con_env_trans[i][1])), state)
@@ -291,9 +260,12 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     set([t.with_condition(t.condition) for i in all_with_matching_con_trans for t in
                          last_desired_env_con_env_trans[i][1]])), env_state)
 
-        write_counterexample(program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
-        check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, False, None)
+        cex = Counterexample(inp.program, ce, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
+
+        write_counterexample(inp.program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
+        check_for_nondeterminism_last_step(monitor_actually_took[0][1], inp.program, False, None)
         ## end compute mismatch trace
+        return cex, real, controller_projected_on_program, out
 
 
         ## check if should use liveness or not
