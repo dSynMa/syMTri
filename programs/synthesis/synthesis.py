@@ -1,5 +1,6 @@
-from typing import Tuple, List
+from typing import Tuple, List, Any
 from dataclasses import dataclass
+
 
 from parsing.string_to_ltl import string_to_ltl
 from programs.abstraction.predicate_abstraction import predicate_abstraction, abstraction_to_ltl
@@ -144,7 +145,6 @@ def compute_abstraction(p: Predicates, inp: Inputs, docker: str, notebook=False)
 
     (real, mm) = ltl_synthesis.ltl_synthesis(
         predicate_constraints + abstraction,  # assumptions
-        # [implies(inp.ltl_assumptions, inp.ltl_guarantees).simplify()],  # ltl formula
         [inp.ltl()],  # ltl formula
         inp.in_acts + pred_acts,
         inp.out_acts,
@@ -173,20 +173,18 @@ def check_mismatch(p: Predicates, mm, real, inp: Inputs, abstract_program):
 
         if contradictory:
             raise Exception(
-                "I have no idea what's gone wrong. Strix thinks the previous mealy machine is a "
-                f"{whatsitsname}"
-                ", but nuxmv thinks it is non consistent with the monitor.\n"
+                f"I have no idea what's gone wrong. Strix thinks the previous mealy machine is a {whatsitsname}, "
+                "but nuXmv thinks it is non consistent with the monitor.\n"
                 "This may be a problem with nuXmv, e.g., it does not seem to play well with integer division.")
 
         if not there_is_mismatch:
-            print(f"No mismatch found between {whatsitsname} and program even when including traces for which the monitor has a non-deterministic choice.")
-            print("Computing projection of controller onto predicate abstraction...")
+            print(
+                f"No mismatch found between {whatsitsname} and program "
+                "even when including traces for which the monitor has a "
+                "non-deterministic choice.\n"
+                "Computing projection of controller onto predicate abstraction...")
 
             ## Finished
-            # symbol_table_preds = {
-            #     str(label_pred(v, pred_list)): TypedValuation(str(label_pred(v, pred_list)), "bool", true()) for v in
-            #     pred_list}
-            # symbol_table_prevs = {tv.name + "_prev": TypedValuation(tv.name + "_prev", tv.type, tv.value) for tv in program.valuation}
             controller_projected_on_program = mm.project_controller_on_program(
                 inp.program, abstract_program,
                 p.state_predicates,
