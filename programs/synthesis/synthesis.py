@@ -104,7 +104,7 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
     return abstract_synthesis_loop(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts, docker, inputs)
 
 
-def compute_abstraction(p: Predicates, inp: Inputs, docker: str, notebook=False) -> Tuple[bool, MealyMachine]:
+def compute_abstraction(p: Predicates, inp: Inputs, docker: str, notebook=False) -> Tuple[bool, MealyMachine, Any, Any]:
     # ltl_assumptions: Formula,
     # ltl_guarantees: Formula,
     # in_acts: List[Variable],
@@ -167,8 +167,8 @@ def check_mismatch(p: Predicates,
                    mm: MealyMachine, real,
                    inp: Inputs, abstract_program,
                    ltl_to_program_transitions):
-    mealy = mm.to_nuXmv_with_turns(p.program.states, p.program.out_events, p.state_predicates, p.transition_predicates)
-    system = create_nuxmv_model_for_compatibility_checking(p.program, mealy, inp.mon_events(), p.pred_list(), False)
+    mealy = mm.to_nuXmv_with_turns(inp.program.states, inp.program.out_events, p.state_predicates, p.transition_predicates)
+    system = create_nuxmv_model_for_compatibility_checking(inp.program, mealy, inp.mon_events(), p.pred_list(), False)
     contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real, False, inp.ltl_assumptions, inp.ltl_guarantees)
     whatsitsname = "controller" if real else "counterstrategy"
 
@@ -177,7 +177,7 @@ def check_mismatch(p: Predicates,
         print("No mismatch found between " + (
             "strategy" if real else "counterstrategy") + " and program when excluding traces for which the monitor has a non-deterministic choice.")
         print("Trying for when the monitor has a non-deterministic choice..")
-        system = create_nuxmv_model_for_compatibility_checking(p.program, mealy, inp.mon_events(), p.pred_list(), True)
+        system = create_nuxmv_model_for_compatibility_checking(inp.program, mealy, inp.mon_events(), p.pred_list(), True)
         contradictory, there_is_mismatch, out = \
             there_is_mismatch_between_monitor_and_strategy(
                 system, real, False, inp.ltl_assumptions, inp.ltl_guarantees)
@@ -200,7 +200,7 @@ def check_mismatch(p: Predicates,
                 inp.program, abstract_program,
                 p.state_predicates,
                 p.transition_predicates,
-                p.program.symbol_table | p.symbol_table_preds())
+                inp.program.symbol_table | inp.symbol_table_preds())
 
             for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
                 ok = False
@@ -374,7 +374,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         # try getting a counterexaample
         (
             cex, real, controller_projected_on_program, out
-        ) = check_mismatch(preds, mm, mon_events, real, inp, abstract_program)
+        ) = check_mismatch(preds, mm, real, inp, abstract_program, ltl_to_program_transitions)
 
         if cex is None:
             if real:
