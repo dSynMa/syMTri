@@ -104,7 +104,7 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
     return abstract_synthesis_loop(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts, docker, inputs)
 
 
-def compute_abstraction(p: Predicates, inp: Inputs, docker: str, notebook=False) -> Tuple[bool, MealyMachine, Any, Any]:
+def compute_abstraction(preds: Predicates, inp: Inputs, docker: str, notebook=False) -> Tuple[bool, MealyMachine, Any, Any]:
     # ltl_assumptions: Formula,
     # ltl_guarantees: Formula,
     # in_acts: List[Variable],
@@ -116,28 +116,28 @@ def compute_abstraction(p: Predicates, inp: Inputs, docker: str, notebook=False)
         con_to_program_transitions
     ) = predicate_abstraction(
         inp.program,
-        p.state_predicates,
-        p.transition_predicates,
+        preds.state_predicates,
+        preds.transition_predicates,
         inp.program.symbol_table,
         True)
 
     abstraction, ltl_to_program_transitions = abstraction_to_ltl(
         abstract_program, env_to_program_transitions,
-        con_to_program_transitions, p.state_predicates,
-        p.transition_predicates)
+        con_to_program_transitions, preds.state_predicates,
+        preds.transition_predicates)
 
     if not notebook:
         print(", ".join(map(str, abstraction)))
 
-    pred_name_dict = {p: label_pred(p, p.list_all()) for p in p.pred_list()}
+    pred_name_dict = {p: label_pred(p, p.list_all()) for p in preds.pred_list()}
     pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
 
     # TODO should be computed incrementally
     predicate_constraints = []
     i = 0
-    while i < len(p.transition_predicates):
-        dec = pred_name_dict[p.transition_predicates[i]]
-        inc = pred_name_dict[p.transition_predicates[i + 1]]
+    while i < len(preds.transition_predicates):
+        dec = pred_name_dict[preds.transition_predicates[i]]
+        inc = pred_name_dict[preds.transition_predicates[i + 1]]
         predicate_constraints += [X(G(neg(conjunct(dec, inc))))]
 
         predicate_constraints += [implies(G(F(dec)), G(F(inc)))]
@@ -150,7 +150,7 @@ def compute_abstraction(p: Predicates, inp: Inputs, docker: str, notebook=False)
         inp.out_acts,
         docker)
     if not notebook:
-        print(mm.to_dot(p.pred_list()))
+        print(mm.to_dot(preds.pred_list()))
     return real, mm, abstract_program, ltl_to_program_transitions
 
 
