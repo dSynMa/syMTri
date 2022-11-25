@@ -269,7 +269,7 @@ def check_mismatch(p: Predicates,
     write_counterexample(inp.program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
     check_for_nondeterminism_last_step(monitor_actually_took[0][1], inp.program, False, None)
     ## end compute mismatch trace
-    return cex, real, controller_projected_on_program, out
+    return cex, real, None, out
 
 
 def try_liveness(inp: Inputs,
