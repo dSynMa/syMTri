@@ -200,7 +200,7 @@ def check_mismatch(p: Predicates,
                 inp.program, abstract_program,
                 p.state_predicates,
                 p.transition_predicates,
-                inp.program.symbol_table | inp.symbol_table_preds())
+                inp.program.symbol_table | p.symbol_table_preds())
 
             for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
                 ok = False
@@ -220,52 +220,56 @@ def check_mismatch(p: Predicates,
                 # Quit early
                 return None, real, controller_projected_on_program, out
        
-        ## Compute mismatch trace
-        ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(
-            len(inp.program.env_transitions) + len(inp.program.con_transitions), out)
-        transitions_without_stutter_monitor_took = concretize_transitions(inp.program, transition_indices_and_state)
-        last_desired_env_con_env_trans: List[Tuple[Transition, Transition]] = ce_state_to_predicate_abstraction_trans(
-            ltl_to_program_transitions, inp.program.symbol_table | p.symbol_table_preds, ce[-4], ce[-3], ce[-2])
+    ## Compute mismatch trace
+    ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(
+        len(inp.program.env_transitions) + len(inp.program.con_transitions), out)
+    transitions_without_stutter_monitor_took = concretize_transitions(inp.program, transition_indices_and_state)
+    last_desired_env_con_env_trans: List[Tuple[Transition, Transition]] = ce_state_to_predicate_abstraction_trans(
+        ltl_to_program_transitions, inp.program.symbol_table | p.symbol_table_preds(), ce[-4], ce[-3], ce[-2])
 
-        agreed_on_transitions = transitions_without_stutter_monitor_took[:-1]
-        disagreed_on_transitions = []
-        monitor_actually_took = transitions_without_stutter_monitor_took[-1]
+    agreed_on_transitions = transitions_without_stutter_monitor_took[:-1]
+    disagreed_on_transitions = []
+    monitor_actually_took = transitions_without_stutter_monitor_took[-1]
 
-        if len(monitor_actually_took) == 1:
-            (tran, state) = monitor_actually_took[0]
-            if tran in inp.program.con_transitions:
-                disagreed_on_transitions += (list(set(
-                    t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in
-                    last_desired_env_con_env_trans[i][0])), state)
-            elif tran in inp.program.env_transitions:
-                disagreed_on_transitions += (list(set(
-                    t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in
-                    last_desired_env_con_env_trans[i][1])), state)
-            else:
-                raise Exception("I don't know what kind of transition this is: " + str(tran))
+    if len(monitor_actually_took) == 1:
+        (tran, state) = monitor_actually_took[0]
+        if tran in inp.program.con_transitions:
+            disagreed_on_transitions += (list(set(
+                t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in
+                last_desired_env_con_env_trans[i][0])), state)
+        elif tran in inp.program.env_transitions:
+            disagreed_on_transitions += (list(set(
+                t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in
+                last_desired_env_con_env_trans[i][1])), state)
         else:
-            con_trans, con_state = monitor_actually_took[0]
-            env_trans, env_state = monitor_actually_took[1]
-            all_with_matching_con_trans = [i for i in range(len(last_desired_env_con_env_trans)) for t in
-                                           last_desired_env_con_env_trans[i][0] if t == con_trans]
-            if len(all_with_matching_con_trans) == 0:
-                monitor_actually_took = monitor_actually_took[:-1]
-                disagreed_on_transitions += (list(
-                    set([t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in
-                         last_desired_env_con_env_trans[i][0]])), con_state)
-            else:
-                agreed_on_transitions += [[monitor_actually_took[0]]]
-                monitor_actually_took = monitor_actually_took[1:]
-                disagreed_on_transitions += (list(
-                    set([t.with_condition(t.condition) for i in all_with_matching_con_trans for t in
-                         last_desired_env_con_env_trans[i][1]])), env_state)
+            raise Exception("I don't know what kind of transition this is: " + str(tran))
+    else:
+        con_trans, con_state = monitor_actually_took[0]
+        env_trans, env_state = monitor_actually_took[1]
+        all_with_matching_con_trans = [
+            i for i in range(len(last_desired_env_con_env_trans))
+            for t in last_desired_env_con_env_trans[i][0]
+            if t == con_trans]
+        if len(all_with_matching_con_trans) == 0:
+            monitor_actually_took = monitor_actually_took[:-1]
+            disagreed_on_transitions += (list(set([
+                t.with_condition(t.condition)
+                for i in range(len(last_desired_env_con_env_trans))
+                for t in last_desired_env_con_env_trans[i][0]])), con_state)
+        else:
+            agreed_on_transitions += [[monitor_actually_took[0]]]
+            monitor_actually_took = monitor_actually_took[1:]
+            disagreed_on_transitions += (list(set([
+                t.with_condition(t.condition)
+                for i in all_with_matching_con_trans
+                for t in last_desired_env_con_env_trans[i][1]])), env_state)
 
-        cex = Counterexample(inp.program, ce, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
+    cex = Counterexample(inp.program, ce, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
 
-        write_counterexample(inp.program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
-        check_for_nondeterminism_last_step(monitor_actually_took[0][1], inp.program, False, None)
-        ## end compute mismatch trace
-        return cex, real, controller_projected_on_program, out
+    write_counterexample(inp.program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
+    check_for_nondeterminism_last_step(monitor_actually_took[0][1], inp.program, False, None)
+    ## end compute mismatch trace
+    return cex, real, controller_projected_on_program, out
 
 
 def try_liveness(inp: Inputs,
