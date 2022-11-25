@@ -39,7 +39,7 @@ class Predicates:
 
         return {
             str_label(v): TypedValuation(str_label(v), "bool", true())
-            for v in self.list(all)}
+            for v in self.pred_list()}
 
 
 @dataclass
