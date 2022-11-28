@@ -164,7 +164,7 @@ class Counterexample:
 
 
 def check_mismatch(p: Predicates,
-                   mm: MealyMachine, real,
+                   mm: MealyMachine, real: bool,
                    inp: Inputs, abstract_program,
                    ltl_to_program_transitions):
     mealy = mm.to_nuXmv_with_turns(inp.program.states, inp.program.out_events, p.state_predicates, p.transition_predicates)
@@ -174,9 +174,12 @@ def check_mismatch(p: Predicates,
 
     ## deal with if there is nothing wrong
     if not there_is_mismatch or contradictory:
-        print("No mismatch found between " + (
-            "strategy" if real else "counterstrategy") + " and program when excluding traces for which the monitor has a non-deterministic choice.")
-        print("Trying for when the monitor has a non-deterministic choice..")
+        print(
+            "No mismatch found between "
+            f'{"strategy " if real else "counterstrategy "}'
+            "and program when excluding traces "
+            "for which the monitor has a non-deterministic choice.\n"
+            "Trying for when the monitor has a non-deterministic choice..")
         system = create_nuxmv_model_for_compatibility_checking(inp.program, mealy, inp.mon_events(), p.pred_list(), True)
         contradictory, there_is_mismatch, out = \
             there_is_mismatch_between_monitor_and_strategy(
@@ -218,7 +221,7 @@ def check_mismatch(p: Predicates,
                         ", ".join([str(p) for p in list(t.tgt)]))
             if not there_is_mismatch:
                 # Quit early
-                return None, real, controller_projected_on_program, out
+                return None, controller_projected_on_program
        
     ## Compute mismatch trace
     ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(
@@ -269,7 +272,7 @@ def check_mismatch(p: Predicates,
     write_counterexample(inp.program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
     check_for_nondeterminism_last_step(monitor_actually_took[0][1], inp.program, False, None)
     ## end compute mismatch trace
-    return cex, real, None, out
+    return cex, None
 
 
 def try_liveness(inp: Inputs,
@@ -363,8 +366,6 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
     rankings = []
     transition_predicates = []
 
-    mon_events = inp.program.out_events + [Variable(s) for s in inp.program.states]
-
     while True:
 
         preds = Predicates(state_predicates, transition_predicates, program)
@@ -377,7 +378,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         # try getting a counterexaample
         (
-            cex, real, controller_projected_on_program, out
+            cex, controller_projected_on_program
         ) = check_mismatch(preds, mm, real, inp, abstract_program, ltl_to_program_transitions)
 
         if cex is None:
