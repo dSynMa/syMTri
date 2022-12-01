@@ -34,12 +34,14 @@ class Predicates:
         yield from self.transition_predicates
 
     def symbol_table_preds(self):
+        pl = list(self.pred_list())
+
         def str_label(v):
-            return str(label_pred(v, self.list()))
+            return str(label_pred(v, pl))
 
         return {
             str_label(v): TypedValuation(str_label(v), "bool", true())
-            for v in self.pred_list()}
+            for v in pl}
 
 
 @dataclass
