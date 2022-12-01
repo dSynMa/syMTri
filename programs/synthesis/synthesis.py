@@ -170,7 +170,7 @@ def check_mismatch(p: Predicates,
                    inp: Inputs, abstract_program,
                    ltl_to_program_transitions):
     mealy = mm.to_nuXmv_with_turns(inp.program.states, inp.program.out_events, p.state_predicates, p.transition_predicates)
-    system = create_nuxmv_model_for_compatibility_checking(inp.program, mealy, inp.mon_events(), p.pred_list(), False)
+    system = create_nuxmv_model_for_compatibility_checking(inp.program, mealy, inp.mon_events(), list(p.pred_list()), False)
     contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real, False, inp.ltl_assumptions, inp.ltl_guarantees)
     whatsitsname = "controller" if real else "counterstrategy"
 
@@ -182,7 +182,7 @@ def check_mismatch(p: Predicates,
             "and program when excluding traces "
             "for which the monitor has a non-deterministic choice.\n"
             "Trying for when the monitor has a non-deterministic choice..")
-        system = create_nuxmv_model_for_compatibility_checking(inp.program, mealy, inp.mon_events(), p.pred_list(), True)
+        system = create_nuxmv_model_for_compatibility_checking(inp.program, mealy, inp.mon_events(), list(p.pred_list()), True)
         contradictory, there_is_mismatch, out = \
             there_is_mismatch_between_monitor_and_strategy(
                 system, real, False, inp.ltl_assumptions, inp.ltl_guarantees)
