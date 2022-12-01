@@ -345,8 +345,8 @@ def try_liveness(inp: Inputs,
                     "are a subset of previous predicates.\n"
                     "I will try safety refinement instead.")
                 use_liveness = False
-                # important to add this, since later on assumptions depend on position of predicates in list
-                preds.transition_predicates += new_transition_predicates
+            # important to add this, since later on assumptions depend on position of predicates in list
+            preds.transition_predicates += new_transition_predicates
 
             return True
         except Exception as e:
