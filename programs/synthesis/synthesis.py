@@ -131,7 +131,7 @@ def compute_abstraction(preds: Predicates, inp: Inputs, docker: str, notebook=Fa
     if not notebook:
         print(", ".join(map(str, abstraction)))
 
-    pred_name_dict = {p: label_pred(p, p.list_all()) for p in preds.pred_list()}
+    pred_name_dict = {p: label_pred(p, preds.pred_list()) for p in preds.pred_list()}
     pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
 
     # TODO should be computed incrementally
@@ -296,8 +296,8 @@ def try_liveness(inp: Inputs,
             entry_predicate,
             entry_predicate_in_terms_of_preds
         ) = use_liveness_refinement(
-            inp.program, cex.agreed_on_transitions,
-            cex.disagreed_on_transitions, last_counterstrategy_state,
+            inp.program, cex.agreed_on,
+            cex.disagreed_on, last_counterstrategy_state,
             cex.monitor_actually_took, inp.program.symbol_table,
             state_pred_label_to_formula)
     except Exception as e:
