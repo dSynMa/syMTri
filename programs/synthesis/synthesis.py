@@ -316,7 +316,8 @@ def try_liveness(inp: Inputs,
                 entry_predicate, entry_predicate_in_terms_of_preds,
                 cex.monitor_actually_took[0])
 
-            # rankings.append((ranking, invars)) todo in main loop
+            rankings.append((ranking, invars))
+
             new_transition_predicates = [
                 x for r, _ in rankings
                 for x in [
@@ -352,6 +353,76 @@ def try_liveness(inp: Inputs,
             print(e)
             print("I will try safety refinement instead.")
             return False
+    else:
+        return False
+
+
+def do_safety_refinement(inp: Inputs,
+                         preds: Predicates,
+                         cex: Counterexample,
+                         mm: MealyMachine,
+                         abstract_program: Program,
+                         keep_only_bool_interpolants: bool):
+    new_preds = safety_refinement(cex.ce, cex.agreed_on, cex.disagreed_on, inp.program.symbol_table, inp.program, use_dnf=False)
+    print("Found: " + ", ".join([str(p) for p in new_preds]))
+    if len(new_preds) == 0:
+        e = Exception("No state predicates identified.")
+        print(
+            "No state predicates identified.\n"
+            "Trying again by putting interpolant B in DNF form "
+            "and checking each disjunct separately. "
+            "This may take some time...")
+        new_preds = safety_refinement(cex.ce, cex.agreed_on, cex.disagreed_on, inp.program.symbol_table, inp.program, use_dnf=True)
+        print("Found: " + ", ".join([str(p) for p in new_preds]))
+        check_for_nondeterminism_last_step(cex.monitor_actually_took[0][1], inp.program, True, e)
+        raise e
+
+    def prev_valuation(v):
+        return TypedValuation(
+            str(v),
+            inp.program.symbol_table[str(v).removesuffix("_prev")].type,
+            "true")
+
+    new_all_preds = {x.simplify() for x in new_preds}
+    new_all_preds = reduce_up_to_iff(
+        preds.state_predicates,
+        list(new_all_preds),
+        inp.program.symbol_table | {
+            str(v): prev_valuation(v)
+            for p in new_all_preds
+            for v in p.variablesin()
+            if str(v).endswith("prev")})  # TODO symbol_table needs to be updated with prevs
+
+    if len(new_all_preds) == len(preds.state_predicates):
+        fmt_preds = ", ".join([str(p) for p in new_preds])
+        e = Exception(
+            f"New state predicates ({fmt_preds})"
+            "are a subset of previous predicates.")
+        check_for_nondeterminism_last_step(cex.monitor_actually_took[0][1], inp.program, True, e)
+        print("For debugging:\nComputing projection of controller onto predicate abstraction..")
+        controller_projected_on_program = mm.project_controller_on_program(
+            inp.program, abstract_program,
+            preds.state_predicates,
+            preds.transition_predicates,
+            inp.program.symbol_table | preds.symbol_table_preds())
+
+        print(controller_projected_on_program.to_dot())
+        raise e
+
+
+    # Should KOBI become an attribute of Predicates? Then we could just say
+    # preds.push_state(new predicates) and let it sort all that stuff out?
+    if keep_only_bool_interpolants:
+        bool_interpolants = [
+            p for p in new_preds
+            if p not in preds.state_predicates and p in new_all_preds and 0 == len([
+                    v for v in p.variablesin()
+                    if inp.program.symbol_table[str(v)].type != "bool" and inp.program.symbol_table[str(v)].type != "boolean"])]
+        if len(bool_interpolants) > 0:
+            new_all_preds = [p for p in new_all_preds if p in bool_interpolants or p in preds.state_predicates]
+    print("Using: " + ", ".join([str(p) for p in new_all_preds if p not in preds.state_predicates]))
+
+    preds.state_predicates = list(new_all_preds)
 
 
 def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable],
@@ -361,15 +432,11 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
     # TODO add check that monitor is deterministic under given ltl assumptions
     eager = False
     keep_only_bool_interpolants = True
-
-    symbol_table = program.symbol_table
-
     state_predicates = []
     rankings = []
     transition_predicates = []
 
     while True:
-
         preds = Predicates(state_predicates, transition_predicates, program)
 
         # Compute abstraction
@@ -392,57 +459,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         use_liveness = try_liveness(inp, preds, cex, rankings, force=False, only_suggest=False)
 
-        ## do safety refinement
         if eager or not use_liveness:
-            new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program, use_dnf=False)
-            print("Found: " + ", ".join([str(p) for p in new_preds]))
-            if len(new_preds) == 0:
-                e = Exception("No state predicates identified.")
-                print("No state predicates identified.")
-                print("Trying again by putting interpolant B in DNF form and checking each disjunct separately. This may take some time...")
-                new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program, use_dnf=True)
-                print("Found: " + ", ".join([str(p) for p in new_preds]))
-                check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, True, e)
-                raise e
-
-            new_all_preds = {x.simplify() for x in new_preds}
-            new_all_preds = reduce_up_to_iff(state_predicates,
-                                             list(new_all_preds),
-                                             symbol_table
-                                             | {str(v): TypedValuation(str(v),
-                                                                       symbol_table[str(v).removesuffix("_prev")].type,
-                                                                       "true")
-                                                for p in new_all_preds
-                                                for v in p.variablesin()
-                                                if str(v).endswith(
-                                                     "prev")})  # TODO symbol_table needs to be updated with prevs
-
-            if len(new_all_preds) == len(state_predicates):
-                e = Exception(
-                    "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
-                                                                                        "previous predicates."
-                )
-                check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, True, e)
-                print("For debugging:\nComputing projection of controller onto predicate abstraction..")
-                controller_projected_on_program = mm.project_controller_on_program(program, abstract_program,
-                                                                                   state_predicates,
-                                                                                   transition_predicates,
-                                                                                   symbol_table | symbol_table_preds)
-
-                print(controller_projected_on_program.to_dot())
-                raise e
-
-            if keep_only_bool_interpolants:
-                bool_interpolants = [p for p in new_preds if
-                                     p not in state_predicates and p in new_all_preds and 0 == len(
-                                         [v for v in p.variablesin() if
-                                          symbol_table[str(v)].type != "bool" and symbol_table[
-                                              str(v)].type != "boolean"])]
-                if len(bool_interpolants) > 0:
-                    new_all_preds = [p for p in new_all_preds if p in bool_interpolants or p in state_predicates]
-            print("Using: " + ", ".join([str(p) for p in new_all_preds if p not in state_predicates]))
-
-            state_predicates = list(new_all_preds)
+            do_safety_refinement(inp, preds, cex, mm, abstract_program, keep_only_bool_interpolants)
 
 
 def liveness_step(program, counterexample_loop, symbol_table, entry_predicate, entry_predicate_in_terms_of_preds,
