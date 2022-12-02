@@ -14,7 +14,7 @@ from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean, dnf, disjunct_formula_set
+from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean, dnf, infinite_type
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
@@ -33,7 +33,6 @@ def safety_refinement(ce: [dict], agreed_on_transitions: [[(Transition, dict)]],
 
     for t in disagreed_on_transitions[0]:
         neg_t = t.with_condition(neg(t.condition))
-        # TODO is this enough, or do we need to dnf the agreed on transitions also?
         for j in reversed(range(0, len(concurring_transitions) + 1)):
             Css = interpolation(program, concurring_transitions, (neg_t, disagreed_on_transitions[1]), j, symbol_table, use_dnf=use_dnf)
             if Css is None:
@@ -331,8 +330,7 @@ def use_liveness_refinement(program,
                             disagreed_on_transitions,
                             last_counterstrategy_state,
                             monitor_actually_took,
-                            symbol_table, pred_label_to_formula,
-                            entry_predicate_as_interpolant=True):
+                            symbol_table, pred_label_to_formula):
     yes = False
     mon_transitions = [(y, st) for xs in agreed_on_transitions for y, st in xs]
     ce = [x for xs in agreed_on_transitions for _, x in xs] + [disagreed_on_transitions[1]]
@@ -345,38 +343,16 @@ def use_liveness_refinement(program,
     if yes:
         ce_prog_loop_tran_concretised = mon_transitions[first_index:]
 
-        ce_prog_init_trans_concretised = mon_transitions[0:first_index]
+        if [] == [t for t, _ in ce_prog_loop_tran_concretised if [] != [a for a in t.action if infinite_type(a.left, program.valuation)]]:
+            return False, None, None, None
 
-        if entry_predicate_as_interpolant:
-            last_trans = disagreed_on_transitions[0][0] \
-                .with_condition(
-                neg(
-                    disjunct_formula_set(
-                        [t.condition for t in disagreed_on_transitions[0]]
-                        + [neg(t[0].condition) for t in monitor_actually_took])))
-
-            if len(ce_prog_init_trans_concretised) > 0:
-                entry_predicate = conjunct_formula_set(
-                    interpolation(program,
-                                  ce_prog_init_trans_concretised + ce_prog_loop_tran_concretised,
-                                  (last_trans, disagreed_on_transitions[1]),
-                                  len(ce_prog_init_trans_concretised),
-                                  symbol_table))
-            else:
-                entry_predicate = conjunct_formula_set(
-                    [BiOp(Variable(tv.name), "=", Value(tv.value)) for tv in program.valuation])
-
-            if entry_predicate == None:
-                raise Exception("Something weird here. Entry predicate to loop is None.")
-
-        if not entry_predicate_as_interpolant or str(entry_predicate).lower() == "true":
-            entry_predicate = conjunct_formula_set([BiOp(Variable(key), "=", Value(value))
+        entry_predicate = conjunct_formula_set([BiOp(Variable(key), "=", Value(value))
                                                     for tv in program.valuation
-                                                    for key, value in ce_prog_init_trans_concretised[-1][1].items()
+                                                    for key, value in ce_prog_loop_tran_concretised[0][1].items()
                                                     if key == tv.name])
 
         entry_preds = (
-            [(pred_label_to_formula[Variable(key)], value) for key, value in ce_prog_init_trans_concretised[-1][1].items() if
+            [(pred_label_to_formula[Variable(key)], value) for key, value in ce_prog_loop_tran_concretised[0][1].items() if
              key.startswith("pred_")])
         entry_predicate_in_terms_of_preds = conjunct_formula_set([p for (p, v) in entry_preds if v == "TRUE"] + [neg(p) for (p, v) in entry_preds if v == "FALSE"])
 
