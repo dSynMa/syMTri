@@ -1,7 +1,7 @@
 from typing import Tuple
 
 from parsing.string_to_ltl import string_to_ltl
-from programs.abstraction.predicate_abstraction import predicate_abstraction, abstraction_to_ltl
+from programs.abstraction.predicate_abstraction import PredicateAbstraction
 from programs.abstraction.refinement import safety_refinement, liveness_refinement, use_liveness_refinement
 from programs.program import Program
 from programs.synthesis import ltl_synthesis
@@ -71,18 +71,18 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
     while True:
 
+        predicate_abstraction = PredicateAbstraction(program)
+        predicate_abstraction.add_predicates(state_predicates,
+                                                transition_predicates,
+                                                symbol_table,
+                                                True)
+
         ## Compute abstraction
-        abstract_program, env_to_program_transitions, con_to_program_transitions = predicate_abstraction(program,
-                                                                                                         state_predicates,
-                                                                                                         transition_predicates,
-                                                                                                         symbol_table,
-                                                                                                         True)
-        print(abstract_program.to_dot())
+        print(predicate_abstraction.abstraction.to_dot())
 
         pred_list = state_predicates + transition_predicates
-        abstraction, ltl_to_program_transitions = abstraction_to_ltl(abstract_program, env_to_program_transitions,
-                                                                     con_to_program_transitions, state_predicates,
-                                                                     transition_predicates)
+
+        abstraction, ltl_to_program_transitions = predicate_abstraction.abstraction_to_ltl()
         print(", ".join(map(str, abstraction)))
 
         pred_name_dict = {p: label_pred(p, pred_list) for p in pred_list}
@@ -147,10 +147,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 print("Computing projection of controller onto predicate abstraction..")
 
                 ## Finished
-                if program_on_env_side:
-                    controller_projected_on_program = mm.project_controller_on_program(program, abstract_program,
-                                                                                       state_predicates,
-                                                                                       transition_predicates,
+                if project_on_abstraction:
+                    controller_projected_on_program = mm.project_controller_on_program(program, predicate_abstraction,
                                                                                        symbol_table | symbol_table_preds)
 
                 for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
@@ -305,9 +303,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 )
                 check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, True, e)
                 print("For debugging:\nComputing projection of controller onto predicate abstraction..")
-                controller_projected_on_program = mm.project_controller_on_program(program, abstract_program,
-                                                                                   state_predicates,
-                                                                                   transition_predicates,
+                controller_projected_on_program = mm.project_controller_on_program(program, predicate_abstraction,
                                                                                    symbol_table | symbol_table_preds)
 
                 print(controller_projected_on_program.to_dot())
