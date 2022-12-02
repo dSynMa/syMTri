@@ -1,6 +1,9 @@
 from typing import Tuple
 
+from click._compat import raw_input
+
 from parsing.string_to_ltl import string_to_ltl
+from parsing.string_to_prop_logic import string_to_prop
 from programs.abstraction.predicate_abstraction import PredicateAbstraction
 from programs.abstraction.refinement import safety_refinement, liveness_refinement, use_liveness_refinement
 from programs.program import Program
@@ -291,7 +294,10 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program, use_dnf=True)
                 print("Found: " + ", ".join([str(p) for p in new_preds]))
                 check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, True, e)
-                raise e
+                print("Could not find a new state predicate..")
+                text = raw_input("Any suggestions?")
+                new_preds = list(map(string_to_prop, text.split(".")))
+
 
             new_all_preds = {x.simplify() for x in new_preds}
             new_all_preds = reduce_up_to_iff(state_predicates,
