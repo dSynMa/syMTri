@@ -188,6 +188,11 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         disagreed_on_transitions = []
         monitor_actually_took = transitions_without_stutter_monitor_took[-1]
 
+        mon_state, con_state, env_state = ce[-4], ce[-3], ce[-2]
+        last_desired_env_con_env_trans: [(Transition, Transition)] = ce_state_to_predicate_abstraction_trans(
+            ltl_to_program_transitions, symbol_table | symbol_table_preds, mon_state, con_state, env_state,
+            program.env_events, program.con_events,
+            program_on_env_side)
         if len(monitor_actually_took) == 1:
             (tran, state) = monitor_actually_took[0]
             if tran in program.con_transitions:
