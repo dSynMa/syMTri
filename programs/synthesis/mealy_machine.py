@@ -121,8 +121,8 @@ class MealyMachine:
                 if guard not in guards_acts.keys():
                     guards_acts[guard] = list()
 
-                if len(self.env_transitions.get(con_tgt)) == 0:
-                    raise Exception("Nothing to do in counter-strategy from state " + str(con_tgt))
+                    if (con_tgt not in self.env_transitions.keys()) or len(self.env_transitions.get(con_tgt)) == 0:
+                        raise Exception("Nothing to do in counter-strategy from state " + str(con_tgt))
 
                 for (env_beh, env_tgt) in self.env_transitions.get(con_tgt):
                     act = conjunct_formula_set([UniOp("next", env_beh.replace(new_mon_events)),
