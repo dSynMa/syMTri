@@ -523,7 +523,7 @@ def concretize_transitions(program, indices_and_state_list):
             else transitions[int(indices_and_state_list[-1][0])]
 
         if env_trans == None:
-            raise Exception("No controller stutter transition found for state " + str(con_from_state))
+            raise Exception("No environment stutter transition found for state " + str(con_from_state))
         else:
             trans_here += [(env_trans, indices_and_state_list[-1][1])]
 
