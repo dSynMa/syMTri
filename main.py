@@ -57,10 +57,10 @@ def main():
 
         if realiz:
             print('Realizable.')
-            print(str(mm.to_dot()))
+            print(str(mm))
         else:
             print('Unrealizable.')
-            print(str(mm.to_dot()))
+            print(str(mm))
 
         print("Synthesis took: ", (end - start) * 10 ** 3, "ms")
     else:

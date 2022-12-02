@@ -151,27 +151,31 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     controller_projected_on_program = mm.project_controller_on_program(program, predicate_abstraction,
                                                                                        symbol_table | symbol_table_preds)
 
-                for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
-                    ok = False
-                    for tt in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
-                        if t.tgt == tt.src:
-                            ok = True
-                            break
+                    for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
+                        ok = False
+                        for tt in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
+                            if t.tgt == tt.src:
+                                ok = True
+                                break
 
-                    if not ok:
-                        print(controller_projected_on_program.to_dot())
+                        if not ok:
+                            print(controller_projected_on_program.to_dot())
 
-                        raise Exception(
-                            "Warning: Model checking says counterstrategy is fine, but something has gone wrong with projection "
-                            "onto the predicate abstraction, and I have no idea why. "
-                            "The " + (
-                                "controller" if real else "counterstrategy") + " has no outgoing transition from this monitor state: "
-                            + ", ".join([str(p) for p in list(t.tgt)]))
+                            raise Exception(
+                                "Warning: Model checking says counterstrategy is fine, but something has gone wrong with projection "
+                                "onto the predicate abstraction, and I have no idea why. "
+                                "The " + (
+                                    "controller" if real else "counterstrategy") + " has no outgoing transition from this monitor state: "
+                                + ", ".join([str(p) for p in list(t.tgt)]))
+                    result = controller_projected_on_program.to_dot()
+                else:
+                    result = mm.to_dot(pred_list)
+
                 if real:
-                    return True, controller_projected_on_program
+                    return True, result
                 else:
                     # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
-                    return False, controller_projected_on_program
+                    return False, result
 
         ## Compute mismatch trace
         ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(
