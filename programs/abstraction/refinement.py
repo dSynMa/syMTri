@@ -153,13 +153,15 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
 
 def liveness_refinement(symbol_table, program, entry_predicate, entry_predicate_in_terms_of_preds, unfolded_loop,
                         exit_predicate_grounded):
-    exceptions = []
     try:
         # try to come up with a ranking function
         c_code = loop_to_c(symbol_table, program, entry_predicate_in_terms_of_preds, unfolded_loop, exit_predicate_grounded)
         print(c_code)
         ranker = Ranker()
-        success, ranking_function, invars = ranker.check(c_code)
+        try:
+            success, ranking_function, invars = ranker.check(c_code)
+        except:
+            success = False
         if not success:
             c_code = loop_to_c(symbol_table, program, entry_predicate, unfolded_loop,
                                exit_predicate_grounded)
@@ -173,7 +175,7 @@ def liveness_refinement(symbol_table, program, entry_predicate, entry_predicate_
 
         return ranking_function, invars
     except Exception as e:
-        exceptions.append(e)
+        raise e
 
 
 def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_before_exit: [Transition],

@@ -37,9 +37,10 @@ class Ranker:
 
                         return True, string_to_math_expression(ranking_function).simplify(), [string_to_prop(invar) for
                                                                                               invar in
-                                                                                              invars]
+                                                                             invars]
                     except Exception as err:
-                        raise Exception(str(err) + "\n\n" + out + "\n\n" + main_function)
+                        print("WARNING: Function terminates, but there is no ranking function, are you sure the loop has at least one iteration?")
+                        return False, None, None
                 else:
                     raise Exception("Unexpected result during termination checking of:\n" + main_function)
                     print(out)
