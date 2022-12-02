@@ -1,6 +1,5 @@
 import re
 
-from parsec import *
 from tatsu.grammars import Grammar
 from tatsu.infos import ParserConfig
 from tatsu.tool import compile

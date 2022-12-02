@@ -1,7 +1,13 @@
-from tatsu import parse
+import re
 
-from parsing.string_to_prop_logic import *
+from tatsu.grammars import Grammar
+from tatsu.tool import compile
+
+from prop_lang.biop import BiOp
+from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
+from prop_lang.value import Value
+from prop_lang.variable import Variable
 
 GRAMMAR = '''
     @@grammar::LTL
