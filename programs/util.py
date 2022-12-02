@@ -609,3 +609,10 @@ def safe_update(d, k, v_arr):
         d[k] = d[k] + v_arr
     else:
         d[k] = v_arr
+
+
+def safe_update_dict_value(d : dict, k, v_dict):
+    if k in d.keys():
+        d[k].update(v_dict)
+    else:
+        d[k] = v_dict
