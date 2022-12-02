@@ -248,3 +248,7 @@ def mutually_exclusive_rules(states):
 
 def is_boolean(var, tvs):
     return any(tv for tv in tvs if tv.name == str(var) and re.match("bool(ean)?", str(tv.type)))
+
+
+def infinite_type(var, tvs):
+    return any(tv for tv in tvs if tv.name == str(var) and re.match("(nat(ural)?|int(eger)?|real|rat(ional)?)", str(tv.type)))
