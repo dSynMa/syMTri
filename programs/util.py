@@ -34,11 +34,15 @@ def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmv
            + ["mismatch : boolean"]
     text += "VAR\n" + "\t" + ";\n\t".join(vars) + ";\n"
     text += "DEFINE\n" + "\t" + ";\n\t".join(program_model.define + strategy_model.define) + ";\n"
-    env_turn = BiOp(Variable("turn"), "=", Value("env"))
 
     prog_and_mon_events_equality = [BiOp(m, '=', Variable("mon_" + m.name)) for m in mon_events]
-    text += "\tcompatible := !(turn = mon) | (" + str(
-        conjunct_formula_set(prog_and_mon_events_equality)) + ");\n"
+
+    compatible = "(" + str(conjunct_formula_set(prog_and_mon_events_equality)) + ");\n"
+    compatible = "\tcompatible := !(turn = mon) | " + compatible
+
+
+    text += compatible
+
     # TODO consider adding checks that state predicates expected by env are true, for debugging predicate abstraction
 
     text += "INIT\n" + "\t(" + ")\n\t& (".join(
