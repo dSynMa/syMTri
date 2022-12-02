@@ -252,17 +252,26 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
 
 
 def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, symbol_table):
-    previous_visits = [i for i, dict in enumerate(env_con_ce[:-1]) for key, value in dict.items()
-                       if i != 0 and key == last_cs_state and value == "TRUE"]
-    if len(previous_visits) > 0:
-        corresponding_ce_state = [env_con_ce[i] for i in range(previous_visits[0], len(env_con_ce))]
-        var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
-                           for i in range(0, len(corresponding_ce_state) - 1)]
-        var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in var_differences]
-        var_differences = [[v for v in vs if v in symbol_table.keys()] for vs in var_differences]
-        var_differences = [[] != [v for v in vs if
-                                  re.match("(int(eger)?|nat(ural)?|real|rational)", symbol_table[v].type)] for vs in
-                           var_differences]
+    previous_visits = [i for i, dict in enumerate(env_con_ce) for key, value in dict.items()
+                       if key == last_cs_state and value == "TRUE"]
+    if len(previous_visits) - 1 > 0: # ignoring last visit
+        var_differences = []
+
+        for i, visit in enumerate(previous_visits[:-1]):
+            corresponding_ce_state = [env_con_ce[i] for i in range(visit, previous_visits[i + 1] + 1)]
+
+            any_var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
+                               for i in range(0, len(corresponding_ce_state) - 1)]
+            any_var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in any_var_differences]
+            any_var_differences = [[v for v in vs if v in symbol_table.keys()] for vs in any_var_differences]
+            any_var_differences = [[] != [v for v in vs if
+                                      re.match("(int(eger)?|nat(ural)?|real|rational)", symbol_table[v].type)] for vs in
+                               any_var_differences]
+            if True in any_var_differences:
+                var_differences += [True]
+            else:
+                var_differences += [False]
+
         if True in var_differences:
             index_of_last_loop_entry = len(var_differences) - 1 - var_differences[::-1].index(True)
 
