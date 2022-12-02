@@ -467,7 +467,7 @@ def stutter_transition(program, state, env: bool):
     condition = neg(disjunct_formula_set([t.condition
                                       for t in transitions if t.src == state]))
 
-    if smt_checker.check(And(*condition.to_smt(symbol_table_from_program(program)))):
+    if smt_checker.check(And(*condition.to_smt(program.symbol_table))):
         return Transition(state,
                           condition,
                           [],
