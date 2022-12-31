@@ -104,6 +104,9 @@ class MealyMachine:
 
         new_mon_events = [BiOp(m, ":=", Variable("mon_" + m.name)) for m in mon_events] \
                          + [BiOp(m, ":=", Variable(m.name)) for m in pred_acts]
+
+        guards_acts = {}
+
         init_conds = []
 
         for (env_beh, tgt) in self.env_transitions.get(self.init_st):
@@ -111,9 +114,6 @@ class MealyMachine:
             init_conds += [conjunct_formula_set(formula_set)]
 
         init_cond = disjunct_formula_set(init_conds)
-
-        guards_acts = {}
-
         for src in self.con_transitions.keys():
             for (con_behaviour, con_tgt) in self.con_transitions[src]:
                 guard = str(src) + " & " \
