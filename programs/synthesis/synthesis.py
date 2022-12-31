@@ -123,7 +123,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         symbol_table_prevs = {tv.name + "_prev": TypedValuation(tv.name + "_prev", tv.type, tv.value) for tv in
                               program.valuation}
 
-        system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, False)
+        system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, False, True)
         contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real, False,
                                                                                                ltl_assumptions,
                                                                                                ltl_guarantees)
@@ -134,7 +134,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             print("No mismatch found between " + (
                 "strategy" if real else "counterstrategy") + " and program when excluding traces for which the monitor has a non-deterministic choice.")
             print("Trying for when the monitor has a non-deterministic choice..")
-            system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, True)
+            system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, True, True)
             contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real, False,
                                                                                                    ltl_assumptions,
                                                                                                    ltl_guarantees)
