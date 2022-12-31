@@ -167,10 +167,30 @@ def liveness_refinement(symbol_table, program, entry_valuation, entry_predicate,
             print(c_code)
             ranker = Ranker()
             success, ranking_function, invars = ranker.check(c_code)
+
+        while not success or (success and any(v for v in ranking_function.variablesin() if symbol_table[str(v)].type.startswith("int"))):
+            if success and any(v for v in ranking_function.variablesin() if symbol_table[str(v)].type.startswith("int")):
+                print("Warning: The ranking function " + str(ranking_function) + " contains integer variables.\n"
+                      "We thus cannot guarantee the ranking abstraction will be a sound abstraction of the program.")
+                print("Re-enter the same function if you want to continue with it, or suggest a new one.")
+                text = raw_input("Enter 'force' to force the use of this unsound a ranking function, or 'stop' to quit ranking refinement:")
+                if text.lower().startswith("force"):
+                    return ranking_function, invars
+                elif text.lower().startswith("stop"):
+                    raise Exception("Exit: Terminated by user.")
+
             if not success:
-                print("Could not find a ranking function for: \n" + c_code)
-                text = raw_input("Any suggestions?")
+                print("Could not find a ranking function.")
+
+                text = raw_input("Enter 'stop' to quit, or suggest a ranking function:")
+            if text == "stop":
+                raise Exception("Exit: Terminated by user.")
+            try:
                 ranking_function, invars = string_to_math_expression(text), []
+                success = True
+            except Exception as e:
+                print(str(e))
+                success = False
 
         return ranking_function, invars
     except Exception as e:
