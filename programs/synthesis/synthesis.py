@@ -42,16 +42,15 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
         ltl_assumptions = true()
         ltl_guarantees = ltl
 
-    in_acts = [e for e in aut.env_events + aut.out_events]
+    in_acts = [e for e in aut.env_events]
     out_acts = [e for e in aut.con_events]
+    prog_acts = aut.out_events
 
-    if [] != [x for x in in_acts_syfco if x not in in_acts] + [x for x in in_acts if x not in in_acts_syfco]:
+    if any(x for x in in_acts + prog_acts if x not in in_acts_syfco):
         raise Exception("TLSF file has different input variables than the program.")
 
-    if [] != [x for x in out_acts_syfco if x not in out_acts] + [x for x in out_acts if x not in out_acts_syfco]:
+    if any(x for x in out_acts if x not in out_acts_syfco):
         raise Exception("TLSF file has different output variables than the program.")
-
-    in_acts += [Variable(e) for e in aut.states]
 
     return abstract_synthesis_loop(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts, docker)
 
