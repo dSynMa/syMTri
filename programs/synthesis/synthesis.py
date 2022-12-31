@@ -186,8 +186,6 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(
             len(program.env_transitions) + len(program.con_transitions), out)
         transitions_without_stutter_monitor_took = concretize_transitions(program, transition_indices_and_state)
-        last_desired_env_con_env_trans: [(Transition, Transition)] = ce_state_to_predicate_abstraction_trans(
-            ltl_to_program_transitions, symbol_table | symbol_table_preds, ce[-4], ce[-3], ce[-2])
 
         agreed_on_transitions = transitions_without_stutter_monitor_took[:-1]
         disagreed_on_transitions = []
