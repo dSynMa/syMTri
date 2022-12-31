@@ -232,10 +232,10 @@ class Program:
         complete_env = []
         complete_con = []
 
-        assert set(self.states) == set(
+        reachable_states = set(
             [s for t in self.env_transitions for s in [t.tgt, t.src]] + [s for t in self.con_transitions for s in
                                                                          [t.tgt, t.src]])
-        for s in self.states:
+        for s in reachable_states:
             env_from_s = [t for t in self.env_transitions if t.src == s]
             env_stutter_from_s = stutter_transition(self, s, True)
             if env_stutter_from_s != None:
