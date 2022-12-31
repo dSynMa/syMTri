@@ -150,11 +150,11 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
         return Cs
 
 
-def liveness_refinement(symbol_table, program, entry_predicate, entry_predicate_in_terms_of_preds, unfolded_loop,
+def liveness_refinement(symbol_table, program, entry_valuation, entry_predicate, unfolded_loop,
                         exit_predicate_grounded):
     try:
         # try to come up with a ranking function
-        c_code = loop_to_c(symbol_table, program, entry_predicate_in_terms_of_preds, unfolded_loop, exit_predicate_grounded)
+        c_code = loop_to_c(symbol_table, program, entry_predicate, unfolded_loop, exit_predicate_grounded)
         print(c_code)
         ranker = Ranker()
         try:
@@ -162,7 +162,7 @@ def liveness_refinement(symbol_table, program, entry_predicate, entry_predicate_
         except:
             success = False
         if not success:
-            c_code = loop_to_c(symbol_table, program, entry_predicate, unfolded_loop,
+            c_code = loop_to_c(symbol_table, program, entry_valuation, unfolded_loop,
                                exit_predicate_grounded)
             print(c_code)
             ranker = Ranker()
@@ -177,15 +177,15 @@ def liveness_refinement(symbol_table, program, entry_predicate, entry_predicate_
         raise e
 
 
-def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_before_exit: [Transition],
+def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_before_exit: [Transition],
               exit_cond: Formula):
     # params
     params = list(set(symbol_table[str(v)].type + " " + str(v)
-                      for v in {v.name for v in program.valuation} | set(entry_predicate.variablesin())
+                      for v in {v.name for v in program.valuation} | set(entry_condition.variablesin())
                       if
                       not is_boolean(v, program.valuation) and [str(vv) for t in loop_before_exit for vv in
                                                                 (t.condition.variablesin()
-                                                                 + entry_predicate.variablesin()
+                                                                 + entry_condition.variablesin()
                                                                  + [act.left for act in t.action]
                                                                  + [a for act in t.action for a in
                                                                     act.right.variablesin()])]))
@@ -237,7 +237,7 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
                 + "\n\t".join(choices) \
                 + "\n\t} while(true);\n"
 
-    loop_code = "\n\tif(" + str(entry_predicate.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ",
+    loop_code = "\n\tif(" + str(entry_condition.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ",
                                                                                                                   " || ") \
                 + "){" + loop_code + "\n\t}"
 
@@ -346,16 +346,16 @@ def use_liveness_refinement(program,
         if [] == [t for t, _ in ce_prog_loop_tran_concretised if [] != [a for a in t.action if infinite_type(a.left, program.valuation)]]:
             return False, None, None, None
 
-        entry_predicate = conjunct_formula_set([BiOp(Variable(key), "=", Value(value))
+        entry_valuation = conjunct_formula_set([BiOp(Variable(key), "=", Value(value))
                                                     for tv in program.valuation
                                                     for key, value in ce_prog_loop_tran_concretised[0][1].items()
                                                     if key == tv.name])
 
         entry_preds = (
             [(pred_label_to_formula[Variable(key)], value) for key, value in ce_prog_loop_tran_concretised[0][1].items() if
-             key.startswith("pred_")])
-        entry_predicate_in_terms_of_preds = conjunct_formula_set([p for (p, v) in entry_preds if v == "TRUE"] + [neg(p) for (p, v) in entry_preds if v == "FALSE"])
+             key.startswith("pred_") and Variable(key) in pred_label_to_formula.keys()])
+        entry_predicate = conjunct_formula_set([p for (p, v) in entry_preds if v == "TRUE"] + [neg(p) for (p, v) in entry_preds if v == "FALSE"])
 
-        return True, ce_prog_loop_tran_concretised, entry_predicate, entry_predicate_in_terms_of_preds
+        return True, ce_prog_loop_tran_concretised, entry_valuation, entry_predicate
     else:
         return False, None, None, None

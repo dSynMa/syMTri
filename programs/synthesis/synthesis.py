@@ -92,21 +92,23 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
 
         # should be computed incrementally
-        predicate_constraints = []
+        transition_fairness = []
+        safety_predicate_constraints = []
         i = 0
         while i < len(transition_predicates):
             dec = pred_name_dict[transition_predicates[i]]
             inc = pred_name_dict[transition_predicates[i + 1]]
-            predicate_constraints += [X(G(neg(conjunct(dec, inc))))]
+            safety_predicate_constraints += [(G(neg(conjunct(dec, inc))))]
 
-            predicate_constraints += [implies(G(F(dec)), G(F(inc)))]
+            transition_fairness += [implies(G(F(dec)), G(F(inc)))]
             i += 2
 
-        assumptions = predicate_constraints + abstraction
+        assumptions = [ltl_assumptions] + transition_fairness + safety_predicate_constraints + abstraction
+        guarantees = [ltl_guarantees]
 
         (real, mm) = ltl_synthesis.ltl_synthesis(assumptions,
-                                                 [ltl],
-                                                 in_acts + pred_acts,
+                                                 guarantees,
+                                                 in_acts + mon_events + pred_acts,
                                                  out_acts,
                                                  docker)
 
@@ -232,7 +234,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         ## check if should use liveness or not
         try:
             last_counterstrategy_state = [key for key, v in ce[-1].items() if key.startswith("st_") and v == "TRUE"][0]
-            use_liveness, counterexample_loop, entry_predicate, entry_predicate_in_terms_of_preds \
+            use_liveness, counterexample_loop, entry_valuation, entry_predicate \
                 = use_liveness_refinement(program, agreed_on_transitions,
                                           disagreed_on_transitions,
                                           last_counterstrategy_state,
@@ -247,7 +249,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         if use_liveness:
             try:
                 ranking, invars = liveness_step(program, counterexample_loop, symbol_table,
-                                                entry_predicate, entry_predicate_in_terms_of_preds,
+                                                entry_valuation, entry_predicate,
                                                 monitor_actually_took[0])
 
                 rankings.append((ranking, invars))
@@ -336,24 +338,24 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             state_predicates = list(new_all_preds)
 
 
-def liveness_step(program, counterexample_loop, symbol_table, entry_predicate, entry_predicate_in_terms_of_preds,
+def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, entry_predicate,
                   exit_transition):
     # ground transitions in the counterexample loop
     # on the environment and controller events in the counterexample
     loop_before_exit = ground_transitions(program, counterexample_loop)
 
-    entry_predicate_grounded = ground_predicate_on_bool_vars(program, entry_predicate,
+    entry_valuation_grounded = ground_predicate_on_bool_vars(program, entry_valuation,
                                                              counterexample_loop[0][1]).simplify()
-    entry_predicate_in_terms_of_preds_grounded = ground_predicate_on_bool_vars(program,
-                                                                               entry_predicate_in_terms_of_preds,
-                                                                               counterexample_loop[0][1]).simplify()
+    entry_predicate_grounded = ground_predicate_on_bool_vars(program,
+                                                             entry_predicate,
+                                                             counterexample_loop[0][1]).simplify()
 
     exit_predicate_grounded = ground_predicate_on_bool_vars(program, exit_transition[0].condition,
                                                             exit_transition[1]).simplify()
 
     ranking, invars = liveness_refinement(symbol_table,
                                           program,
-                                          entry_predicate_grounded, entry_predicate_in_terms_of_preds_grounded,
+                                          entry_valuation_grounded, entry_predicate_grounded,
                                           loop_before_exit,
                                           exit_predicate_grounded)
     if len(invars) > 0:
