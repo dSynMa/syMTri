@@ -13,11 +13,11 @@ class SMTChecker:
         # _add_solver(self.SOLVER_NAME, "msat")
 
     def check(self, smt: FNode):
-        with Solver(name=self.SOLVER_NAME) as s:
+        with Solver(name="z3") as s: # this is needed because msat does not support non-linear arithmetic
             return s.is_sat(smt)
 
     def binary_interpolant(self, A: FNode, B: FNode, logic) -> FNode:
-        with Interpolator(name="msat", logic="QF_UFLRA") as s:
+        with Interpolator(name="msat") as s:
             return s.binary_interpolant(A, B)
 
     def sequence_interpolant(self, A: FNode, B: FNode, logic) -> FNode:
