@@ -12,7 +12,7 @@ from programs.synthesis.ltl_synthesis import syfco_ltl, syfco_ltl_in, syfco_ltl_
 from programs.synthesis.mealy_machine import MealyMachine
 from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
-from programs.util import symbol_table_from_program, create_nuxmv_model_for_compatibility_checking, \
+from programs.util import create_nuxmv_model_for_compatibility_checking, \
     there_is_mismatch_between_monitor_and_strategy, \
     parse_nuxmv_ce_output_finite, reduce_up_to_iff, \
     add_prev_suffix, label_pred, ground_predicate_on_bool_vars, \
