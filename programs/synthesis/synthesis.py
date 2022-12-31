@@ -181,6 +181,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
                     return False, result
 
+        print(out)
         ## Compute mismatch trace
         ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(
             len(program.env_transitions) + len(program.con_transitions), out)
