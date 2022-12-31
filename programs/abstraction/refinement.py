@@ -252,7 +252,7 @@ def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_bef
 
 def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, symbol_table):
     previous_visits = [i for i, dict in enumerate(env_con_ce) for key, value in dict.items()
-                       if key == last_cs_state and value == "TRUE"]
+                       if key == last_cs_state and dict["turn"] == "env" and value == "TRUE"]
     if len(previous_visits) - 1 > 0: # ignoring last visit
         var_differences = []
 

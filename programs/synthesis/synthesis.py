@@ -233,7 +233,9 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         ## check if should use liveness or not
         try:
-            last_counterstrategy_state = [key for key, v in ce[-1].items() if key.startswith("st_") and v == "TRUE"][0]
+            counterstrategy_states = [key for ce_state in ce for key, v in ce_state.items()
+                                      if key.startswith("st_") and ce_state["turn"] == "env" and v == "TRUE"]
+            last_counterstrategy_state = counterstrategy_states[-1]
             use_liveness, counterexample_loop, entry_valuation, entry_predicate \
                 = use_liveness_refinement(program, agreed_on_transitions,
                                           disagreed_on_transitions,
