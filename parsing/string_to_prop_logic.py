@@ -86,7 +86,7 @@ GRAMMAR = '''
         ;
 
     atom = /\_?[a-zA-Z][a-zA-Z0-9\_\-]*/;
-    number = /\d+|\d+\.\d+/;
+    number = /[\-]*(\d+|\d+\.\d+)/;
 '''
 
 parser: Grammar = compile(GRAMMAR)
