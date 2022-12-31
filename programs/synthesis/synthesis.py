@@ -24,7 +24,7 @@ from prop_lang.util import neg, G, F, implies, conjunct, X, true
 from prop_lang.variable import Variable
 
 
-def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tuple[bool, Program]:
+def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool, project_on_abstraction=True) -> Tuple[bool, Program]:
     if tlsf_path is not None:
         ltl_text = syfco_ltl(tlsf_path)
         if " Error\"" in ltl_text:
@@ -52,11 +52,11 @@ def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool) -> Tup
     if any(x for x in out_acts if x not in out_acts_syfco):
         raise Exception("TLSF file has different output variables than the program.")
 
-    return abstract_synthesis_loop(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts, docker)
+    return abstract_synthesis_loop(aut, ltl_assumptions, ltl_guarantees, in_acts, out_acts, docker, project_on_abstraction=project_on_abstraction)
 
 
 def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable],
-                            out_acts: [Variable], docker: str) -> \
+                            out_acts: [Variable], docker: str, project_on_abstraction=False) -> \
         Tuple[bool, MealyMachine]:
     # TODO add check that monitor is deterministic under given ltl assumptions
     eager = False
