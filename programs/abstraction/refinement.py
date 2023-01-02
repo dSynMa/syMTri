@@ -170,7 +170,7 @@ def liveness_refinement(symbol_table, program, entry_valuation, entry_predicate,
 
         while not success or (success and any(v for v in ranking_function.variablesin() if symbol_table[str(v)].type.startswith("int"))):
             if success and any(v for v in ranking_function.variablesin() if symbol_table[str(v)].type.startswith("int")):
-                print("Warning: The ranking function " + str(ranking_function) + " contains integer variables.\n"
+                print("Warning: The ranking function <<" + str(ranking_function) + ">> contains integer variables.\n"
                       "We thus cannot guarantee the ranking abstraction will be a sound abstraction of the program.")
                 print("Re-enter the same function if you want to continue with it, or suggest a new one.")
                 text = raw_input("Enter 'force' to force the use of this unsound a ranking function, or 'stop' to quit ranking refinement:")

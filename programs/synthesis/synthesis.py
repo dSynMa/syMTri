@@ -233,6 +233,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         try:
             counterstrategy_states = [key for ce_state in ce for key, v in ce_state.items()
                                       if key.startswith("st_") and ce_state["turn"] == "env" and v == "TRUE"]
+            print("Counterstrategy states before environment step: " + ", ".join(counterstrategy_states))
             last_counterstrategy_state = counterstrategy_states[-1]
             use_liveness, counterexample_loop, entry_valuation, entry_predicate \
                 = use_liveness_refinement(program, agreed_on_transitions,
