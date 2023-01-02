@@ -120,7 +120,7 @@ class Program:
         for t in self.con_transitions:
             label = str(t.condition)
             if len(t.action) > 0:
-                label + " $ " + ', '.join(map(str, t.action))
+                label = label + " $ " + ', '.join(map(str, t.action))
             dot.edge(to_str(t.src), to_str(t.tgt), label, style="dotted")
 
         return dot
