@@ -20,7 +20,7 @@ from programs.util import create_nuxmv_model_for_compatibility_checking, \
     check_for_nondeterminism_last_step, ground_transitions
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from prop_lang.util import neg, G, F, implies, conjunct, X, true
+from prop_lang.util import neg, G, F, implies, conjunct, X, true, disjunct_formula_set
 from prop_lang.variable import Variable
 
 
@@ -250,7 +250,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             try:
                 ranking, invars = liveness_step(program, counterexample_loop, symbol_table,
                                                 entry_valuation, entry_predicate,
-                                                monitor_actually_took[0])
+                                                neg(disjunct_formula_set({t.condition for t in last_desired_env_con_env_trans[0][-1]})),
+                                                monitor_actually_took[0][1])
 
                 rankings.append((ranking, invars))
                 new_transition_predicates = [x for r, _ in rankings for x in
@@ -339,7 +340,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
 
 def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, entry_predicate,
-                  exit_transition):
+                  exit_condition, exit_prestate):
     # ground transitions in the counterexample loop
     # on the environment and controller events in the counterexample
     loop_before_exit = ground_transitions(program, counterexample_loop)
@@ -350,8 +351,8 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
                                                              entry_predicate,
                                                              counterexample_loop[0][1]).simplify()
 
-    exit_predicate_grounded = ground_predicate_on_bool_vars(program, exit_transition[0].condition,
-                                                            exit_transition[1]).simplify()
+    exit_predicate_grounded = ground_predicate_on_bool_vars(program, exit_condition,
+                                                            exit_prestate).simplify()
 
     ranking, invars = liveness_refinement(symbol_table,
                                           program,
