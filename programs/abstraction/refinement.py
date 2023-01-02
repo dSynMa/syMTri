@@ -271,13 +271,37 @@ def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_bef
 
 
 def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, symbol_table):
-    previous_visits = [i for i, dict in enumerate(env_con_ce) for key, value in dict.items()
+    ce_with_stutter_states = []
+    env_turn = True
+    i = 0
+    while i < len(env_con_ce) - 1:
+        if env_turn:
+            env_turn = False
+            if env_con_ce[i]["turn"] == "env":
+                ce_with_stutter_states.append(env_con_ce[i])
+            else:
+                env_copy = env_con_ce[i + 1]
+                env_copy["turn"] = "env"
+                ce_with_stutter_states.append(env_con_ce[i + 1])
+        else:
+            env_turn = True
+            if env_con_ce[i]["turn"] == "con":
+                ce_with_stutter_states.append(env_con_ce[i])
+            else:
+                con_copy = env_con_ce[i + 1]
+                con_copy["turn"] = "con"
+                ce_with_stutter_states.append(env_con_ce[i + 1])
+        i += 1
+
+    ce_with_stutter_states.append(env_con_ce[-1])
+
+    previous_visits = [i for i, dict in enumerate(ce_with_stutter_states) for key, value in dict.items()
                        if key == last_cs_state and dict["turn"] == "env" and value == "TRUE"]
     if len(previous_visits) - 1 > 0: # ignoring last visit
         var_differences = []
 
         for i, visit in enumerate(previous_visits[:-1]):
-            corresponding_ce_state = [env_con_ce[i] for i in range(visit, previous_visits[i + 1] + 1)]
+            corresponding_ce_state = [ce_with_stutter_states[i] for i in range(visit, previous_visits[i + 1] + 1)]
 
             any_var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
                                for i in range(0, len(corresponding_ce_state) - 1)]
