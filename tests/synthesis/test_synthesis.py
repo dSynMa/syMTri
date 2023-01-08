@@ -55,7 +55,7 @@ class Test(TestCase):
             (real, mm) = synthesize(program, None, tlsf_file, True, False)
             self.assertTrue(real)
 
-    def test_synthesize_7(self):
+    def test_synthesize_7_5(self):
         with open('../examples/parallel/arbiter3/program3.prog') as program_file:
             program = string_to_program(program_file.read())
             tlsf_file = '../examples/parallel/arbiter3/controller.tlsf'

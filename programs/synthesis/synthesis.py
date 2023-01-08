@@ -17,10 +17,10 @@ from programs.util import create_nuxmv_model_for_compatibility_checking, \
     parse_nuxmv_ce_output_finite, reduce_up_to_iff, \
     add_prev_suffix, label_pred, ground_predicate_on_bool_vars, \
     concretize_transitions, ce_state_to_predicate_abstraction_trans, \
-    check_for_nondeterminism_last_step, ground_transitions
+    check_for_nondeterminism_last_step, ground_transitions, keep_bool_preds
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from prop_lang.util import neg, G, F, implies, conjunct, X, true, disjunct_formula_set
+from prop_lang.util import neg, G, F, implies, conjunct, X, true, disjunct_formula_set, conjunct_formula_set
 from prop_lang.variable import Variable
 
 
@@ -62,23 +62,25 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
     eager = False
     keep_only_bool_interpolants = True
 
-    symbol_table = program.symbol_table
-
-    state_predicates = []
+    state_predicates = [Variable(p.name) for p in program.valuation if p.type == "bool"]
     rankings = []
     transition_predicates = []
 
-    mon_events = program.out_events \
-                 + [Variable(s) for s in program.states]
+    in_acts += [Variable("inloop"), Variable("notinloop")]
+    transition_fairness = []
+    predicate_abstraction = PredicateAbstraction(program)
+    symbol_table = predicate_abstraction.program.symbol_table
 
     while True:
-
-        predicate_abstraction = PredicateAbstraction(program)
         predicate_abstraction.add_predicates(state_predicates,
                                                 transition_predicates,
                                                 symbol_table,
                                                 True)
+        symbol_table["inloop"] = TypedValuation("inloop", "bool", True)
+        symbol_table["notinloop"] = TypedValuation("notinloop", "bool", True)
 
+        mon_events = predicate_abstraction.program.out_events \
+                     + [Variable(s) for s in predicate_abstraction.program.states]
         ## Compute abstraction
         print(predicate_abstraction.abstraction.to_dot())
 
@@ -89,19 +91,21 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         pred_name_dict = {p: label_pred(p, pred_list) for p in pred_list}
         state_pred_label_to_formula = {label_pred(p, pred_list): p for p in state_predicates}
+        state_pred_label_to_formula |= {neg(label_pred(p, pred_list)): neg(p) for p in state_predicates}
         pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
 
         # should be computed incrementally
-        transition_fairness = []
+        # transition_fairness = []
         safety_predicate_constraints = []
-        i = 0
-        while i < len(transition_predicates):
-            dec = pred_name_dict[transition_predicates[i]]
-            inc = pred_name_dict[transition_predicates[i + 1]]
-            safety_predicate_constraints += [(G(neg(conjunct(dec, inc))))]
+        # i = 0
+        # while i < len(transition_predicates):
+        #     dec = pred_name_dict[transition_predicates[i]]
+        #     inc = pred_name_dict[transition_predicates[i + 1]]
+        #     safety_predicate_constraints += [(G(neg(conjunct(dec, inc))))]
+        #
+        #     transition_fairness += [implies(G(F(dec)), G(F(inc)))]
+        #     i += 2
 
-            transition_fairness += [implies(G(F(dec)), G(F(inc)))]
-            i += 2
 
         assumptions = [ltl_assumptions] + transition_fairness + safety_predicate_constraints + abstraction
         guarantees = [ltl_guarantees]
@@ -113,7 +117,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                                  docker)
 
         ## checking for mismatch
-        mealy = mm.to_nuXmv_with_turns(program.states, program.out_events, state_predicates, transition_predicates)
+        mealy = mm.to_nuXmv_with_turns(predicate_abstraction.program.states, predicate_abstraction.program.out_events, state_predicates, transition_predicates)
 
         print(mm.to_dot(pred_list))
 
@@ -134,7 +138,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             print("No mismatch found between " + (
                 "strategy" if real else "counterstrategy") + " and program when excluding traces for which the monitor has a non-deterministic choice.")
             print("Trying for when the monitor has a non-deterministic choice..")
-            system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, True, True)
+            system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, True, True, False)
             contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real, False,
                                                                                                    ltl_assumptions,
                                                                                                    ltl_guarantees)
@@ -148,84 +152,106 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             if not there_is_mismatch:
                 print("No mismatch found between " + (
                     "strategy" if real else "counterstrategy") + " and program even when including traces for which the monitor has a non-deterministic choice.")
-                print("Computing projection of controller onto predicate abstraction..")
 
-                ## Finished
-                if project_on_abstraction:
-                    controller_projected_on_program = mm.project_controller_on_program(program, predicate_abstraction,
-                                                                                       symbol_table | symbol_table_preds)
+                print("Looking for mismatches in predicates.")
 
-                    for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
-                        ok = False
-                        for tt in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
-                            if t.tgt == tt.src:
-                                ok = True
-                                break
+                system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, True,
+                                                                       True, True)
+                contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real,
+                                                                                                       False,
+                                                                                                       ltl_assumptions,
+                                                                                                       ltl_guarantees)
+                if not there_is_mismatch:
+                    print("No mismatch found.")
 
-                        if not ok:
-                            print(controller_projected_on_program.to_dot())
+                    ## Finished
+                    if project_on_abstraction:
+                        print("Computing projection of controller onto predicate abstraction..")
+                        controller_projected_on_program = mm.project_controller_on_program(program, predicate_abstraction,
+                                                                                           symbol_table | symbol_table_preds)
 
-                            raise Exception(
-                                "Warning: Model checking says counterstrategy is fine, but something has gone wrong with projection "
-                                "onto the predicate abstraction, and I have no idea why. "
-                                "The " + (
-                                    "controller" if real else "counterstrategy") + " has no outgoing transition from this monitor state: "
-                                + ", ".join([str(p) for p in list(t.tgt)]))
-                    result = controller_projected_on_program.to_dot()
-                else:
-                    result = mm.to_dot(pred_list)
+                        for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
+                            ok = False
+                            for tt in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
+                                if t.tgt == tt.src:
+                                    ok = True
+                                    break
 
-                if real:
-                    return True, result
-                else:
-                    # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
-                    return False, result
+                            if not ok:
+                                print(controller_projected_on_program.to_dot())
+
+                                raise Exception(
+                                    "Warning: Model checking says counterstrategy is fine, but something has gone wrong with projection "
+                                    "onto the predicate abstraction, and I have no idea why. "
+                                    "The " + (
+                                        "controller" if real else "counterstrategy") + " has no outgoing transition from this monitor state: "
+                                    + ", ".join([str(p) for p in list(t.tgt)]))
+                        result = controller_projected_on_program.to_dot()
+                    else:
+                        result = mm.to_dot(pred_list)
+
+                    if real:
+                        return True, result
+                    else:
+                        # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
+                        return False, result
 
         print(out)
         ## Compute mismatch trace
         ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(
-            len(program.env_transitions) + len(program.con_transitions), out)
-        transitions_without_stutter_monitor_took = concretize_transitions(program, transition_indices_and_state)
+            len(program.env_transitions) + len(program.con_transitions), out, state_pred_label_to_formula)
 
-        agreed_on_transitions = transitions_without_stutter_monitor_took[:-1]
-        disagreed_on_transitions = []
-        monitor_actually_took = transitions_without_stutter_monitor_took[-1]
+        transitions_without_stutter_monitor_took, pred_state = concretize_transitions(program, program, transition_indices_and_state)
 
-        mon_state, con_state, env_state = ce[-4], ce[-3], ce[-2]
-        last_desired_env_con_env_trans: [(Transition, Transition)] = ce_state_to_predicate_abstraction_trans(
-            ltl_to_program_transitions, symbol_table | symbol_table_preds, mon_state, con_state, env_state,
-            program.env_events, program.con_events)
-        if len(monitor_actually_took) == 1:
-            (tran, state) = monitor_actually_took[0]
-            if tran in program.con_transitions:
-                disagreed_on_transitions += (list(set(
-                    t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in
-                    last_desired_env_con_env_trans[i][0])), state)
-            elif tran in program.env_transitions:
-                disagreed_on_transitions += (list(set(
-                    t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in
-                    last_desired_env_con_env_trans[i][1])), state)
-            else:
-                raise Exception("I don't know what kind of transition this is: " + str(tran))
+        if False:
+            agreed_on_transitions = transitions_without_stutter_monitor_took
+            disagreed_on_state = pred_state
+            disagreed_on_state_dict = disagreed_on_state[1]
+
+            write_counterexample_state(program, agreed_on_transitions, disagreed_on_state)
         else:
-            con_trans, con_state = monitor_actually_took[0]
-            env_trans, env_state = monitor_actually_took[1]
-            all_with_matching_con_trans = [i for i in range(len(last_desired_env_con_env_trans)) for t in
-                                           last_desired_env_con_env_trans[i][0] if t == con_trans]
-            if len(all_with_matching_con_trans) == 0:
-                monitor_actually_took = monitor_actually_took[:-1]
-                disagreed_on_transitions += (list(
-                    set([t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in
-                         last_desired_env_con_env_trans[i][0]])), con_state)
-            else:
-                agreed_on_transitions += [[monitor_actually_took[0]]]
-                monitor_actually_took = monitor_actually_took[1:]
-                disagreed_on_transitions += (list(
-                    set([t.with_condition(t.condition) for i in all_with_matching_con_trans for t in
-                         last_desired_env_con_env_trans[i][1]])), env_state)
+            agreed_on_transitions = transitions_without_stutter_monitor_took[:-1]
+            # disagreed_on_transitions = []
+            monitor_actually_took = transitions_without_stutter_monitor_took[-1]
 
-        write_counterexample(program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
-        check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, False, None)
+            mon_state, con_state, env_state = ce[-4], ce[-3], ce[-2]
+            last_desired_env_con_env_trans: [(Transition, Transition)] = ce_state_to_predicate_abstraction_trans(
+                ltl_to_program_transitions, symbol_table | symbol_table_preds, mon_state, con_state, env_state,
+                program.env_events, program.con_events)
+            if len(monitor_actually_took) == 1:
+                (tran, state) = monitor_actually_took[0]
+                if tran in program.con_transitions:
+                    disagreed_on_transitions = (list(set(
+                        t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in
+                        last_desired_env_con_env_trans[i][0])), state)
+                elif tran in program.env_transitions:
+                    disagreed_on_transitions = (list(set(
+                        t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in
+                        last_desired_env_con_env_trans[i][1])), state)
+                else:
+                    raise Exception("I don't know what kind of transition this is: " + str(tran))
+            else:
+                con_trans, con_state = monitor_actually_took[0]
+                env_trans, env_state = monitor_actually_took[1]
+                all_with_matching_con_trans = [i for i in range(len(last_desired_env_con_env_trans)) for t in
+                                               last_desired_env_con_env_trans[i][0] if t == con_trans]
+                if len(all_with_matching_con_trans) == 0:
+                    monitor_actually_took = monitor_actually_took[:-1]
+                    disagreed_on_transitions = (list(
+                        set([t.with_condition(t.condition) for i in range(len(last_desired_env_con_env_trans)) for t in
+                             last_desired_env_con_env_trans[i][0]])), con_state)
+                else:
+                    agreed_on_transitions += [[monitor_actually_took[0]]]
+                    monitor_actually_took = monitor_actually_took[1:]
+                    disagreed_on_transitions = (list(
+                        set([t.with_condition(t.condition) for i in all_with_matching_con_trans for t in
+                             last_desired_env_con_env_trans[i][1]])), env_state)
+
+                disagreed_on_state_dict = disagreed_on_transitions[1]
+
+            write_counterexample(program, agreed_on_transitions, disagreed_on_transitions, monitor_actually_took)
+            check_for_nondeterminism_last_step(monitor_actually_took[0][1], predicate_abstraction.program, False, None)
+
 
         ## end compute mismatch trace
 
@@ -237,9 +263,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             last_counterstrategy_state = counterstrategy_states[-1]
             use_liveness, counterexample_loop, entry_valuation, entry_predicate \
                 = use_liveness_refinement(program, agreed_on_transitions,
-                                          disagreed_on_transitions,
+                                          disagreed_on_state_dict,
                                           last_counterstrategy_state,
-                                          monitor_actually_took,
                                           symbol_table, state_pred_label_to_formula)
         except Exception as e:
             print("WARNING: " + str(e))
@@ -249,38 +274,52 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         ## do liveness refinement
         if use_liveness:
             try:
-                ranking, invars = liveness_step(program, counterexample_loop, symbol_table,
-                                                entry_valuation, entry_predicate,
-                                                neg(disjunct_formula_set({t.condition for t in last_desired_env_con_env_trans[0][-1]})),
-                                                monitor_actually_took[0][1])
+                ranking, invars, sufficient_entry_condition = liveness_step(program, counterexample_loop, symbol_table,
+                                                                            entry_valuation, entry_predicate,
+                                                                            monitor_actually_took[0][0].condition,
+                                                                            monitor_actually_took[0][1])
+                try:
+                    if [t for (t, _) in counterexample_loop] in [loop_body for (_, loop_body, _) in predicate_abstraction.loops]:
+                        print("The loop is already in the predicate abstraction.")
+                    # TODO need to add info about all predicates to entry condition, not just number vars
+                    new_safety_preds = predicate_abstraction.make_explicit_terminating_loop(sufficient_entry_condition, [t for (t, _) in counterexample_loop],
+                                                                     [monitor_actually_took[0][0]])
+                    program = predicate_abstraction.program
+                    symbol_table = predicate_abstraction.program.symbol_table
+                    state_predicates = state_predicates + list(new_safety_preds)
+                except Exception as e:
+                    print(e)
+                    new_safety_preds = predicate_abstraction.make_explicit_terminating_loop(sufficient_entry_condition, [t for (t, _) in counterexample_loop],
+                                                                     [monitor_actually_took[0][0]])
 
-                rankings.append((ranking, invars))
-                new_transition_predicates = [x for r, _ in rankings for x in
-                                             [BiOp(add_prev_suffix(program, r), ">", r),
-                                              BiOp(add_prev_suffix(program, r), "<", r)
-                                              ]]
-
-                if new_transition_predicates == []:
-                    # raise Exception("No new transition predicates identified.")
-                    print("No transition predicates identified. So will try safety refinement.")
-                    use_liveness = False
-
-                print("Found: " + ", ".join([str(p) for p in new_transition_predicates]))
-
-                new_all_trans_preds = {x.simplify() for x in new_transition_predicates}
-                new_all_trans_preds = reduce_up_to_iff(transition_predicates, list(new_all_trans_preds),
-                                                       symbol_table | symbol_table_prevs)
-
-                if len(new_all_trans_preds) == len(transition_predicates):
-                    print("I did something wrong, "
-                          "it turns out the new transition predicates "
-                          "(" + ", ".join(
-                        [str(p) for p in new_transition_predicates]) + ") are a subset of "
-                                                                       "previous predicates.")
-                    print("I will try safety refinement instead.")
-                    use_liveness = False
-                # important to add this, since later on assumptions depend on position of predicates in list
-                transition_predicates += new_transition_predicates
+                transition_fairness = [implies(G(F(Variable("inloop"))), G(F((Variable("notinloop")))))]
+                # rankings.append((ranking, invars))
+                # new_transition_predicates = [x for r, _ in rankings for x in
+                #                              [BiOp(add_prev_suffix(program, r), ">", r),
+                #                               BiOp(add_prev_suffix(program, r), "<", r)
+                #                               ]]
+                #
+                # if new_transition_predicates == []:
+                #     # raise Exception("No new transition predicates identified.")
+                #     print("No transition predicates identified. So will try safety refinement.")
+                #     use_liveness = False
+                #
+                # print("Found: " + ", ".join([str(p) for p in new_transition_predicates]))
+                #
+                # new_all_trans_preds = {x.simplify() for x in new_transition_predicates}
+                # new_all_trans_preds = reduce_up_to_iff(transition_predicates, list(new_all_trans_preds),
+                #                                        symbol_table | symbol_table_prevs)
+                #
+                # if len(new_all_trans_preds) == len(transition_predicates):
+                #     print("I did something wrong, "
+                #           "it turns out the new transition predicates "
+                #           "(" + ", ".join(
+                #         [str(p) for p in new_transition_predicates]) + ") are a subset of "
+                #                                                        "previous predicates.")
+                #     print("I will try safety refinement instead.")
+                #     use_liveness = False
+                # # important to add this, since later on assumptions depend on position of predicates in list
+                # transition_predicates += new_transition_predicates
             except Exception as e:
                 print(e)
                 print("I will try safety refinement instead.")
@@ -288,15 +327,26 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         ## do safety refinement
         if eager or not use_liveness:
-            new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program, use_dnf=False)
+            if pred_state is not None:
+                pred_formula = conjunct_formula_set([state_pred_label_to_formula[p] for p in pred_state[0]])
+                new_preds = safety_refinement(ce, agreed_on_transitions + [[(disagreed_on_transitions[0][0], disagreed_on_transitions[1])]], ([pred_formula], pred_state[1]), symbol_table, program, use_dnf=True)
+            else:
+                new_preds = safety_refinement(ce, agreed_on_transitions, ([t.condition for t in disagreed_on_transitions[0]], disagreed_on_transitions[1]), symbol_table, program, use_dnf=False)
             print("Found: " + ", ".join([str(p) for p in new_preds]))
             if len(new_preds) == 0:
                 e = Exception("No state predicates identified.")
                 print("No state predicates identified.")
                 print("Trying again by putting interpolant B in DNF form and checking each disjunct separately. This may take some time...")
-                new_preds = safety_refinement(ce, agreed_on_transitions, disagreed_on_transitions, symbol_table, program, use_dnf=True)
+                if pred_state is not None:
+                    pred_formula = conjunct_formula_set([state_pred_label_to_formula[p] for p in pred_state[0]])
+                    new_preds = safety_refinement(ce, agreed_on_transitions + [[(disagreed_on_transitions[0][0], disagreed_on_transitions[1])]],
+                                                  ([pred_formula], pred_state[1]), symbol_table, program, use_dnf=True)
+                else:
+                    new_preds = safety_refinement(ce, agreed_on_transitions, (
+                    [t.condition for t in disagreed_on_transitions[0]], disagreed_on_transitions[1]), symbol_table,
+                                                  program, use_dnf=True)
                 print("Found: " + ", ".join([str(p) for p in new_preds]))
-                check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, True, e)
+                check_for_nondeterminism_last_step(monitor_actually_took[0][1], predicate_abstraction.program, True, e)
                 print("Could not find a new state predicate..")
                 text = raw_input("Any suggestions?")
                 new_preds = list(map(string_to_prop, text.split(".")))
@@ -319,7 +369,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
                                                                                         "previous predicates."
                 )
-                check_for_nondeterminism_last_step(monitor_actually_took[0][1], program, True, e)
+                check_for_nondeterminism_last_step(monitor_actually_took[0][1], predicate_abstraction.program, True, e)
                 print("For debugging:\nComputing projection of controller onto predicate abstraction..")
                 controller_projected_on_program = mm.project_controller_on_program(program, predicate_abstraction,
                                                                                    symbol_table | symbol_table_preds)
@@ -355,17 +405,36 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
     exit_predicate_grounded = ground_predicate_on_bool_vars(program, exit_condition,
                                                             exit_prestate).simplify()
 
-    ranking, invars = liveness_refinement(symbol_table,
-                                          program,
-                                          entry_valuation_grounded, entry_predicate_grounded,
-                                          loop_before_exit,
-                                          exit_predicate_grounded)
+    sufficient_entry_condition = None
+    try:
+        ranking, invars = liveness_refinement(symbol_table,
+                                              program,
+                                              true(),
+                                              loop_before_exit,
+                                              exit_predicate_grounded)
+        sufficient_entry_condition = keep_bool_preds(entry_predicate, symbol_table)
+    except:
+        try:
+            ranking, invars = liveness_refinement(symbol_table,
+                                                  program,
+                                                  entry_predicate_grounded.simplify(),
+                                                  loop_before_exit,
+                                                  exit_predicate_grounded)
+            sufficient_entry_condition = entry_predicate
+        except:
+            ranking, invars = liveness_refinement(symbol_table,
+                                                  program,
+                                                  entry_valuation_grounded.simplify(),
+                                                  loop_before_exit,
+                                                  exit_predicate_grounded)
+            sufficient_entry_condition = entry_valuation
+
     if len(invars) > 0:
         raise NotImplementedError(
             "Ranking function comes with invar, what shall we do here? " + ranking + "\n" + ", ".join(
                 [str(invar) for invar in invars]))
 
-    return ranking, invars
+    return ranking, invars, sufficient_entry_condition
 
 
 def write_counterexample(program,
@@ -396,3 +465,24 @@ def write_counterexample(program,
 
     print("Monitor actually took:")
     print(str(monitor_actually_took[0][0]))
+
+
+def write_counterexample_state(program,
+                         agreed_on_transitions: [(Transition, dict)],
+                         disagreed_on_state: ([Formula], dict)):
+    print("Mismatch:")
+    print("Agreed on transitions:")
+    for trans, state in ([(t, s) for ts in agreed_on_transitions for (t, s) in ts]):
+        vs = set(trans.condition.variablesin()
+                 + [v for v in list(state.keys()) if str(v).startswith("mon_")]
+                 + [v for v in list(state.keys()) if str(v).startswith("pred_")]
+                 + [v for v in program.env_events + program.con_events])
+
+        print(str(trans) + " var values: " + ", ".join([str(v) + "=" + state[str(v)] for v in vs]))
+
+    print("Environment wanted predicate state to be:")
+
+    print(", ".join([str(p) for p in disagreed_on_state[0]]))
+
+    print("Monitor however has state:")
+    print(", ".join([v + " = " + k for v,k in disagreed_on_state[1].items()]))

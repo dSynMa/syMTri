@@ -1,4 +1,5 @@
 from itertools import chain, combinations
+import re
 
 from pysmt.shortcuts import And, Not, TRUE
 
@@ -7,12 +8,14 @@ from programs.abstraction.abstract_state import AbstractState
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
-from programs.util import label_preds, add_prev_suffix, safe_update, safe_update_dict_value
+from programs.typed_valuation import TypedValuation
+from programs.util import label_preds, add_prev_suffix, safe_update, safe_update_dict_value, stutter_transitions, \
+    stutter_transition, symbol_table_from_program, create_nuxmv_model
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
 from prop_lang.util import conjunct, neg, conjunct_formula_set, conjunct_typed_valuation_set, disjunct_formula_set, \
-    implies, G, X, true
+    implies, G, X, true, sat, false, disjunct
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
@@ -29,6 +32,8 @@ class PredicateAbstraction:
         self.program = program
         self.cache = {}
         self.f_cache = {}
+        self.loop_counter = 0
+        self.loops = []
 
     def getFromCache(self, f: Formula):
         if f in self.cache.keys():
@@ -59,7 +64,7 @@ class PredicateAbstraction:
 
         orig_env_transitions, orig_con_transitions = program.complete_transitions()
 
-        symbol_table_with_prev_vars = symbol_table | {key + "_prev": value for key, value in symbol_table.items()}
+        symbol_table_with_prev_vars = symbol_table | {(str(key) + "_prev"): value for key, value in symbol_table.items()}
 
         self.state_predicates = state_predicates
         self.transition_predicates = transition_predicates
@@ -238,6 +243,410 @@ class PredicateAbstraction:
                                    new_con_transitions, program.env_events,
                                    program.con_events, program.out_events, False)
 
+    def make_explicit_terminating_loop(self, entry_condition, loop_body : [Transition], exit_transs : [Transition]):
+        self.loops += [(entry_condition, loop_body, exit_transs)]
+        new_env = []
+        new_env += self.program.env_transitions
+        new_con = []
+        new_con += self.program.con_transitions
+        entry_trans = loop_body[0]
+        start = 0
+
+        if entry_trans in self.program.con_transitions:
+            entry_trans = stutter_transition(self.program, entry_trans.src, True)
+        else:
+            start = 1
+
+        old_to_new_env_transitions = {t: {t} for t in self.program.env_transitions + stutter_transitions(self.program, True)}
+        old_to_new_con_transitions = {t: {t} for t in self.program.con_transitions + stutter_transitions(self.program, False)}
+
+        update_from_to = lambda _action, _from, _to: ([v for v in _action if v.left != _from]
+                                                      + [BiOp(_from, ":=", disjunct(v.right, _to)) for v in _action if v.left == _from]) \
+                                                if any(v for v in _action if v.left == _from) \
+                                                else _action + [BiOp(_from, ":=", _to)]
+
+        entered_loop = Variable("loop" + str(self.loop_counter) + "_1")
+
+        env_turn = entry_trans in old_to_new_env_transitions.keys()
+
+        env_turn = not env_turn
+
+        # TODO: find unique suffix
+        step = 1
+        i_t = start
+        abstract_state_formula = true()
+        symbol_table = symbol_table_from_program(self.program)
+
+        loop_seq_vars = {entered_loop}
+
+        for loop_seq_var in loop_seq_vars:
+            symbol_table |= {(str(loop_seq_var) + "_" + str(step)): TypedValuation(
+                (str(loop_seq_var) + "_" + str(step)), "bool", false())}
+
+        while i_t < len(loop_body):
+            if env_turn:
+                if loop_body[i_t] not in old_to_new_env_transitions.keys():
+                    step_t = stutter_transition(self.program, loop_body[i_t].src, True)
+                else:
+                    step_t = loop_body[i_t]
+                    i_t += 1
+
+                src_state = Variable("loop" + str(self.loop_counter) + "_" + str(step))
+                tgt_state = Variable("loop" + str(self.loop_counter) + "_" + str(step + 1))
+
+                loop_seq_vars |= {src_state, tgt_state}
+
+                for loop_seq_var in loop_seq_vars:
+                    symbol_table |= {(str(loop_seq_var) + "_" + str(step + 1)): TypedValuation(
+                        (str(loop_seq_var) + "_" + str(step + 1)), "bool", false())}
+
+                for k, v in symbol_table_from_program(self.program).items():
+                    symbol_table |= {(str(k) + "_" + str(step)): TypedValuation(v.name + "_" + str(step), v.type, v.value) }
+                    symbol_table |= {(str(k) + "_" + str(step + 1)): TypedValuation(v.name + "_" + str(step + 1), v.type, v.value) }
+
+                ts_renamed = set()
+                for t in old_to_new_env_transitions[step_t]:
+                    t_renamed = Transition(t.src, t.condition,
+                                           update_from_to(update_from_to(t.action, tgt_state, src_state), src_state, false()), t.output,
+                                           t.tgt)
+                    ts_renamed |= {t_renamed}
+                    new_env += [t_renamed]
+
+                    abstract_state_formula = conjunct(abstract_state_formula, t.condition.replace(lambda var : Variable(var.name + "_" + str(step))))
+                    abstract_state_formula = conjunct(abstract_state_formula,
+                                                      conjunct_formula_set([BiOp(a.left.replace(lambda var : Variable(var.name + "_" + str(step + 1))),
+                                                                                 "=", a.right.replace(lambda var : Variable(var.name + "_" + str(step))))
+                                                                            for a in self.program.complete_action_set(t.action)]))
+
+                    alternate_trans_exit = [tt for tt in old_to_new_env_transitions.keys()
+                                       if t != tt and tt.src == t.src
+                                            and smt_checker.check(And(*conjunct(neg(tt.condition.replace(lambda var : Variable(var.name + "_" + str(step)))),
+                                                                            abstract_state_formula).to_smt(symbol_table)))]
+
+                    for tt in alternate_trans_exit:
+                        old_to_new_env_transitions[tt] = {
+                                            Transition(ttt.src, ttt.condition,
+                                                       update_from_to(ttt.action, src_state, false()),
+                                                       ttt.output, ttt.tgt)
+                                            for ttt in old_to_new_env_transitions[tt]}
+
+                        alternate_trans_stay = [tt for tt in old_to_new_env_transitions.keys()
+                                           if t != tt and tt.src == t.src
+                                                and not smt_checker.check(And(*conjunct(neg(tt.condition.replace(lambda var : Variable(var.name + "_" + str(step)))),
+                                                                                    abstract_state_formula).to_smt(symbol_table)))]
+
+                        for tt in alternate_trans_stay:
+                            old_to_new_env_transitions[tt] = {
+                                Transition(ttt.src, ttt.condition,
+                                           update_from_to(update_from_to(ttt.action, tgt_state, src_state), src_state, false()),
+                                           ttt.output, ttt.tgt)
+                                for ttt in old_to_new_env_transitions[tt]}
+                old_to_new_env_transitions[step_t] = ts_renamed
+
+            elif not env_turn:
+                if loop_body[i_t] not in old_to_new_con_transitions.keys():
+                    step_t = stutter_transition(self.program, loop_body[i_t].src, False)
+                else:
+                    step_t = loop_body[i_t]
+                    i_t += 1
+
+                src_state = Variable("loop" + str(self.loop_counter) + "_" + str(step))
+                tgt_state = Variable("loop" + str(self.loop_counter) + "_" + str(step + 1))
+
+                loop_seq_vars |= {src_state, tgt_state}
+
+                for loop_seq_var in loop_seq_vars:
+                    symbol_table |= {(str(loop_seq_var) + "_" + str(step + 1)): TypedValuation(
+                        (str(loop_seq_var) + "_" + str(step + 1)), "bool", false())}
+
+                for k, v in symbol_table_from_program(self.program).items():
+                    symbol_table |= {(str(k) + "_" + str(step)): TypedValuation(v.name + "_" + str(step), v.type, v.value) }
+                    symbol_table |= {(str(k) + "_" + str(step + 1)): TypedValuation(v.name + "_" + str(step), v.type, v.value) }
+
+                loop_seq_vars |= {src_state, tgt_state}
+
+                ts_renamed = set()
+                for t in old_to_new_con_transitions[step_t]:
+                    t_renamed = Transition(t.src, t.condition,
+                                           update_from_to(update_from_to(t.action, tgt_state, src_state), src_state, false()),
+                                           t.output, t.tgt)
+                    ts_renamed |= {t_renamed}
+                    new_con += [t_renamed]
+
+                    abstract_state_formula = conjunct(abstract_state_formula, t.condition.replace(lambda var : Variable(var.name + "_" + str(step))))
+                    abstract_state_formula = conjunct(abstract_state_formula,
+                                                      conjunct_formula_set([BiOp(a.left.replace(lambda var : Variable(var.name + "_"  + str(step + 1))),
+                                                                                 "=", a.right.replace(lambda var : Variable(var.name + "_" + str(step))))
+                                                                            for a in self.program.complete_action_set(t.action)]))
+
+                    alternate_trans_exit = [tt for tt in old_to_new_con_transitions.keys()
+                                       if t != tt and tt.src == t.src
+                                            and smt_checker.check(And(*conjunct(neg(tt.condition.replace(lambda var : Variable(var.name + "_" + str(step)))),
+                                                                            abstract_state_formula).to_smt(symbol_table)))]
+
+                    for tt in alternate_trans_exit:
+                        old_to_new_con_transitions[tt] = {
+                            Transition(ttt.src, ttt.condition,
+                                       update_from_to(ttt.action, src_state, false()),
+                                       ttt.output, ttt.tgt)
+                            for ttt in old_to_new_con_transitions[tt]}
+
+                        alternate_trans_stay = [tt for tt in old_to_new_con_transitions.keys()
+                                           if t != tt and tt.src == t.src
+                                                and not smt_checker.check(And(*conjunct(neg(tt.condition.replace(lambda var : Variable(var.name + "_" + str(step)))),
+                                                                                    abstract_state_formula).to_smt(symbol_table)))]
+
+                        for tt in alternate_trans_stay:
+                            old_to_new_con_transitions[tt] = {
+                                Transition(ttt.src, ttt.condition,
+                                           update_from_to(update_from_to(ttt.action, tgt_state, src_state), src_state, false()),
+                                           ttt.output, ttt.tgt)
+                                for ttt in old_to_new_con_transitions[tt]}
+                old_to_new_con_transitions[step_t] = ts_renamed
+
+            # loop_states |= {Variable(t.src + "loop" +  str(self.loop_counter) + "_" + str(step)), Variable(t.tgt + "loop" +  str(self.loop_counter) + "_" + str(step + 1))}
+
+            env_turn = not env_turn
+            step += 1
+
+        if env_turn and any(exit_trans
+                                for exit_trans in exit_transs
+                                if exit_trans not in old_to_new_env_transitions.keys()):
+            stutter_t = stutter_transition(self.program, exit_transs[0].src, True)
+
+            src_state = Variable("loop" + str(self.loop_counter) + "_" + str(step))
+            tgt_state = Variable("loop" + str(self.loop_counter) + "_" + str(step + 1))
+
+            loop_seq_vars |= {src_state, tgt_state}
+
+            for loop_seq_var in loop_seq_vars:
+                symbol_table |= {(str(loop_seq_var) + "_" + str(step + 1)): TypedValuation(
+                    (str(loop_seq_var) + "_" + str(step + 1)), "bool", false())}
+
+            for k, v in symbol_table_from_program(self.program).items():
+                symbol_table |= {(str(k) + "_" + str(step)): TypedValuation(v.name + "_" + str(step), v.type, v.value) }
+                symbol_table |= {(str(k) + "_" + str(step + 1)): TypedValuation(v.name + "_" + str(step + 1), v.type, v.value) }
+
+            ts_renamed = set()
+            for t in old_to_new_env_transitions[stutter_t]:
+                t_renamed = Transition(t.src, t.condition,
+                                       update_from_to(update_from_to(t.action, tgt_state, src_state), src_state, false()),
+                                       t.output, t.tgt)
+                ts_renamed |= {t_renamed}
+                new_env += [t_renamed]
+
+                abstract_state_formula = conjunct(abstract_state_formula,
+                                                  t.condition.replace(lambda var: Variable(var.name + "_" + str(step))))
+                abstract_state_formula = conjunct(abstract_state_formula,
+                                                  conjunct_formula_set([BiOp(a.left.replace(
+                                                      lambda var: Variable(var.name + "_" + str(step + 1))),
+                                                                             "=", a.right.replace(
+                                                          lambda var: Variable(var.name + "_" + str(step))))
+                                                                        for a in
+                                                                        self.program.complete_action_set(t.action)]))
+
+                alternate_trans_exit = [tt for tt in old_to_new_env_transitions.keys()
+                                        if t != tt and tt.src == t.src
+                                        and smt_checker.check(
+                        And(*conjunct(neg(tt.condition.replace(lambda var: Variable(var.name + "_" + str(step)))),
+                                      abstract_state_formula).to_smt(symbol_table)))]
+
+                for tt in alternate_trans_exit:
+                    old_to_new_env_transitions[tt] = {
+                        Transition(ttt.src, ttt.condition,
+                                   update_from_to(ttt.action, src_state, false()),
+                                   ttt.output, ttt.tgt)
+                        for ttt in old_to_new_env_transitions[tt]}
+
+                    alternate_trans_stay = [tt for tt in old_to_new_env_transitions.keys()
+                                            if t != tt and tt.src == t.src
+                                            and not smt_checker.check(
+                            And(*conjunct(neg(tt.condition.replace(lambda var: Variable(var.name + "_" + str(step)))),
+                                          abstract_state_formula).to_smt(symbol_table)))]
+
+                    for tt in alternate_trans_stay:
+                        old_to_new_env_transitions[tt] = {
+                            Transition(ttt.src, ttt.condition,
+                                       update_from_to(update_from_to(ttt.action, tgt_state, src_state), src_state, false()),
+                                       ttt.output, ttt.tgt)
+                            for ttt in old_to_new_env_transitions[tt]}
+            old_to_new_env_transitions[stutter_t] = ts_renamed
+
+            step += 1
+            env_turn = not env_turn
+        elif not env_turn and any(exit_trans
+                                for exit_trans in exit_transs
+                                if exit_trans not in old_to_new_con_transitions.keys()):
+            stutter_t = stutter_transition(self.program, exit_transs[0].src, False)
+
+            src_state = Variable("loop" + str(self.loop_counter) + "_" + str(step))
+            tgt_state = Variable("loop" + str(self.loop_counter) + "_" + str(step + 1))
+
+            loop_seq_vars |= {src_state, tgt_state}
+
+            for loop_seq_var in loop_seq_vars:
+                symbol_table |= {(str(loop_seq_var) + "_" + str(step + 1)): TypedValuation(
+                    (str(loop_seq_var) + "_" + str(step + 1)), "bool", false())}
+
+            for k, v in symbol_table_from_program(self.program).items():
+                symbol_table |= {(str(k) + "_" + str(step)): TypedValuation(v.name + "_" + str(step), v.type, v.value) }
+                symbol_table |= {(str(k) + "_" + str(step + 1)): TypedValuation(v.name + "_" + str(step + 1), v.type, v.value) }
+
+            ts_renamed = set()
+            for t in old_to_new_con_transitions[stutter_t]:
+                t_renamed = Transition(t.src, t.condition,
+                                       update_from_to(update_from_to(t.action, tgt_state, src_state), src_state, false()),
+                                       t.output, t.tgt)
+                ts_renamed |= {t_renamed}
+                new_env += [t_renamed]
+
+                abstract_state_formula = conjunct(abstract_state_formula,
+                                                  t.condition.replace(lambda var: Variable(var.name + "_" + str(step))))
+                abstract_state_formula = conjunct(abstract_state_formula,
+                                                  conjunct_formula_set([BiOp(a.left.replace(
+                                                      lambda var: Variable(var.name + "_" + str(step + 1))),
+                                                      "=", a.right.replace(
+                                                          lambda var: Variable(var.name + "_" + str(step))))
+                                                      for a in
+                                                      self.program.complete_action_set(t.action)]))
+
+                alternate_trans_exit = [tt for tt in old_to_new_con_transitions.keys()
+                                        if t != tt and tt.src == t.src
+                                        and smt_checker.check(
+                        And(*conjunct(neg(tt.condition.replace(lambda var: Variable(var.name + "_" + str(step)))),
+                                      abstract_state_formula).to_smt(symbol_table)))]
+
+                for tt in alternate_trans_exit:
+                    old_to_new_con_transitions[tt] = {
+                        Transition(ttt.src, ttt.condition,
+                                   update_from_to(ttt.action, src_state, false()),
+                                   ttt.output, ttt.tgt)
+                        for ttt in old_to_new_con_transitions[tt]}
+
+                    alternate_trans_stay = [tt for tt in old_to_new_con_transitions.keys()
+                                            if t != tt and tt.src == t.src
+                                            and not smt_checker.check(
+                            And(*conjunct(neg(tt.condition.replace(lambda var: Variable(var.name + "_" + str(step)))),
+                                          abstract_state_formula).to_smt(symbol_table)))]
+
+                    for tt in alternate_trans_stay:
+                        old_to_new_con_transitions[tt] |= {
+                            Transition(ttt.src, ttt.condition,
+                                       update_from_to(update_from_to(ttt.action, tgt_state, src_state), src_state, false()),
+                                       ttt.output, ttt.tgt)
+                            for ttt in old_to_new_con_transitions[tt]}
+            old_to_new_con_transitions[stutter_t] = ts_renamed
+            step += 1
+            env_turn = not env_turn
+
+        for exit_trans0 in exit_transs:
+            src_state = Variable("loop" + str(self.loop_counter) + "_" + str(step))
+
+            if env_turn:
+                # assert exit_trans == entry_trans
+                # assert len(exit_transs) == 1
+
+                tgt_state = Variable("loop" + str(self.loop_counter) + "_1")
+                loop_seq_vars |= {src_state, tgt_state}
+
+                exit_trans_renamed = set()
+                for exit_trans in old_to_new_env_transitions[exit_trans0]:
+                    t = Transition(exit_trans.src, exit_trans.condition,
+                                   update_from_to(exit_trans.action, src_state, false()),
+                                   exit_trans.output, exit_trans.tgt)
+                    exit_trans_renamed |= {t}
+
+                    alternate_trans = [tt for tt in old_to_new_env_transitions.keys() if
+                                       exit_trans != tt and exit_trans.src == tt.src]
+
+                    for tt in alternate_trans:
+                        old_to_new_env_transitions[tt] = \
+                        {Transition(ttt.src, ttt.condition,
+                                    update_from_to(update_from_to(ttt.action, tgt_state, src_state), src_state, false()),
+                        ttt.output, ttt.tgt) for ttt in old_to_new_env_transitions[tt]}
+                old_to_new_env_transitions[exit_trans0] = exit_trans_renamed
+
+            else:
+                tgt_state = Variable("loop" + str(self.loop_counter) + "_0")
+                loop_seq_vars |= {src_state, tgt_state}
+
+                exit_trans_renamed = set()
+                for exit_trans in old_to_new_con_transitions[exit_trans0]:
+                    t = Transition(exit_trans.src, exit_trans.condition,
+                                   update_from_to(exit_trans.action, src_state, false()),
+                                   exit_trans.output, exit_trans.tgt)
+                    exit_trans_renamed |= {t}
+
+                    alternate_trans = [tt for tt in old_to_new_con_transitions.keys() if
+                                       exit_trans != tt and exit_trans.src == tt.src]
+
+                    for tt in alternate_trans:
+                        old_to_new_con_transitions[tt] = {
+                            Transition(ttt.src, ttt.condition,
+                                       update_from_to(update_from_to(ttt.action, tgt_state, src_state), src_state,
+                                                      false()),
+                                       ttt.output, ttt.tgt) for ttt in old_to_new_con_transitions[tt]}
+                old_to_new_con_transitions[exit_trans0] = exit_trans_renamed
+
+        if not env_turn:
+            src_state = Variable("loop" + str(self.loop_counter) + "_0")
+            tgt_state = Variable("loop" + str(self.loop_counter) + "_1")
+
+            loop_seq_vars |= {src_state, tgt_state}
+
+            ts = []
+            for entry_trans1 in old_to_new_env_transitions[entry_trans]:
+                t = Transition(entry_trans1.src, entry_trans1.condition,
+                               update_from_to(update_from_to(entry_trans1.action, tgt_state, src_state), src_state,
+                                              false()),
+                               entry_trans1.output, entry_trans1.tgt)
+                ts += [t]
+
+                alternate_trans = [tt for tt in old_to_new_env_transitions.keys() if
+                                   t != tt and t.src == tt.src]
+
+                for tt in alternate_trans:
+                    old_to_new_env_transitions[tt] = [
+                        Transition(ttt.src, ttt.condition,
+                                   update_from_to(ttt.action, src_state, false()),
+                                   ttt.output, ttt.tgt) for ttt in old_to_new_env_transitions[tt]]
+
+            old_to_new_env_transitions[entry_trans] = set(ts)
+
+
+        if entry_trans in old_to_new_env_transitions.keys():
+            entry_transs = list(old_to_new_env_transitions[entry_trans])[0]
+            entry_trans_renamed = Transition(entry_transs.src, entry_transs.condition,
+                                             update_from_to(entry_transs.action, entered_loop,
+                                                            conjunct(entry_condition,
+                                                                     neg(disjunct_formula_set(loop_seq_vars)))),
+                                             entry_transs.output, entry_transs.tgt)
+
+            old_to_new_env_transitions[entry_trans] = {entry_trans_renamed}
+        else:
+            entry_transs = list(old_to_new_con_transitions[entry_trans])[0]
+            entry_trans_renamed = Transition(entry_transs.src, entry_transs.condition,
+                                             update_from_to(entry_transs.action, entered_loop,
+                                                            conjunct(entry_condition,
+                                                                     neg(disjunct_formula_set(loop_seq_vars)))),
+                                             entry_transs.output, entry_transs.tgt)
+
+            old_to_new_con_transitions[entry_trans] = {entry_trans_renamed}
+
+        new_program = Program(self.program.name, self.program.states,
+                              self.program.initial_state,
+                              self.program.valuation + [TypedValuation(v.name, "bool", false()) for v in loop_seq_vars],
+                              [v for V in old_to_new_env_transitions.values() for v in V], [v for V in old_to_new_con_transitions.values() for v in V],
+                              self.program.env_events, self.program.con_events, self.program.out_events)
+        old_program = self.program
+        self.program = new_program
+        print(self.program.to_dot())
+        print(create_nuxmv_model(old_program.to_nuXmv_with_turns()))
+        print(create_nuxmv_model(self.program.to_nuXmv_with_turns()))
+        self.loop_counter += 1
+
+        return loop_seq_vars
+
     def abstraction_to_ltl(self):
         predicates = self.state_predicates + self.transition_predicates
 
@@ -268,7 +677,7 @@ class PredicateAbstraction:
                                                                                          states
                                                                                          if
                                                                                          r != q]))
-                                                    for q in states])).to_nuxmv()
+                                                    for q in states if "loop" not in str(q)])).to_nuxmv()
 
         not_init_env_transitions = [t for t in self.abstraction.env_transitions if
                                     t.src != self.abstraction.initial_state]
@@ -302,6 +711,7 @@ class PredicateAbstraction:
                     else:
                         pass
 
+        remove_loop_stuff = lambda state : state #re.split("loop", state)[0]
         con_env_transitions = []
         for c_s, cond_ets in matching_pairs.items():
             now_state_preds = [p for p in c_s.predicates if
@@ -316,6 +726,18 @@ class PredicateAbstraction:
                 for et in ets:
                     bookeeping_tran_preds = label_preds(tran_and_state_preds_after_con_env_step(et),
                                                         predicates)
+                    if any(v for v in (ct.tgt.predicates) if isinstance(v, Variable) and "loop" in str(v)) or \
+                        any(v for v in (et.tgt.predicates) if isinstance(v, Variable) and "loop" in str(v)):
+                        bookeeping_tran_preds |= {Variable("inloop")}
+                    else:
+                        bookeeping_tran_preds |= {neg(Variable("inloop"))}
+                    #if #Variable("inloop") not in bookeeping_tran_preds and \
+                    if (not any(v for v in (ct.tgt.predicates) if isinstance(v, Variable) and "loop" in str(v)) or \
+                        not any(v for v in (et.tgt.predicates) if isinstance(v, Variable) and "loop" in str(v))):
+                        bookeeping_tran_preds |= {(Variable("notinloop"))}
+                    else:
+                        bookeeping_tran_preds |= {(neg(Variable("notinloop")))}
+
                     next_here = conjunct(conjunct_formula_set([Variable(et.tgt.state), et.condition] + et.output),
                                          conjunct_formula_set(sorted(bookeeping_tran_preds, key=lambda x: str(x)))
                                          )

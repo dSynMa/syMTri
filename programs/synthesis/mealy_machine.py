@@ -282,3 +282,4 @@ class MealyMachine:
                        abstraction.valuation, list(set(new_env_transitions)), list(set(new_con_transitions)),
                        abstraction.env_events, abstraction.con_events,
                        abstraction.out_events, False, False)
+

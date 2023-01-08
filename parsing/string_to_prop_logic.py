@@ -10,6 +10,8 @@ from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
 from prop_lang.value import Value
 from prop_lang.variable import Variable
+import sys
+sys.setrecursionlimit(20000)
 
 GRAMMAR = '''
     @@grammar::PROPLOGIC

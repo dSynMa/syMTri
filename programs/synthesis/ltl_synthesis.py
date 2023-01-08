@@ -76,6 +76,8 @@ def parse_hoa(env_events, con_events, output) -> Program:
     else:
         counterstrategy = False
 
+    print(output)
+
     init_st, trans = hoa_to_transitions(output)
 
     mon = MealyMachine("counterstrategy" if counterstrategy else "controller", init_st, env_events, con_events)

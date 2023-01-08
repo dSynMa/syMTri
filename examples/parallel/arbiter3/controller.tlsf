@@ -25,7 +25,6 @@ MAIN {
     G(!(request && dealWithTasks));
     G(!(request && otherRoom));
     G(!(dealWithTasks && otherRoom));
-    G(!(dealWithTasks && request));
   }
 
   GUARANTEES {
