@@ -161,20 +161,18 @@ def check_for_nondeterminism_last_step(state_before_mismatch, program, raise_exc
             print("WARNING: " + message)
 
 
-def parse_nuxmv_ce_output_finite(transition_no, out: str, state_pred_label_to_formula):
+def parse_nuxmv_ce_output_finite(transition_no, out: str):
     prefix, _ = get_ce_from_nuxmv_output(out)
 
-    return prefix, prog_transition_indices_and_state_from_ce(transition_no, prefix, state_pred_label_to_formula)
+    return prefix, prog_transition_indices_and_state_from_ce(transition_no, prefix)
 
 
-def prog_transition_indices_and_state_from_ce(transition_no, prefix, state_pred_label_to_formula):
+def prog_transition_indices_and_state_from_ce(transition_no, prefix):
     monitor_transitions_and_state = []
 
-    pred_mismatch = False
     for dic in prefix:
         if dic["turn"] != "mon":
             transition = "-1"
-
             for (key, value) in dic.items():
                 if key.startswith("guard_") and value == "TRUE":
                     if dic[key.replace("guard_", "act_")] == "TRUE":
@@ -517,31 +515,31 @@ def concretize_transitions(program, looping_program, indices_and_state_list):
     trans_here = []
 
     last_index = len(indices_and_state_list)
-    # if indices_and_state_list[-1][1]["turn"] == "con" and indices_and_state_list[-1][1]["compatible_predicates"] == "FALSE":
-    #     pred_state = [Variable(p) for p,v in indices_and_state_list[-1][1].items() if p.startswith("pred_") and v == "TRUE"] \
-    #             + [neg(Variable(p)) for p,v in indices_and_state_list[-1][1].items() if p.startswith("pred_") and v == "FALSE"]
-    #     last_index = last_index - 1
-    #     pred_state = (pred_state, indices_and_state_list[-1][1])
-    #
-    #     # value_expression = conjunct_formula_set(
-    #     #     [Variable(p) for p,v in indices_and_state_list[-1][1].items() if not p.startswith("pred_") and v == "TRUE"] \
-    #     #         + [neg(Variable(p)) for p,v in indices_and_state_list[-1][1].items() if not p.startswith("pred_") and v == "FALSE"])
-    #     #
-    #     #
-    #     # for p in pred_state:
-    #     #     if smt_checker.check(And(*value_expression.to_smt(program.symbol_table), *p.to_smt(program.symbol_table))):
-    #     #         pred_state = p
-    #     #         break
-    #
-    # else:
-    pred_state = None
+    if indices_and_state_list[-1][1]["turn"] == "con" and indices_and_state_list[-1][1]["compatible_predicates"] == "FALSE":
+        pred_state = [Variable(p) for p,v in indices_and_state_list[-1][1].items() if p.startswith("pred_") and v == "TRUE"] \
+                + [neg(Variable(p)) for p,v in indices_and_state_list[-1][1].items() if p.startswith("pred_") and v == "FALSE"]
+        last_index = last_index - 1
+        pred_state = (pred_state, indices_and_state_list[-1][1])
+
+        # value_expression = conjunct_formula_set(
+        #     [Variable(p) for p,v in indices_and_state_list[-1][1].items() if not p.startswith("pred_") and v == "TRUE"] \
+        #         + [neg(Variable(p)) for p,v in indices_and_state_list[-1][1].items() if not p.startswith("pred_") and v == "FALSE"])
+        #
+        #
+        # for p in pred_state:
+        #     if smt_checker.check(And(*value_expression.to_smt(program.symbol_table), *p.to_smt(program.symbol_table))):
+        #         pred_state = p
+        #         break
+
+    else:
+        pred_state = None
 
     if last_index > 1:
         # for last two transitions
         con_from_state = concretized[-1][-1][0].tgt
         con_trans = stutter_transition(program, con_from_state, False) \
             if indices_and_state_list[last_index-2][0] == '-1' \
-            else looping_to_normal(transitions[int(indices_and_state_list[last_index-2][0])])
+            else looping_to_normal(transitions[int(indices_and_state_list[-2][0])])
 
         if con_trans == None:
             raise Exception("No controller stutter transition found for state " + str(con_from_state))
@@ -554,20 +552,9 @@ def concretize_transitions(program, looping_program, indices_and_state_list):
             else looping_to_normal(transitions[int(indices_and_state_list[last_index-1][0])])
 
         if env_trans == None:
-            raise Exception("No environment stutter transition found for state " + str(env_from_state))
+            raise Exception("No environment stutter transition found for state " + str(con_from_state))
         else:
             trans_here += [(env_trans, indices_and_state_list[last_index-1][1])]
-
-        if pred_state != None:
-            con_from_state = env_trans.tgt
-            con_trans = stutter_transition(program, con_from_state, False) \
-                if indices_and_state_list[last_index][0] == '-1' \
-                else looping_to_normal(transitions[int(indices_and_state_list[last_index][0])])
-
-            if con_trans == None:
-                raise Exception("No controller stutter transition found for state " + str(con_from_state))
-            else:
-                trans_here += [(con_trans, indices_and_state_list[last_index][1])]
 
         concretized += [trans_here]
 

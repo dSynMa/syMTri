@@ -6,6 +6,7 @@ from pysmt.shortcuts import And
 
 from parsing.string_to_prop_logic import string_to_prop, string_to_math_expression
 from programs.analysis.ranker import Ranker
+from programs.typed_valuation import TypedValuation
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
@@ -157,29 +158,32 @@ def liveness_refinement(symbol_table, program, entry_condition, unfolded_loop: [
         ranker = Ranker()
         success, ranking_function, invars = ranker.check(c_code)
 
-        while not success or (success and any(v for v in ranking_function.variablesin() if symbol_table[str(v)].type.startswith("int"))):
-            if success and any(v for v in ranking_function.variablesin() if symbol_table[str(v)].type.startswith("int")):
-                print("Warning: The ranking function <<" + str(ranking_function) + ">> contains integer variables.\n"
-                      "We thus cannot guarantee the ranking abstraction will be a sound abstraction of the program.")
-                print("Re-enter the same function if you want to continue with it, or suggest a new one.")
-                text = raw_input("Enter 'force' to force the use of this unsound a ranking function, or 'stop' to quit ranking refinement:")
-                if text.lower().startswith("force"):
-                    return ranking_function, invars
-                elif text.lower().startswith("stop"):
-                    raise Exception("Exit: Terminated by user.")
+        # while not success or (success and any(v for v in ranking_function.variablesin() if symbol_table[str(v)].type.startswith("int"))):
+        #     if success and any(v for v in ranking_function.variablesin() if symbol_table[str(v)].type.startswith("int")):
+        #         print("Warning: The ranking function <<" + str(ranking_function) + ">> contains integer variables.\n"
+        #               "We thus cannot guarantee the ranking abstraction will be a sound abstraction of the program.")
+        #         print("Re-enter the same function if you want to continue with it, or suggest a new one.")
+        #         text = raw_input("Enter 'force' to force the use of this unsound a ranking function, or 'stop' to quit ranking refinement:")
+        #         if text.lower().startswith("force"):
+        #             return ranking_function, invars
+        #         elif text.lower().startswith("stop"):
+        #             raise Exception("Exit: Terminated by user.")
+        #
+        #     if not success:
+        #         print("Could not find a ranking function.")
+        #
+        #         text = raw_input("Enter 'stop' to quit, or suggest a ranking function:")
+        #     if text == "stop":
+        #         raise Exception("Exit: Terminated by user.")
+        #     try:
+        #         ranking_function, invars = string_to_math_expression(text), []
+        #         success = True
+        #     except Exception as e:
+        #         print(str(e))
+        #         success = False
 
-            if not success:
-                print("Could not find a ranking function.")
-
-                text = raw_input("Enter 'stop' to quit, or suggest a ranking function:")
-            if text == "stop":
-                raise Exception("Exit: Terminated by user.")
-            try:
-                ranking_function, invars = string_to_math_expression(text), []
-                success = True
-            except Exception as e:
-                print(str(e))
-                success = False
+        if not success:
+            raise Exception("Could not prove termination.")
 
         return ranking_function, invars
     except Exception as e:
@@ -447,7 +451,48 @@ def use_liveness_refinement(program,
         first_index = first_index_state
 
     if yes:
-        ce_prog_loop_tran_concretised = mon_transitions[first_index:]
+        tentative_loop = mon_transitions[first_index:]
+        # prune up to predicate mismatch
+        # TODO THIS IS NOT CORRECT
+        ce_prog_loop_tran_concretised = []
+        pred_mismatch = False
+        pred_symbol_table = symbol_table | {str(p):TypedValuation(str(p), "bool", None) for p in pred_label_to_formula.keys() if isinstance(p, Variable)}
+        exit = False
+
+        found_mismatch_but_no_transition_mismatch = False
+        condition_with_preds_numbered = None
+        for i, (t, st) in enumerate(tentative_loop):
+            ce_prog_loop_tran_concretised += [(t, st)]
+            if exit:
+                break
+            if not found_mismatch_but_no_transition_mismatch and st["turn"] == "con" and st["compatible_predicates"] == "FALSE":
+                found_mismatch_but_no_transition_mismatch = True
+                true_preds = [pred_label_to_formula[p] for p in pred_label_to_formula.keys() if isinstance(p, Variable) and "loop" not in str(p) and st[str(p)] == "TRUE"]
+                false_preds = [neg(pred_label_to_formula[p]) for p in pred_label_to_formula.keys() if isinstance(p, Variable) and "loop" not in str(p)  and st[str(p)] == "FALSE"]
+                state_formula = conjunct_formula_set(true_preds + false_preds)
+                pred_symbol_table = pred_symbol_table | {
+                    (str(var) + str(i)): TypedValuation((str(var) + str(i)), pred_symbol_table[str(var)].type, None) for
+                    var in state_formula.variablesin()}
+                state_formula = conjunct_formula_set(true_preds + false_preds).replace(lambda v: Variable(v.name + str(i)))
+
+
+            if found_mismatch_but_no_transition_mismatch:
+                state_formula = conjunct(t.condition.replace(lambda v: Variable(v.name + str(i))), state_formula)
+                pred_symbol_table = pred_symbol_table | {(v + str(i)):TypedValuation((pred_symbol_table[v].name + str(i)), pred_symbol_table[v].type, None) for v in pred_symbol_table.keys()}
+
+                if (not smt_checker.check(And(*(state_formula).to_smt(pred_symbol_table)))):
+                    pred_mismatch = True #len(ce_prog_loop_tran_concretised) < len(tentative_loop)
+                    break
+                else:
+                    state_formula = conjunct(state_formula,
+                                             conjunct_formula_set([BiOp(Variable(a.left.name + str(i + 1)),
+                                                                                       "=",
+                                                                                       a.right.replace(lambda v : Variable(v.name + str(i))))
+                                                                   for a in t.action if Variable(a.left.name + str(i)) in state_formula.variablesin()]))
+
+                # else:
+                #     pred_mismatch = len(ce_prog_loop_tran_concretised) + 1 < len(tentative_loop)
+                #     exit = True
 
         if [] == [t for t, _ in ce_prog_loop_tran_concretised if [] != [a for a in t.action if infinite_type(a.left, program.valuation)]]:
             return False, None, None, None
@@ -461,6 +506,6 @@ def use_liveness_refinement(program,
         false_preds = [neg(p) for p in pred_label_to_formula.values() if p not in true_preds]
         entry_predicate = conjunct_formula_set(true_preds + false_preds)
 
-        return True, ce_prog_loop_tran_concretised, entry_valuation, entry_predicate
+        return True, ce_prog_loop_tran_concretised, entry_valuation, entry_predicate, pred_mismatch
     else:
-        return False, None, None, None
+        return False, None, None, None, None

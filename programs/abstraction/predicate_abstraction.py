@@ -10,7 +10,7 @@ from programs.program import Program
 from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
 from programs.util import label_preds, add_prev_suffix, safe_update, safe_update_dict_value, stutter_transitions, \
-    stutter_transition, symbol_table_from_program, create_nuxmv_model
+    stutter_transition, symbol_table_from_program
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
@@ -252,7 +252,8 @@ class PredicateAbstraction:
         entry_trans = loop_body[0]
         start = 0
 
-        if entry_trans in self.program.con_transitions:
+        entry_trans_is_con = entry_trans in self.program.con_transitions
+        if entry_trans_is_con:
             entry_trans = stutter_transition(self.program, entry_trans.src, True)
         else:
             start = 1
@@ -409,10 +410,13 @@ class PredicateAbstraction:
             env_turn = not env_turn
             step += 1
 
-        if env_turn and any(exit_trans
+        exit_trans_is_con = any(exit_trans
                                 for exit_trans in exit_transs
-                                if exit_trans not in old_to_new_env_transitions.keys()):
+                                if exit_trans not in old_to_new_env_transitions.keys())
+
+        if env_turn and exit_trans_is_con:
             stutter_t = stutter_transition(self.program, exit_transs[0].src, True)
+
 
             src_state = Variable("loop" + str(self.loop_counter) + "_" + str(step))
             tgt_state = Variable("loop" + str(self.loop_counter) + "_" + str(step + 1))
@@ -474,9 +478,7 @@ class PredicateAbstraction:
 
             step += 1
             env_turn = not env_turn
-        elif not env_turn and any(exit_trans
-                                for exit_trans in exit_transs
-                                if exit_trans not in old_to_new_con_transitions.keys()):
+        elif not env_turn and not exit_trans_is_con:
             stutter_t = stutter_transition(self.program, exit_transs[0].src, False)
 
             src_state = Variable("loop" + str(self.loop_counter) + "_" + str(step))
@@ -638,11 +640,8 @@ class PredicateAbstraction:
                               self.program.valuation + [TypedValuation(v.name, "bool", false()) for v in loop_seq_vars],
                               [v for V in old_to_new_env_transitions.values() for v in V], [v for V in old_to_new_con_transitions.values() for v in V],
                               self.program.env_events, self.program.con_events, self.program.out_events)
-        old_program = self.program
         self.program = new_program
         print(self.program.to_dot())
-        print(create_nuxmv_model(old_program.to_nuXmv_with_turns()))
-        print(create_nuxmv_model(self.program.to_nuXmv_with_turns()))
         self.loop_counter += 1
 
         return loop_seq_vars

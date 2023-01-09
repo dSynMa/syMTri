@@ -69,9 +69,9 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
     in_acts += [Variable("inloop"), Variable("notinloop")]
     transition_fairness = []
     predicate_abstraction = PredicateAbstraction(program)
-    symbol_table = predicate_abstraction.program.symbol_table
 
     while True:
+        symbol_table = predicate_abstraction.program.symbol_table
         predicate_abstraction.add_predicates(state_predicates,
                                                 transition_predicates,
                                                 symbol_table,
@@ -127,7 +127,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         symbol_table_prevs = {tv.name + "_prev": TypedValuation(tv.name + "_prev", tv.type, tv.value) for tv in
                               program.valuation}
 
-        system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, False, True)
+        system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, False, False)
         contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real, False,
                                                                                                ltl_assumptions,
                                                                                                ltl_guarantees)
@@ -156,7 +156,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 print("Looking for mismatches in predicates.")
 
                 system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, True,
-                                                                       True, True)
+                                                                       True, False)
                 contradictory, there_is_mismatch, out = there_is_mismatch_between_monitor_and_strategy(system, real,
                                                                                                        False,
                                                                                                        ltl_assumptions,
@@ -199,16 +199,16 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         print(out)
         ## Compute mismatch trace
         ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(
-            len(program.env_transitions) + len(program.con_transitions), out, state_pred_label_to_formula)
-
+            len(program.env_transitions) + len(program.con_transitions), out)
         transitions_without_stutter_monitor_took, pred_state = concretize_transitions(program, program, transition_indices_and_state)
 
-        if False:
+        if pred_state is not None:
             agreed_on_transitions = transitions_without_stutter_monitor_took
             disagreed_on_state = pred_state
             disagreed_on_state_dict = disagreed_on_state[1]
 
             write_counterexample_state(program, agreed_on_transitions, disagreed_on_state)
+
         else:
             agreed_on_transitions = transitions_without_stutter_monitor_took[:-1]
             # disagreed_on_transitions = []
@@ -261,7 +261,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                       if key.startswith("st_") and ce_state["turn"] == "env" and v == "TRUE"]
             print("Counterstrategy states before environment step: " + ", ".join(counterstrategy_states))
             last_counterstrategy_state = counterstrategy_states[-1]
-            use_liveness, counterexample_loop, entry_valuation, entry_predicate \
+            use_liveness, counterexample_loop, entry_valuation, entry_predicate, pred_mismatch \
                 = use_liveness_refinement(program, agreed_on_transitions,
                                           disagreed_on_state_dict,
                                           last_counterstrategy_state,
@@ -274,16 +274,26 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         ## do liveness refinement
         if use_liveness:
             try:
-                ranking, invars, sufficient_entry_condition = liveness_step(program, counterexample_loop, symbol_table,
+                if pred_mismatch:  # counterexample_loop[-1][1]["compatible_predicates"] == "FALSE":
+                    exit_trans = counterexample_loop[-1][0]
+                    exit_trans_state = counterexample_loop[-1][1]
+                    loop = counterexample_loop[:-1]
+                else:
+                    loop = counterexample_loop
+                    exit_trans = monitor_actually_took[0][0]
+                    exit_trans_state = monitor_actually_took[0][1]
+
+                exit_condition = exit_trans.condition
+                ranking, invars, sufficient_entry_condition = liveness_step(program, loop, symbol_table,
                                                                             entry_valuation, entry_predicate,
-                                                                            monitor_actually_took[0][0].condition,
-                                                                            monitor_actually_took[0][1])
+                                                                            exit_condition,
+                                                                            exit_trans_state)
                 try:
                     if [t for (t, _) in counterexample_loop] in [loop_body for (_, loop_body, _) in predicate_abstraction.loops]:
                         print("The loop is already in the predicate abstraction.")
-                    # TODO need to add info about all predicates to entry condition, not just number vars
-                    new_safety_preds = predicate_abstraction.make_explicit_terminating_loop(sufficient_entry_condition, [t for (t, _) in counterexample_loop],
-                                                                     [monitor_actually_took[0][0]])
+
+                    new_safety_preds = predicate_abstraction.make_explicit_terminating_loop(sufficient_entry_condition, [t for (t, _) in loop],
+                                                                     [exit_trans])
                     program = predicate_abstraction.program
                     symbol_table = predicate_abstraction.program.symbol_table
                     state_predicates = state_predicates + list(new_safety_preds)
@@ -429,7 +439,7 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
                                                   exit_predicate_grounded)
             sufficient_entry_condition = entry_valuation
 
-    if len(invars) > 0:
+    if invars != None and len(invars) > 0:
         raise NotImplementedError(
             "Ranking function comes with invar, what shall we do here? " + ranking + "\n" + ", ".join(
                 [str(invar) for invar in invars]))

@@ -40,7 +40,7 @@ class Ranker:
                                                                              invars]
                     except Exception as err:
                         print("WARNING: Function terminates, but there is no ranking function, are you sure the loop has at least one iteration?")
-                        return False, None, None
+                        return True, None, None
                 else:
                     raise Exception("Unexpected result during termination checking of:\n" + main_function)
                     print(out)
