@@ -243,7 +243,7 @@ class PredicateAbstraction:
                                    new_con_transitions, program.env_events,
                                    program.con_events, program.out_events, False)
 
-    def make_explicit_terminating_loop(self, entry_condition, loop_body : [Transition], exit_transs : [Transition]):
+    def make_explicit_terminating_loop(self, entry_condition, loop_body : [Transition], exit_transs : [Transition], exit_predicate):
         self.loops += [(entry_condition, loop_body, exit_transs)]
         new_env = []
         new_env += self.program.env_transitions
@@ -564,7 +564,7 @@ class PredicateAbstraction:
                     for tt in alternate_trans:
                         old_to_new_env_transitions[tt] = \
                         {Transition(ttt.src, ttt.condition,
-                                    update_from_to(update_from_to(ttt.action, tgt_state, src_state), src_state, false()),
+                                    update_from_to(update_from_to(ttt.action, tgt_state, conjunct(neg(exit_predicate), src_state)), src_state, false()),
                         ttt.output, ttt.tgt) for ttt in old_to_new_env_transitions[tt]}
                 old_to_new_env_transitions[exit_trans0] = exit_trans_renamed
 
@@ -585,7 +585,7 @@ class PredicateAbstraction:
                     for tt in alternate_trans:
                         old_to_new_con_transitions[tt] = {
                             Transition(ttt.src, ttt.condition,
-                                       update_from_to(update_from_to(ttt.action, tgt_state, src_state), src_state,
+                                       update_from_to(update_from_to(ttt.action, tgt_state, conjunct(neg(exit_predicate), src_state)), src_state,
                                                       false()),
                                        ttt.output, ttt.tgt) for ttt in old_to_new_con_transitions[tt]}
                 old_to_new_con_transitions[exit_trans0] = exit_trans_renamed

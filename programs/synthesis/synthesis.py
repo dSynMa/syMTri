@@ -1,6 +1,8 @@
 from typing import Tuple
 
 from click._compat import raw_input
+from pysmt.shortcuts import And
+from programs.analysis.smt_checker import SMTChecker
 
 from parsing.string_to_ltl import string_to_ltl
 from parsing.string_to_prop_logic import string_to_prop
@@ -23,6 +25,7 @@ from prop_lang.formula import Formula
 from prop_lang.util import neg, G, F, implies, conjunct, X, true, disjunct_formula_set, conjunct_formula_set
 from prop_lang.variable import Variable
 
+smt_checker = SMTChecker()
 
 def synthesize(aut: Program, ltl_text: str, tlsf_path: str, docker: bool, project_on_abstraction=True) -> Tuple[bool, Program]:
     if tlsf_path is not None:
@@ -284,23 +287,28 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     exit_trans_state = monitor_actually_took[0][1]
 
                 exit_condition = exit_trans.condition
-                ranking, invars, sufficient_entry_condition = liveness_step(program, loop, symbol_table,
-                                                                            entry_valuation, entry_predicate,
-                                                                            exit_condition,
-                                                                            exit_trans_state)
+                ranking, invars, sufficient_entry_condition, exit_predicate = \
+                    liveness_step(program, loop, symbol_table,
+                                    entry_valuation, entry_predicate,
+                                    exit_condition,
+                                    exit_trans_state)
+                # TODO in some cases we can use ranking abstraction as before:
+                #  -if ranking function is a natural number
+                #  -if ranking function does not decrease outside the loop
+                #  -if supporting invariant ensures ranking function is bounded below
                 try:
                     if [t for (t, _) in counterexample_loop] in [loop_body for (_, loop_body, _) in predicate_abstraction.loops]:
                         print("The loop is already in the predicate abstraction.")
 
-                    new_safety_preds = predicate_abstraction.make_explicit_terminating_loop(sufficient_entry_condition, [t for (t, _) in loop],
-                                                                     [exit_trans])
+                    new_safety_preds = predicate_abstraction.make_explicit_terminating_loop(sufficient_entry_condition,
+                                                                                            [t for (t, _) in loop],
+                                                                                            [exit_trans],
+                                                                                            exit_predicate)
                     program = predicate_abstraction.program
                     symbol_table = predicate_abstraction.program.symbol_table
                     state_predicates = state_predicates + list(new_safety_preds)
                 except Exception as e:
                     print(e)
-                    new_safety_preds = predicate_abstraction.make_explicit_terminating_loop(sufficient_entry_condition, [t for (t, _) in counterexample_loop],
-                                                                     [monitor_actually_took[0][0]])
 
                 transition_fairness = [implies(G(F(Variable("inloop"))), G(F((Variable("notinloop")))))]
                 # rankings.append((ranking, invars))
@@ -444,7 +452,13 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
             "Ranking function comes with invar, what shall we do here? " + ranking + "\n" + ", ".join(
                 [str(invar) for invar in invars]))
 
-    return ranking, invars, sufficient_entry_condition
+    if not smt_checker.check(And(*neg(exit_predicate_grounded).to_smt(symbol_table))):
+        for grounded_t in loop_before_exit:
+            if smt_checker.check(And(*neg(grounded_t.condition).to_smt(symbol_table))):
+                exit_predicate_grounded = neg(grounded_t.condition.simplify())
+                break
+
+    return ranking, invars, sufficient_entry_condition, exit_predicate_grounded
 
 
 def write_counterexample(program,
