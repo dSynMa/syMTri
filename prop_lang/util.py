@@ -1,10 +1,11 @@
 import re
 
-from pysmt.shortcuts import Solver
+from pysmt.shortcuts import And
 from sympy.logic.boolalg import to_dnf, simplify_logic
 from sympy.parsing.sympy_parser import parse_expr
 
 from parsing.string_to_prop_logic import string_to_prop
+from programs.analysis.smt_checker import SMTChecker
 from programs.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
 from prop_lang.biop import BiOp
@@ -138,8 +139,12 @@ def nnf(prop: Formula) -> Formula:
         return NotImplemented
 
 
-def sat(formula: Formula, symbol_table: dict, solver: Solver) -> bool:
-    return solver.is_sat(formula.to_smt(symbol_table))
+def sat(formula: Formula, symbol_table: dict, solver: SMTChecker) -> bool:
+    return solver.check(And(*formula.to_smt(symbol_table)))
+
+
+def is_tautology(formula: Formula, symbol_table: dict, solver: SMTChecker) -> bool:
+    return solver.check(And(*neg(formula).to_smt(symbol_table)))
 
 
 def negation_closed(predicates: [Formula]):
