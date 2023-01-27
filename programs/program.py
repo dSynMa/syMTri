@@ -58,7 +58,7 @@ class Program:
                 if not all(v in out_events or (isinstance(v, UniOp) and v.simplify().right in out_events) for v in
                            transition.output):
                     raise Exception(
-                        "Outputs of environment transitions can only refer to monitor output variables: " + str(
+                        "Outputs of environment transitions can only refer to program output variables: " + str(
                             transition) + ".")
 
             for transition in self.con_transitions:
@@ -177,7 +177,7 @@ class Program:
 
         define += ["identity_" + self.name + " := " + " & ".join(identity)]
 
-        # if no guard holds, then keep the same state and output no monitor events
+        # if no guard holds, then keep the same state and output no program events
         guards.append("!(" + " | ".join(guard_ids) + ")")
         acts.append("identity_" + self.name)
         define += ["guard_" + str(len(guards) - 1) + " := " + guards[len(guards) - 1]]
