@@ -38,8 +38,8 @@ class Program:
         else:
             self.env_transitions = env_transitions
             self.con_transitions = con_transitions
-        self.state_to_env = lambda s: [t for t in self.env_transitions if t.src == s]
-        self.state_to_con = lambda s: [t for t in self.con_transitions if t.src == s]
+        self.state_to_env = {s:[t for t in self.env_transitions if t.src == s] for s in self.states}
+        self.state_to_con = {s:[t for t in self.con_transitions if t.src == s] for s in self.states}
 
         if debug:
             # type checking
