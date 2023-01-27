@@ -329,37 +329,42 @@ def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_bef
     return c_code
 
 
-def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, symbol_table):
+def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, disagreed_on_state_dict, symbol_table):
     ce_with_stutter_states = []
     env_turn = True
     new_i_to_old_i = {}
     i = 0
     old_i = 0
-    while i < len(env_con_ce) - 1:
+    while i < len(env_con_ce):
         if env_turn:
             env_turn = False
             if env_con_ce[i]["turn"] == "env":
                 ce_with_stutter_states.append(env_con_ce[i])
                 new_i_to_old_i[i] = old_i
             else:
-                env_copy = env_con_ce[i + 1]
+                env_copy = env_con_ce[max(0, i - 1)]
                 env_copy["turn"] = "env"
-                ce_with_stutter_states.append(env_con_ce[i + 1])
-                new_i_to_old_i[old_i] = i + 1
+                ce_with_stutter_states.append(env_con_ce[max(0, i - 1)])
+                new_i_to_old_i[old_i] = max(0, i - 1)
         else:
             env_turn = True
             if env_con_ce[i]["turn"] == "con":
                 ce_with_stutter_states.append(env_con_ce[i])
                 new_i_to_old_i[i] = old_i
             else:
-                con_copy = env_con_ce[i + 1]
+                con_copy = env_con_ce[max(0, i - 1)]
                 con_copy["turn"] = "con"
-                ce_with_stutter_states.append(env_con_ce[i + 1])
-                new_i_to_old_i[old_i] = i + 1
+                ce_with_stutter_states.append(env_con_ce[max(0, i - 1)])
+                new_i_to_old_i[old_i] = max(0, i - 1)
         i += 1
         old_i += 1
 
-    ce_with_stutter_states.append(env_con_ce[-1])
+    # ce_with_stutter_states.append(env_con_ce[-1])
+    ce_with_stutter_states.append(disagreed_on_state_dict)
+    if disagreed_on_state_dict["turn"] == "con":
+        disagreed_on_state_dict_env = disagreed_on_state_dict
+        disagreed_on_state_dict_env["turn"] = "env"
+        ce_with_stutter_states.append(disagreed_on_state_dict_env)
 
     previous_visits = [i for i, dict in enumerate(ce_with_stutter_states) for key, value in dict.items()
                        if key == last_cs_state and dict["turn"] == "env" and value == "TRUE"]
@@ -382,10 +387,11 @@ def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, symbol_tabl
                 var_differences += [False]
 
         if True in var_differences:
-            index_of_last_loop_entry = len(var_differences) - 1 - var_differences[::-1].index(True)
-            last_index = new_i_to_old_i[previous_visits[index_of_last_loop_entry]]
+            index_of_first_loop_entry = var_differences.index(True)
+            # index_of_last_loop_entry = len(var_differences) - 1 - var_differences[::-1].index(True)
+            first_index = new_i_to_old_i[previous_visits[index_of_first_loop_entry]]
 
-            return True, last_index
+            return True, first_index
         else:
             return False, None
     else:
@@ -445,7 +451,7 @@ def use_liveness_refinement(program,
     mon_transitions = [(y, st) for xs in agreed_on_transitions for y, st in xs]
     ce = [x for xs in agreed_on_transitions for _, x in xs]
 
-    yes_state, first_index_state = use_liveness_refinement_state(ce, last_counterstrategy_state, symbol_table)
+    yes_state, first_index_state = use_liveness_refinement_state(ce, last_counterstrategy_state, disagreed_on_state_dict, symbol_table)
     if yes_state:
         yes = True
         first_index = first_index_state
