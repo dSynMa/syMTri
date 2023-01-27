@@ -411,17 +411,44 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, entry_predicate,
                   exit_condition, exit_prestate):
     # ground transitions in the counterexample loop
-    # on the environment and controller events in the counterexample
-    loop_before_exit = ground_transitions(program, counterexample_loop)
+    # on the environment and controller events in the counterexample\
 
-    entry_valuation_grounded = ground_predicate_on_bool_vars(program, entry_valuation,
-                                                             counterexample_loop[0][1]).simplify()
-    entry_predicate_grounded = ground_predicate_on_bool_vars(program,
+    #TODO ground everything on all variable values that are not updated by transitions
+    bool_vars = [v for v in symbol_table.keys() if symbol_table[v].type == "bool" or symbol_table[v].type == "boolean"]
+
+    # first ground on bool vars
+
+    entry_valuation_grounded = ground_predicate_on_vars(program, entry_valuation,
+                                                             counterexample_loop[0][1], bool_vars, symbol_table).simplify()
+    entry_predicate_grounded = ground_predicate_on_vars(program,
                                                              entry_predicate,
-                                                             counterexample_loop[0][1]).simplify()
+                                                             counterexample_loop[0][1], bool_vars, symbol_table).simplify()
 
-    exit_predicate_grounded = ground_predicate_on_bool_vars(program, exit_condition,
-                                                            exit_prestate).simplify()
+    exit_predicate_grounded = ground_predicate_on_vars(program, exit_condition,
+                                                            exit_prestate, bool_vars, symbol_table).simplify()
+
+    if isinstance(exit_predicate_grounded, Value) or\
+         is_tautology(exit_predicate_grounded, symbol_table, smt_checker):
+         # in this case the exit is really happening before the last transition
+         # TODO this shouldn't be happening, we should be identifying the real exit transition/condition
+         loop_before_exit = ground_transitions(program, counterexample_loop, bool_vars, symbol_table)
+    else:
+         # then discover which variables are related to the variables updated in the loop
+        updated_in_loop_vars = [str(act.left) for t, _ in counterexample_loop for act in t.action]
+        dnf_exit_pred = dnf(exit_predicate_grounded)
+        disjuncts_in_exit_pred = [dnf_exit_pred] if not isinstance(dnf_exit_pred, BiOp) or not dnf_exit_pred.op.startswith("&") else dnf_exit_pred.sub_formulas_up_to_associativity()
+
+        relevant_vars = [str(v) for f in disjuncts_in_exit_pred for v in f.variablesin() if any(v for v in f.variablesin() if str(v) in updated_in_loop_vars)]
+        irrelevant_vars = [v for v in symbol_table.keys() if v not in relevant_vars]
+
+        entry_predicate_grounded = ground_predicate_on_vars(program,
+                                                                 entry_predicate_grounded,
+                                                                 counterexample_loop[0][1], irrelevant_vars, symbol_table).simplify()
+
+        exit_predicate_grounded = ground_predicate_on_vars(program, exit_predicate_grounded,
+                                                                exit_prestate, irrelevant_vars, symbol_table).simplify()
+
+        loop_before_exit = ground_transitions(program, counterexample_loop, irrelevant_vars + bool_vars, symbol_table)
 
     sufficient_entry_condition = None
     try:
