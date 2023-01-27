@@ -265,6 +265,7 @@ def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_bef
                       not is_boolean(v, program.valuation) and [str(vv) for t in loop_before_exit for vv in
                                                                 (t.condition.variablesin()
                                                                  + entry_condition.variablesin()
+                                                                 + exit_cond.variablesin()
                                                                  + [act.left for act in t.action]
                                                                  + [a for act in t.action for a in
                                                                     act.right.variablesin()])]))
@@ -296,7 +297,8 @@ def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_bef
                 choices += ["\t" + acts]
         else:
             choices += ["\tif(" + cond_simpl + ") {" + acts + "}\n\t\t else break;"]
-        choices += ["\tif(!(" + safety + ")) break;"]
+        if safety != "true":
+            choices += ["\tif(!(" + safety + ")) break;"]
 
     exit_cond_simplified = str(exit_cond.simplify()) \
         .replace(" = ", " == ") \
@@ -308,9 +310,11 @@ def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_bef
         .replace(" | ", " || ")
 
     # TODO check for satisfiability instead of equality of with true
-    choices = [
-                  "\tif(!(" + exit_cond_var_constraints + ")) break;" if exit_cond_var_constraints.lower() != "true" else ""] + choices
-    choices = ["\tif(" + exit_cond_simplified + ") break;" if exit_cond_simplified.lower() != "true" else ""] + choices
+    # choices = [
+    #               "\tif(!(" + exit_cond_var_constraints + ")) break;" if exit_cond_var_constraints.lower() != "true" else ""] \
+    #           + choices
+    choices = ["\tif(" + exit_cond_simplified + ") break;" if exit_cond_simplified.lower() != "true" else ""] \
+              + choices
 
     loop_code = "\n\tdo{\n\t" \
                 + "\n\t".join(choices) \
