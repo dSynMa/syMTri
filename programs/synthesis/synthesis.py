@@ -215,7 +215,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         ## Compute mismatch trace
         ce, transition_indices_and_state = parse_nuxmv_ce_output_finite(
             len(program.env_transitions) + len(program.con_transitions), out)
-        transitions_without_stutter_monitor_took, pred_state = concretize_transitions(program, program, transition_indices_and_state)
+        transitions_without_stutter_monitor_took, pred_state = concretize_transitions(program, program, transition_indices_and_state, False)
 
         if pred_state is not None:
             agreed_on_transitions = transitions_without_stutter_monitor_took
