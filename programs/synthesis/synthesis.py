@@ -1,3 +1,4 @@
+from itertools import chain
 from typing import Tuple
 
 from click._compat import raw_input
@@ -5,7 +6,7 @@ from pysmt.shortcuts import And
 from programs.analysis.smt_checker import SMTChecker
 
 from parsing.string_to_ltl import string_to_ltl
-from parsing.string_to_prop_logic import string_to_prop
+from parsing.string_to_prop_logic import string_to_prop, string_to_math_expression
 from programs.abstraction.predicate_abstraction import PredicateAbstraction
 from programs.abstraction.refinement import safety_refinement, liveness_refinement, use_liveness_refinement
 from programs.program import Program
@@ -64,6 +65,10 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
     # TODO add check that monitor is deterministic under given ltl assumptions
     eager = False
     keep_only_bool_interpolants = True
+    use_explicit_loops_abstraction = False
+    no_analysis_just_user_input = False
+    choose_predicates = False
+    conservative_with_state_predicates = False
 
     state_predicates = [Variable(p.name) for p in program.valuation if p.type == "bool"]
     rankings = []
@@ -276,29 +281,61 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         ## do liveness refinement
         if use_liveness:
-            try:
-                if pred_mismatch:  # counterexample_loop[-1][1]["compatible_predicates"] == "FALSE":
-                    exit_trans = counterexample_loop[-1][0]
-                    exit_trans_state = counterexample_loop[-1][1]
-                    loop = counterexample_loop[:-1]
-                else:
-                    loop = counterexample_loop
-                    exit_trans = monitor_actually_took[0][0]
-                    exit_trans_state = monitor_actually_took[0][1]
+            if no_analysis_just_user_input:
+                finished = False
+                while not finished:
+                    try:
+                        text = raw_input("Any suggestions of ranking functions?")
+                        rankings = list(map(string_to_math_expression, text.split(",")))
+                        finished = True
+                    except Exception as e:
+                        pass
 
-                exit_condition = exit_trans.condition
-                ranking, invars, sufficient_entry_condition, exit_predicate = \
-                    liveness_step(program, loop, symbol_table,
-                                    entry_valuation, entry_predicate,
-                                    exit_condition,
-                                    exit_trans_state)
-                # TODO in some cases we can use ranking abstraction as before:
-                #  -if ranking function is a natural number
-                #  -if ranking function does not decrease outside the loop
-                #  -if supporting invariant ensures ranking function is bounded below
+                invars = []
+                transition_predicates += list(chain.from_iterable([[BiOp(add_prev_suffix(program, r), ">", r), BiOp(add_prev_suffix(program, r), "<", r)] for r in rankings]))
+            else:
                 try:
-                    if [t for (t, _) in counterexample_loop] in [loop_body for (_, loop_body, _) in predicate_abstraction.loops]:
-                        print("The loop is already in the predicate abstraction.")
+                    if pred_mismatch:  # counterexample_loop[-1][1]["compatible_predicates"] == "FALSE":
+                        exit_trans = counterexample_loop[-1][0]
+                        exit_trans_state = counterexample_loop[-1][1]
+                        loop = counterexample_loop[:-1]
+                    else:
+                        loop = counterexample_loop
+                        exit_trans = monitor_actually_took[0][0]
+                        exit_trans_state = monitor_actually_took[0][1]
+
+                        # TODO this isn't the real exit trans, it's a good approximation for now, but it may be a just
+                        #  an explicit or implicit stutter transition
+                        exit_condition = exit_trans.condition
+                        ranking, invars, sufficient_entry_condition, exit_predicate = \
+                            liveness_step(program, loop, symbol_table,
+                                            entry_valuation, entry_predicate,
+                                            exit_condition,
+                                            exit_trans_state)
+
+                    # TODO in some cases we can use ranking abstraction as before:
+                    #  -DONE if ranking function is a natural number
+                    #  -if ranking function does not decrease outside the loop
+                    #  -DONE if supporting invariant ensures ranking function is bounded below
+
+                    if ranking is not None:# and function_is_of_natural_type(ranking, invars, symbol_table):
+                        print("Found: " + str(ranking))
+                        if choose_predicates:
+                            finished = False
+                            while not finished:
+                                try:
+                                    text = raw_input("Press enter to use suggested ranking function, "
+                                                     "otherwise suggest one ranking function to use instead, with a list of invars after (all separated with ',').")
+                                    if text.strip(" ") == "":
+                                        finished = true
+                                    else:
+                                        split = text.split(",")
+                                        ranking = string_to_math_expression(text[0])
+                                        invars = list(map(string_to_prop, split[1:]))
+
+                                        finished = True
+                                except Exception as e:
+                                    pass
 
                     new_safety_preds = predicate_abstraction.make_explicit_terminating_loop(sufficient_entry_condition,
                                                                                             [t for (t, _) in loop],
@@ -345,29 +382,46 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         ## do safety refinement
         if eager or not use_liveness:
-            if pred_state is not None:
-                pred_formula = conjunct_formula_set([state_pred_label_to_formula[p] for p in pred_state[0]])
-                new_preds = safety_refinement(ce, agreed_on_transitions + [[(disagreed_on_transitions[0][0], disagreed_on_transitions[1])]], ([pred_formula], pred_state[1]), symbol_table, program, use_dnf=True)
+            if no_analysis_just_user_input:
+                finished = False
+                while not finished:
+                    try:
+                        text = raw_input("Any suggestions of state predicates?")
+                        new_preds = list(map(string_to_prop, text.split(",")))
+                        finished = True
+                    except Exception as e:
+                        pass
             else:
-                new_preds = safety_refinement(ce, agreed_on_transitions, ([t.condition for t in disagreed_on_transitions[0]], disagreed_on_transitions[1]), symbol_table, program, use_dnf=False)
-            print("Found: " + ", ".join([str(p) for p in new_preds]))
-            if len(new_preds) == 0:
-                e = Exception("No state predicates identified.")
-                print("No state predicates identified.")
-                print("Trying again by putting interpolant B in DNF form and checking each disjunct separately. This may take some time...")
                 if pred_state is not None:
                     pred_formula = conjunct_formula_set([state_pred_label_to_formula[p] for p in pred_state[0]])
-                    new_preds = safety_refinement(ce, agreed_on_transitions + [[(disagreed_on_transitions[0][0], disagreed_on_transitions[1])]],
-                                                  ([pred_formula], pred_state[1]), symbol_table, program, use_dnf=True)
+                    new_preds = safety_refinement(ce, agreed_on_transitions + [[(disagreed_on_transitions[0][0], disagreed_on_transitions[1])]], ([pred_formula], pred_state[1]), symbol_table, program, use_dnf=True)
                 else:
-                    new_preds = safety_refinement(ce, agreed_on_transitions, (
-                    [t.condition for t in disagreed_on_transitions[0]], disagreed_on_transitions[1]), symbol_table,
-                                                  program, use_dnf=True)
+                    new_preds = safety_refinement(ce, agreed_on_transitions, ([t.condition for t in disagreed_on_transitions[0]], disagreed_on_transitions[1]), symbol_table, program, use_dnf=False)
                 print("Found: " + ", ".join([str(p) for p in new_preds]))
-                check_for_nondeterminism_last_step(monitor_actually_took[0][1], predicate_abstraction.program, True, e)
-                print("Could not find a new state predicate..")
-                text = raw_input("Any suggestions?")
-                new_preds = list(map(string_to_prop, text.split(".")))
+                if len(new_preds) == 0:
+                    e = Exception("No state predicates identified.")
+                    print("No state predicates identified.")
+                    print("Trying again by putting interpolant B in DNF form and checking each disjunct separately. This may take some time...")
+                    if pred_state is not None:
+                        pred_formula = conjunct_formula_set([state_pred_label_to_formula[p] for p in pred_state[0]])
+                        new_preds = safety_refinement(ce, agreed_on_transitions + [[(disagreed_on_transitions[0][0], disagreed_on_transitions[1])]],
+                                                      ([pred_formula], pred_state[1]), symbol_table, program, use_dnf=True)
+                    else:
+                        new_preds = safety_refinement(ce, agreed_on_transitions, (
+                        [t.condition for t in disagreed_on_transitions[0]], disagreed_on_transitions[1]), symbol_table,
+                                                      program, use_dnf=True)
+                    print("Found: " + ", ".join([str(p) for p in new_preds]))
+                    check_for_nondeterminism_last_step(monitor_actually_took[0][1], predicate_abstraction.program, True, e)
+                    print("Could not find a new state predicate..")
+
+                    finished = False
+                    while not finished:
+                        try:
+                            text = raw_input("Any suggestions of state predicates?")
+                            new_preds = list(map(string_to_prop, text.split(",")))
+                            finished = True
+                        except Exception as e:
+                            pass
 
 
             new_all_preds = {x.simplify() for x in new_preds}
@@ -395,14 +449,33 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 print(controller_projected_on_program.to_dot())
                 raise e
 
-            if keep_only_bool_interpolants:
-                bool_interpolants = [p for p in new_preds if
-                                     p not in state_predicates and p in new_all_preds and 0 == len(
-                                         [v for v in p.variablesin() if
-                                          symbol_table[str(v)].type != "bool" and symbol_table[
-                                              str(v)].type != "boolean"])]
-                if len(bool_interpolants) > 0:
-                    new_all_preds = [p for p in new_all_preds if p in bool_interpolants or p in state_predicates]
+            if choose_predicates:
+                finished = False
+                while not finished:
+                    try:
+                        text = raw_input("Press enter to use suggested state predicates, otherwise write the state predicates to proceed with in a comma-separated list.")
+                        if text.strip(" ") == "":
+                            finished = True
+                        else:
+                            new_all_preds = list(map(string_to_prop, text.split(",")))
+                            finished = True
+                    except Exception as e:
+                        pass
+            else:
+                if keep_only_bool_interpolants:
+                    bool_interpolants = [p for p in new_preds if
+                                         p not in state_predicates and p in new_all_preds and 0 == len(
+                                             [v for v in p.variablesin() if
+                                              symbol_table[str(v)].type != "bool" and symbol_table[
+                                                  str(v)].type != "boolean"])]
+                    if len(bool_interpolants) > 0:
+                        new_all_preds = [p for p in new_all_preds if p in bool_interpolants or p in state_predicates]
+                if conservative_with_state_predicates:
+                    # TODO some heuristics to choose state preds
+
+                    # when coming after a ranking refinement, only get interpolants that are in some way related to exit condition
+                    new_all_preds = new_all_preds
+
             print("Using: " + ", ".join([str(p) for p in new_all_preds if p not in state_predicates]))
 
             state_predicates = list(new_all_preds)
