@@ -76,6 +76,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
     state_predicates = [Variable(p.name) for p in program.valuation if p.type == "bool"]
     rankings = []
     transition_predicates = []
+    transition_predicates_invars = {}
 
     in_acts += [Variable("inloop"), Variable("notinloop")]
     transition_fairness = []
@@ -108,14 +109,17 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         # should be computed incrementally
         # transition_fairness = []
         safety_predicate_constraints = []
-        # i = 0
-        # while i < len(transition_predicates):
-        #     dec = pred_name_dict[transition_predicates[i]]
-        #     inc = pred_name_dict[transition_predicates[i + 1]]
-        #     safety_predicate_constraints += [(G(neg(conjunct(dec, inc))))]
-        #
-        #     transition_fairness += [implies(G(F(dec)), G(F(inc)))]
-        #     i += 2
+        i = 0
+        while i < len(transition_predicates):
+            dec = pred_name_dict[transition_predicates[i]]
+            inc = pred_name_dict[transition_predicates[i + 1]]
+            safety_predicate_constraints += [(G(neg(conjunct(dec, inc))))]
+
+            invar_vars = [pred_name_dict[p] for p in transition_predicates_invars[rankings[i % 2][0]]]
+            invar_formula = conjunct_formula_set(invar_vars)
+
+            transition_fairness += [implies(G(F(conjunct(invar_formula, dec))), G(F(inc)))]
+            i += 2
 
 
         assumptions = [ltl_assumptions] + transition_fairness + safety_predicate_constraints + abstraction
@@ -340,49 +344,52 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                 except Exception as e:
                                     pass
 
-                    new_safety_preds = predicate_abstraction.make_explicit_terminating_loop(sufficient_entry_condition,
-                                                                                            [t for (t, _) in loop],
-                                                                                            [exit_trans],
-                                                                                            exit_predicate)
-                    program = predicate_abstraction.program
-                    symbol_table = predicate_abstraction.program.symbol_table
-                    state_predicates = state_predicates + list(new_safety_preds)
+                        if not function_is_of_natural_type(ranking, invars, symbol_table):
+                            wellfounded_invar = MathExpr(BiOp(ranking, ">=", Value(0)))
+                            invars.append(wellfounded_invar)
+                        # invar_formula = conjunct_formula_set(invars)
+                        state_predicates += invars #TODO should be adding them separately
+                        new_transition_predicates = [BiOp(add_prev_suffix(program, ranking), ">", ranking),
+                                                      # conjunct(invar_formula, BiOp(add_prev_suffix(program, ranking), "<", ranking))
+                                                      BiOp(add_prev_suffix(program, ranking), "<", ranking)
+                                                      ]
+                        transition_predicates_invars[ranking] = invars
+                        rankings.append((ranking, invars))
+
+                        new_all_trans_preds = {x.simplify() for x in new_transition_predicates}
+                        new_all_trans_preds = reduce_up_to_iff(transition_predicates, list(new_all_trans_preds),
+                                                               symbol_table | symbol_table_prevs)
+
+                        if len(new_all_trans_preds) == len(transition_predicates):
+                            print("I did something wrong, "
+                                  "it turns out the new transition predicates "
+                                  "(" + ", ".join(
+                                [str(p) for p in new_transition_predicates]) + ") are a subset of "
+                                                                               "previous predicates.")
+                            print("I will try safety refinement instead.")
+                            use_liveness = False
+                        # important to add this, since later on assumptions depend on position of predicates in list
+                        transition_predicates += new_transition_predicates
+                    elif use_explicit_loops_abstraction:
+                        # if [t for (t, _) in counterexample_loop] in [loop_body for (_, loop_body, _) in predicate_abstraction.loops]:
+                        #     print("The loop is already in the predicate abstraction.")
+                        new_safety_preds = predicate_abstraction.make_explicit_terminating_loop(sufficient_entry_condition,
+                                                                                                [t for (t, _) in loop],
+                                                                                                [exit_trans],
+                                                                                                exit_predicate)
+                        program = predicate_abstraction.program
+                        symbol_table = predicate_abstraction.program.symbol_table
+                        state_predicates = state_predicates + list(new_safety_preds)
+
+                        transition_fairness = [implies(G(F(Variable("inloop"))), G(F((Variable("notinloop")))))]
+                    else:
+                        print("I will try safety refinement instead.")
+                        use_liveness = False
+
                 except Exception as e:
                     print(e)
-
-                transition_fairness = [implies(G(F(Variable("inloop"))), G(F((Variable("notinloop")))))]
-                # rankings.append((ranking, invars))
-                # new_transition_predicates = [x for r, _ in rankings for x in
-                #                              [BiOp(add_prev_suffix(program, r), ">", r),
-                #                               BiOp(add_prev_suffix(program, r), "<", r)
-                #                               ]]
-                #
-                # if new_transition_predicates == []:
-                #     # raise Exception("No new transition predicates identified.")
-                #     print("No transition predicates identified. So will try safety refinement.")
-                #     use_liveness = False
-                #
-                # print("Found: " + ", ".join([str(p) for p in new_transition_predicates]))
-                #
-                # new_all_trans_preds = {x.simplify() for x in new_transition_predicates}
-                # new_all_trans_preds = reduce_up_to_iff(transition_predicates, list(new_all_trans_preds),
-                #                                        symbol_table | symbol_table_prevs)
-                #
-                # if len(new_all_trans_preds) == len(transition_predicates):
-                #     print("I did something wrong, "
-                #           "it turns out the new transition predicates "
-                #           "(" + ", ".join(
-                #         [str(p) for p in new_transition_predicates]) + ") are a subset of "
-                #                                                        "previous predicates.")
-                #     print("I will try safety refinement instead.")
-                #     use_liveness = False
-                # # important to add this, since later on assumptions depend on position of predicates in list
-                # transition_predicates += new_transition_predicates
-            except Exception as e:
-                print(e)
-                print("I will try safety refinement instead.")
-                use_liveness = False
-
+                    print("I will try safety refinement instead.")
+                    use_liveness = False
         ## do safety refinement
         if eager or not use_liveness:
             if no_analysis_just_user_input:
@@ -550,10 +557,10 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
                                                   exit_predicate_grounded)
             sufficient_entry_condition = entry_valuation
 
-    if invars != None and len(invars) > 0:
-        raise NotImplementedError(
-            "Ranking function comes with invar, what shall we do here? " + ranking + "\n" + ", ".join(
-                [str(invar) for invar in invars]))
+    # if invars != None and len(invars) > 0:
+    #     print(
+    #         "Ranking function comes with invar, what shall we do here? " + ranking + "\n" + ", ".join(
+    #             [str(invar) for invar in invars]) + ".")
 
     if not smt_checker.check(And(*neg(exit_predicate_grounded).to_smt(symbol_table))):
         for grounded_t in loop_before_exit:
