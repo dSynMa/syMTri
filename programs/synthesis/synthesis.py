@@ -18,12 +18,15 @@ from programs.typed_valuation import TypedValuation
 from programs.util import create_nuxmv_model_for_compatibility_checking, \
     there_is_mismatch_between_monitor_and_strategy, \
     parse_nuxmv_ce_output_finite, reduce_up_to_iff, \
-    add_prev_suffix, label_pred, ground_predicate_on_bool_vars, \
+    add_prev_suffix, label_pred, \
     concretize_transitions, ce_state_to_predicate_abstraction_trans, \
-    check_for_nondeterminism_last_step, ground_transitions, keep_bool_preds
+    check_for_nondeterminism_last_step, ground_transitions, keep_bool_preds, function_is_of_natural_type, \
+    ground_predicate_on_vars
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from prop_lang.util import neg, G, F, implies, conjunct, X, true, disjunct_formula_set, conjunct_formula_set
+from prop_lang.mathexpr import MathExpr
+from prop_lang.util import neg, G, F, implies, conjunct, true, conjunct_formula_set, dnf, is_tautology
+from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 smt_checker = SMTChecker()
