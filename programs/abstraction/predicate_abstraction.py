@@ -15,7 +15,7 @@ from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
 from prop_lang.util import conjunct, neg, conjunct_formula_set, conjunct_typed_valuation_set, disjunct_formula_set, \
-    implies, G, X, true, sat, false, disjunct
+    implies, G, X, true, false, disjunct
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
