@@ -7,7 +7,6 @@ from pysmt.fnode import FNode
 from pysmt.logics import QF_UFLRA
 from pysmt.shortcuts import get_env, And, Not
 
-from parsing.string_to_prop_logic import string_to_prop
 from programs.analysis.model_checker import ModelChecker
 from programs.analysis.nuxmv_model import NuXmvModel
 from programs.analysis.smt_checker import SMTChecker
@@ -585,14 +584,11 @@ def ground_transitions(program, transition_and_state_list):
     return grounded
 
 
-def ground_predicate_on_bool_vars(program, predicate, ce_state):
+def ground_predicate_on_vars(program, predicate, ce_state, vars, symbol_table):
     grounded_state = project_ce_state_onto_ev(ce_state,
-                                              program.env_events + program.con_events + [Variable(v.name) for v in
-                                                                                         program.valuation if
-                                                                                         re.match("bool(ean)?",
-                                                                                                  v.type.lower())])
+                                              program.env_events + program.con_events + program.out_events + [Variable(str(v)) for v in vars])
     projected_condition = predicate.ground(
-        [TypedValuation(key, "bool", Value(grounded_state[key].lower())) for key in grounded_state.keys()])
+        [TypedValuation(key, symbol_table[key].type, Value(grounded_state[key])) for key in grounded_state.keys()])
     return projected_condition
 
 def keep_bool_preds(formula: Formula, symbol_table):
