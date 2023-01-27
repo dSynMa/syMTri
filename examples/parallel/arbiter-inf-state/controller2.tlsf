@@ -10,15 +10,16 @@ MAIN {
 
   INPUTS {
     request;
-    pending;
+    here;
   }
 
   OUTPUTS {
     grant;
+    finished;
   }
 
   GUARANTEES {
-    G ((pending && !request) -> F(!pending));
+    G F request -> G F here;
   }
 
 }

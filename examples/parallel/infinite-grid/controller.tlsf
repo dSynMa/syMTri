@@ -9,16 +9,21 @@ INFO {
 MAIN {
 
   INPUTS {
-    request;
-    pending;
+    win;
+    incb1;
+    incb2;
+    start;
   }
 
   OUTPUTS {
-    grant;
+    inc1;
+    inc2;
+    dec1;
+    dec2;
   }
 
   GUARANTEES {
-    G ((pending && !request) -> F(!pending));
+      (F start) -> F win;
   }
 
 }
