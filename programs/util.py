@@ -487,7 +487,7 @@ def looping_to_normal(t : Transition):
     return t #Transition(re.split("_loop", t.src)[0], t.condition, t.action, t.output,  re.split("_loop", t.tgt)[0]) \
               #  if "loop" in ((t.src) + (t.tgt)) else t
 
-def concretize_transitions(program, looping_program, indices_and_state_list):
+def concretize_transitions(program, looping_program, indices_and_state_list, add_stuttering_transitions: bool):
     transitions = looping_program.env_transitions + looping_program.con_transitions
     concretized = []
 
@@ -498,6 +498,8 @@ def concretize_transitions(program, looping_program, indices_and_state_list):
         trans = stutter_transition(program, program.initial_state, True)
         concretized += [[(trans, indices_and_state_list[0][1])]]
 
+    current_state = concretized[0][0][0].tgt
+
     for i in range(1, len(indices_and_state_list) - 2):
         if i % 2 == 0:
             continue
@@ -505,10 +507,16 @@ def concretize_transitions(program, looping_program, indices_and_state_list):
         trans_index_con = int(indices_and_state_list[i][0])
         if trans_index_con != -1:
             trans_here += [(looping_to_normal(transitions[trans_index_con]), indices_and_state_list[i][1])]
+            current_state = trans_here[-1][0].tgt
+        elif add_stuttering_transitions:
+            trans_here += [(stutter_transition(program, current_state, False), indices_and_state_list[i][1])]
+            current_state = trans_here[-1][0].tgt
         if i + 1 < len(indices_and_state_list) - 2:
             trans_index_env = int(indices_and_state_list[i + 1][0])
             if trans_index_env != -1:
                 trans_here += [(looping_to_normal(transitions[int(trans_index_env)]), indices_and_state_list[i + 1][1])]
+            elif add_stuttering_transitions:
+                trans_here += [(stutter_transition(program, trans_here[-1][0].tgt, True), indices_and_state_list[i + 1][1])]
         if len(trans_here) > 0:
             concretized += [trans_here]
 
