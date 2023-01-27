@@ -656,3 +656,8 @@ def safe_update_dict_value(d : dict, k, v_dict):
         d[k].update(v_dict)
     else:
         d[k] = v_dict
+
+
+def function_is_of_natural_type(f: Formula, invars: Formula, symbol_table):
+    # TODO, should we conjunct or disjunct invars?
+    return not smt_checker.check(And(*conjunct(conjunct_formula_set(invars), BiOp(f, "<", Value(0))).to_smt(symbol_table)))
