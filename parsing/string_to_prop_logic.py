@@ -52,6 +52,7 @@ GRAMMAR = '''
         | math_expression '<=' math_expression
         | math_expression '>' math_expression
         | math_expression '>=' math_expression
+        | math_expression '=' math_expression
         | math_expression '==' math_expression
         | math_expression '!=' math_expression
         | term
@@ -67,8 +68,8 @@ GRAMMAR = '''
         ;
         
     math_expression
-        = math_1 '*' math_expression
-        | math_1 '/' math_expression
+        = math_1 '+' math_expression
+        | math_1 '-' math_expression
         | math_1
         ;
         
@@ -76,19 +77,20 @@ GRAMMAR = '''
         = math_expression $ ;
     
     math_1
-        = math_0 '+' math_1
-        | math_0 '-' math_1
+        = math_0 '*' math_1
+        | math_0 '/' math_1
         | math_0
         ;
     
     math_0
         = '(' math_expression ')'
         | number
+        | '-' number
         | atom
         ;
 
     atom = /\_?[a-zA-Z][a-zA-Z0-9\_\-]*/;
-    number = /[\-]*(\d+|\d+\.\d+)/;
+    number = /(\d+|\d+\.\d+)/;
 '''
 
 parser: Grammar = compile(GRAMMAR)
