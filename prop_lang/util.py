@@ -226,7 +226,7 @@ dnf_cache = {}
 def dnf(f: Formula):
     if f in dnf_cache.keys():
         return dnf_cache[f]
-    simple_f = only_dis_or_con_junctions(f).simplify()
+    simple_f = only_dis_or_con_junctions(f).simplify().to_nuxmv()
     simple_f_without_math, dic = simple_f.replace_math_exprs(0)
     for_sympi = parse_expr(str(simple_f_without_math).replace("!", " ~"), evaluate=True)
     if isinstance(for_sympi, int):
