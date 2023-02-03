@@ -40,10 +40,12 @@ class Variable(Atom):
         return []
 
     def replace(self, context):
-        for val in context:
-            if (val.op == "=" or val.op == ":=") and (str(val.left.name) == self.name):
-                return val.right
-
+        if isinstance(context, list):
+            for val in context:
+                if (val.op == "=" or val.op == ":=") and (str(val.left.name) == self.name):
+                    return val.right
+        elif hasattr(context, '__call__'):
+            return context(self)
         return self
 
     def to_nuxmv(self):

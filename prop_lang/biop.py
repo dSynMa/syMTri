@@ -13,10 +13,14 @@ from prop_lang.variable import Variable
 
 class BiOp(Formula):
     def __init__(self, left: Formula, op: str, right: Formula):
-        assert isinstance(left, Formula)
+        if left == None:
+            raise Exception("BiOp: left is None")
+        if right == None:
+            raise Exception("BiOp: right is None")
+        assert(isinstance(left, Formula), "left is not a formula")
         self.left = left
         self.op = op.strip()
-        assert isinstance(right, Formula)
+        assert(isinstance(right, Formula), "right is not a formula")
         self.right = right
 
     def __str__(self):

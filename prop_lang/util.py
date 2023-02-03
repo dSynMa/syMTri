@@ -1,10 +1,11 @@
 import re
 
-from pysmt.shortcuts import Solver
+from pysmt.shortcuts import And
 from sympy.logic.boolalg import to_dnf, simplify_logic
 from sympy.parsing.sympy_parser import parse_expr
 
 from parsing.string_to_prop_logic import string_to_prop
+from programs.analysis.smt_checker import SMTChecker
 from programs.typed_valuation import TypedValuation
 from prop_lang.atom import Atom
 from prop_lang.biop import BiOp
@@ -138,8 +139,12 @@ def nnf(prop: Formula) -> Formula:
         return NotImplemented
 
 
-def sat(formula: Formula, symbol_table: dict, solver: Solver) -> bool:
-    return solver.is_sat(formula.to_smt(symbol_table))
+def sat(formula: Formula, symbol_table: dict, solver: SMTChecker) -> bool:
+    return solver.check(And(*formula.to_smt(symbol_table)))
+
+
+def is_tautology(formula: Formula, symbol_table: dict, solver: SMTChecker) -> bool:
+    return solver.check(And(*neg(formula).to_smt(symbol_table)))
 
 
 def negation_closed(predicates: [Formula]):
@@ -221,9 +226,9 @@ dnf_cache = {}
 def dnf(f: Formula):
     if f in dnf_cache.keys():
         return dnf_cache[f]
-    simple_f = only_dis_or_con_junctions(f)
+    simple_f = only_dis_or_con_junctions(f).simplify().to_nuxmv()
     simple_f_without_math, dic = simple_f.replace_math_exprs(0)
-    for_sympi = parse_expr(str(simple_f_without_math).replace("!", "~"), evaluate=True)
+    for_sympi = parse_expr(str(simple_f_without_math).replace("!", " ~"), evaluate=True)
     if isinstance(for_sympi, int):
         return f
     # if formula has more than 8 variables it can take a long time, dnf is exponential
@@ -248,3 +253,7 @@ def mutually_exclusive_rules(states):
 
 def is_boolean(var, tvs):
     return any(tv for tv in tvs if tv.name == str(var) and re.match("bool(ean)?", str(tv.type)))
+
+
+def infinite_type(var, tvs):
+    return any(tv for tv in tvs if tv.name == str(var) and re.match("(nat(ural)?|int(eger)?|real|rat(ional)?)", str(tv.type)))

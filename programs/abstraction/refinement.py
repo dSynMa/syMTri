@@ -6,6 +6,7 @@ from pysmt.shortcuts import And
 
 from parsing.string_to_prop_logic import string_to_prop, string_to_math_expression
 from programs.analysis.ranker import Ranker
+from programs.typed_valuation import TypedValuation
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
@@ -14,13 +15,14 @@ from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean, dnf, disjunct_formula_set
+from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean, dnf, infinite_type
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
+smt_checker = SMTChecker()
 
 def safety_refinement(ce: [dict], agreed_on_transitions: [[(Transition, dict)]],
-                      disagreed_on_transitions: ([Transition], dict), symbol_table, program, use_dnf=False) -> [FNode]:
+                      disagreed_on_state: ([Formula], dict), symbol_table, program, use_dnf=False) -> [FNode]:
     # we collect interpolants in this set
     Cs = set()
 
@@ -31,11 +33,9 @@ def safety_refinement(ce: [dict], agreed_on_transitions: [[(Transition, dict)]],
     if concurring_transitions == []:
         concurring_transitions = [(Transition(program.initial_state, true(), [], [], program.initial_state), ce[0])]
 
-    for t in disagreed_on_transitions[0]:
-        neg_t = t.with_condition(neg(t.condition))
-        # TODO is this enough, or do we need to dnf the agreed on transitions also?
+    for s in disagreed_on_state[0]:
         for j in reversed(range(0, len(concurring_transitions) + 1)):
-            Css = interpolation(program, concurring_transitions, (neg_t, disagreed_on_transitions[1]), j, symbol_table, use_dnf=use_dnf)
+            Css = interpolation(program, concurring_transitions, (neg(s), disagreed_on_state[1]), j, symbol_table, use_dnf=use_dnf)
             if Css is None:
                 print("I think that interpolation is being checked against formulas that are not contradictory.")
                 break
@@ -60,8 +60,8 @@ def safety_refinement(ce: [dict], agreed_on_transitions: [[(Transition, dict)]],
     return Cs
 
 
-def interpolation(program: Program, concurring_transitions: [(Transition, dict)], disagreed_on: (Transition, dict),
-                  cut_point: int, symbol_table, use_dnf=False):
+def interpolation(program: Program, concurring_transitions: [(Transition, dict)],
+                  disagreed_on_state: (Formula, dict), cut_point: int, symbol_table, use_dnf=False):
     assert cut_point <= len(concurring_transitions)
     assert len(concurring_transitions) > 0
 
@@ -101,11 +101,10 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
                                program.complete_action_set(concurring_transitions[i][0].action)]
         i += 1
 
-    disagreed_on_transition = disagreed_on[0]
-    disagreed_on_state = disagreed_on[1]
-    projected_condition = disagreed_on_transition.condition.replace(ith_vars(len(concurring_transitions)))
+    disagreed_on_value_state = disagreed_on_state[1]
+    projected_condition = disagreed_on_state[0].replace(ith_vars(len(concurring_transitions)))
     grounded_condition = ground_formula_on_ce_state_with_index(projected_condition,
-                                                               project_ce_state_onto_ev(disagreed_on_state,
+                                                               project_ce_state_onto_ev(disagreed_on_value_state,
                                                                                         program.env_events
                                                                                         + program.con_events),
                                                                len(concurring_transitions))
@@ -151,40 +150,121 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
         return Cs
 
 
-def liveness_refinement(symbol_table, program, entry_predicate, entry_predicate_in_terms_of_preds, unfolded_loop,
-                        exit_predicate_grounded):
-    exceptions = []
+def liveness_refinement(symbol_table, program, entry_condition, unfolded_loop: [Transition], exit_predicate_grounded):
     try:
-        # try to come up with a ranking function
-        c_code = loop_to_c(symbol_table, program, entry_predicate_in_terms_of_preds, unfolded_loop, exit_predicate_grounded)
+        c_code = loop_to_c(symbol_table, program, entry_condition, unfolded_loop,
+                           exit_predicate_grounded)
         print(c_code)
         ranker = Ranker()
         success, ranking_function, invars = ranker.check(c_code)
+
+        # while not success or (success and any(v for v in ranking_function.variablesin() if symbol_table[str(v)].type.startswith("int"))):
+        #     if success and any(v for v in ranking_function.variablesin() if symbol_table[str(v)].type.startswith("int")):
+        #         print("Warning: The ranking function <<" + str(ranking_function) + ">> contains integer variables.\n"
+        #               "We thus cannot guarantee the ranking abstraction will be a sound abstraction of the program.")
+        #         print("Re-enter the same function if you want to continue with it, or suggest a new one.")
+        #         text = raw_input("Enter 'force' to force the use of this unsound a ranking function, or 'stop' to quit ranking refinement:")
+        #         if text.lower().startswith("force"):
+        #             return ranking_function, invars
+        #         elif text.lower().startswith("stop"):
+        #             raise Exception("Exit: Terminated by user.")
+        #
+        #     if not success:
+        #         print("Could not find a ranking function.")
+        #
+        #         text = raw_input("Enter 'stop' to quit, or suggest a ranking function:")
+        #     if text == "stop":
+        #         raise Exception("Exit: Terminated by user.")
+        #     try:
+        #         ranking_function, invars = string_to_math_expression(text), []
+        #         success = True
+        #     except Exception as e:
+        #         print(str(e))
+        #         success = False
+
         if not success:
-            c_code = loop_to_c(symbol_table, program, entry_predicate, unfolded_loop,
+            raise Exception("Could not prove termination.")
+
+        return ranking_function, invars
+    except Exception as e:
+        raise e
+
+
+def liveness_refinement_state_encoding(symbol_table, program, entry_valuation, entry_predicate,
+                                       unfolded_loop: [Transition], exit_predicate_grounded):
+    loop_renamed = []
+    entry_trans = unfolded_loop[0]
+    loop_renamed += [Transition(entry_trans.src, entry_trans.condition,
+                                entry_trans.action, entry_trans.output, entry_trans.tgt + "_loop1")] # TODO: find unique suffix
+    step = 2
+    loop_states = {Variable(entry_trans.tgt + "_loop1")}
+    for t in unfolded_loop[-1][1:]:
+        loop_renamed += [Transition(t.src + "_loop" + str(step), t.condition, t.action, t.output, t.tgt + "_loop" + str(step + 1))]
+        loop_states |= {Variable(t.src + "_loop" + str(step)), Variable(t.tgt + "_loop" + str(step + 1))}
+        step += 1
+
+    exit_trans = unfolded_loop[-1]
+    loop_renamed += [Transition(exit_trans.src + "_loop" + str(step), exit_trans.condition, exit_trans.action, exit_trans.output, exit_trans.tgt + "_loop0")]
+    loop_states |= {Variable(exit_trans.src + "_loop" + str(step)), Variable(exit_trans.tgt + "_loop0")}
+
+    loop_renamed += [Transition(exit_trans.src + "_loop" + str(step), exit_trans.condition, exit_trans.action, exit_trans.output, exit_trans.tgt)]
+
+    new_assumption = G(F(implies(disjunct_formula_set(loop_states), X(V))))
+
+    try:
+        # try to come up with a ranking function
+        c_code = loop_to_c(symbol_table, program, entry_predicate, unfolded_loop, exit_predicate_grounded)
+        print(c_code)
+        ranker = Ranker()
+        try:
+            success, ranking_function, invars = ranker.check(c_code)
+        except:
+            success = False
+        if not success:
+            c_code = loop_to_c(symbol_table, program, entry_valuation, unfolded_loop,
                                exit_predicate_grounded)
             print(c_code)
             ranker = Ranker()
             success, ranking_function, invars = ranker.check(c_code)
+
+        while not success or (success and any(v for v in ranking_function.variablesin() if symbol_table[str(v)].type.startswith("int"))):
+            if success and any(v for v in ranking_function.variablesin() if symbol_table[str(v)].type.startswith("int")):
+                print("Warning: The ranking function <<" + str(ranking_function) + ">> contains integer variables.\n"
+                      "We thus cannot guarantee the ranking abstraction will be a sound abstraction of the program.")
+                print("Re-enter the same function if you want to continue with it, or suggest a new one.")
+                text = raw_input("Enter 'force' to force the use of this unsound a ranking function, or 'stop' to quit ranking refinement:")
+                if text.lower().startswith("force"):
+                    return ranking_function, invars
+                elif text.lower().startswith("stop"):
+                    raise Exception("Exit: Terminated by user.")
+
             if not success:
-                print("Could not find a ranking function for: \n" + c_code)
-                text = raw_input("Any suggestions?")
+                print("Could not find a ranking function.")
+
+                text = raw_input("Enter 'stop' to quit, or suggest a ranking function:")
+            if text == "stop":
+                raise Exception("Exit: Terminated by user.")
+            try:
                 ranking_function, invars = string_to_math_expression(text), []
+                success = True
+            except Exception as e:
+                print(str(e))
+                success = False
 
         return ranking_function, invars
     except Exception as e:
-        exceptions.append(e)
+        raise e
 
 
-def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_before_exit: [Transition],
+def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_before_exit: [Transition],
               exit_cond: Formula):
     # params
     params = list(set(symbol_table[str(v)].type + " " + str(v)
-                      for v in {v.name for v in program.valuation} | set(entry_predicate.variablesin())
+                      for v in {v.name for v in program.valuation} | set(entry_condition.variablesin())
                       if
                       not is_boolean(v, program.valuation) and [str(vv) for t in loop_before_exit for vv in
                                                                 (t.condition.variablesin()
-                                                                 + entry_predicate.variablesin()
+                                                                 + entry_condition.variablesin()
                                                                  + [act.left for act in t.action]
                                                                  + [a for act in t.action for a in
                                                                     act.right.variablesin()])]))
@@ -236,7 +316,7 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
                 + "\n\t".join(choices) \
                 + "\n\t} while(true);\n"
 
-    loop_code = "\n\tif(" + str(entry_predicate.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ",
+    loop_code = "\n\tif(" + str(entry_condition.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ",
                                                                                                                   " || ") \
                 + "){" + loop_code + "\n\t}"
 
@@ -249,22 +329,69 @@ def loop_to_c(symbol_table, program: Program, entry_predicate: Formula, loop_bef
     return c_code
 
 
-def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, symbol_table):
-    previous_visits = [i for i, dict in enumerate(env_con_ce[:-1]) for key, value in dict.items()
-                       if i != 0 and key == last_cs_state and value == "TRUE"]
-    if len(previous_visits) > 0:
-        corresponding_ce_state = [env_con_ce[i] for i in range(previous_visits[0], len(env_con_ce))]
-        var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
-                           for i in range(0, len(corresponding_ce_state) - 1)]
-        var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in var_differences]
-        var_differences = [[v for v in vs if v in symbol_table.keys()] for vs in var_differences]
-        var_differences = [[] != [v for v in vs if
-                                  re.match("(int(eger)?|nat(ural)?|real|rational)", symbol_table[v].type)] for vs in
-                           var_differences]
-        if True in var_differences:
-            index_of_last_loop_entry = len(var_differences) - 1 - var_differences[::-1].index(True)
+def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, disagreed_on_state_dict, symbol_table):
+    ce_with_stutter_states = []
+    env_turn = True
+    new_i_to_old_i = {}
+    i = 0
+    old_i = 0
+    while i < len(env_con_ce):
+        if env_turn:
+            env_turn = False
+            if env_con_ce[i]["turn"] == "env":
+                ce_with_stutter_states.append(env_con_ce[i])
+                new_i_to_old_i[i] = old_i
+            else:
+                env_copy = env_con_ce[max(0, i - 1)]
+                env_copy["turn"] = "env"
+                ce_with_stutter_states.append(env_con_ce[max(0, i - 1)])
+                new_i_to_old_i[old_i] = max(0, i - 1)
+        else:
+            env_turn = True
+            if env_con_ce[i]["turn"] == "con":
+                ce_with_stutter_states.append(env_con_ce[i])
+                new_i_to_old_i[i] = old_i
+            else:
+                con_copy = env_con_ce[max(0, i - 1)]
+                con_copy["turn"] = "con"
+                ce_with_stutter_states.append(env_con_ce[max(0, i - 1)])
+                new_i_to_old_i[old_i] = max(0, i - 1)
+        i += 1
+        old_i += 1
 
-            return True, previous_visits[index_of_last_loop_entry]
+    # ce_with_stutter_states.append(env_con_ce[-1])
+    ce_with_stutter_states.append(disagreed_on_state_dict)
+    if disagreed_on_state_dict["turn"] == "con":
+        disagreed_on_state_dict_env = disagreed_on_state_dict
+        disagreed_on_state_dict_env["turn"] = "env"
+        ce_with_stutter_states.append(disagreed_on_state_dict_env)
+
+    previous_visits = [i for i, dict in enumerate(ce_with_stutter_states) for key, value in dict.items()
+                       if key == last_cs_state and dict["turn"] == "env" and value == "TRUE"]
+    if len(previous_visits) - 1 > 0: # ignoring last visit
+        var_differences = []
+
+        for i, visit in enumerate(previous_visits[:-1]):
+            corresponding_ce_state = [ce_with_stutter_states[i] for i in range(visit, previous_visits[i + 1] + 1)]
+
+            any_var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
+                               for i in range(0, len(corresponding_ce_state) - 1)]
+            any_var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in any_var_differences]
+            any_var_differences = [[v for v in vs if v in symbol_table.keys()] for vs in any_var_differences]
+            any_var_differences = [[] != [v for v in vs if
+                                      re.match("(int(eger)?|nat(ural)?|real|rational)", symbol_table[v].type)] for vs in
+                               any_var_differences]
+            if True in any_var_differences:
+                var_differences += [True]
+            else:
+                var_differences += [False]
+
+        if True in var_differences:
+            index_of_first_loop_entry = var_differences.index(True)
+            # index_of_last_loop_entry = len(var_differences) - 1 - var_differences[::-1].index(True)
+            first_index = new_i_to_old_i[previous_visits[index_of_first_loop_entry]]
+
+            return True, first_index
         else:
             return False, None
     else:
@@ -317,58 +444,74 @@ def use_liveness_refinement_trans(ce: [dict], symbol_table):
 
 def use_liveness_refinement(program,
                             agreed_on_transitions,
-                            disagreed_on_transitions,
+                            disagreed_on_state_dict,
                             last_counterstrategy_state,
-                            monitor_actually_took,
-                            symbol_table, pred_label_to_formula,
-                            entry_predicate_as_interpolant=True):
+                            symbol_table, pred_label_to_formula):
     yes = False
     mon_transitions = [(y, st) for xs in agreed_on_transitions for y, st in xs]
-    ce = [x for xs in agreed_on_transitions for _, x in xs] + [disagreed_on_transitions[1]]
+    ce = [x for xs in agreed_on_transitions for _, x in xs]
 
-    yes_state, first_index_state = use_liveness_refinement_state(ce, last_counterstrategy_state, symbol_table)
+    yes_state, first_index_state = use_liveness_refinement_state(ce, last_counterstrategy_state, disagreed_on_state_dict, symbol_table)
     if yes_state:
         yes = True
         first_index = first_index_state
 
     if yes:
-        ce_prog_loop_tran_concretised = mon_transitions[first_index:]
+        tentative_loop = mon_transitions[first_index:]
+        # prune up to predicate mismatch
+        # TODO THIS IS NOT CORRECT
+        ce_prog_loop_tran_concretised = []
+        pred_mismatch = False
+        pred_symbol_table = symbol_table | {str(p):TypedValuation(str(p), "bool", None) for p in pred_label_to_formula.keys() if isinstance(p, Variable)}
+        exit = False
 
-        ce_prog_init_trans_concretised = mon_transitions[0:first_index]
+        found_mismatch_but_no_transition_mismatch = False
+        condition_with_preds_numbered = None
+        for i, (t, st) in enumerate(tentative_loop):
+            ce_prog_loop_tran_concretised += [(t, st)]
+            if exit:
+                break
+            if not found_mismatch_but_no_transition_mismatch and st["turn"] == "con" and st["compatible_predicates"] == "FALSE":
+                found_mismatch_but_no_transition_mismatch = True
+                true_preds = [pred_label_to_formula[p] for p in pred_label_to_formula.keys() if isinstance(p, Variable) and "loop" not in str(p) and st[str(p)] == "TRUE"]
+                false_preds = [neg(pred_label_to_formula[p]) for p in pred_label_to_formula.keys() if isinstance(p, Variable) and "loop" not in str(p)  and st[str(p)] == "FALSE"]
+                state_formula = conjunct_formula_set(true_preds + false_preds)
+                pred_symbol_table = pred_symbol_table | {
+                    (str(var) + str(i)): TypedValuation((str(var) + str(i)), pred_symbol_table[str(var)].type, None) for
+                    var in state_formula.variablesin()}
+                state_formula = conjunct_formula_set(true_preds + false_preds).replace(lambda v: Variable(v.name + str(i)))
 
-        if entry_predicate_as_interpolant:
-            last_trans = disagreed_on_transitions[0][0] \
-                .with_condition(
-                neg(
-                    disjunct_formula_set(
-                        [t.condition for t in disagreed_on_transitions[0]]
-                        + [neg(t[0].condition) for t in monitor_actually_took])))
 
-            if len(ce_prog_init_trans_concretised) > 0:
-                entry_predicate = conjunct_formula_set(
-                    interpolation(program,
-                                  ce_prog_init_trans_concretised + ce_prog_loop_tran_concretised,
-                                  (last_trans, disagreed_on_transitions[1]),
-                                  len(ce_prog_init_trans_concretised),
-                                  symbol_table))
-            else:
-                entry_predicate = conjunct_formula_set(
-                    [BiOp(Variable(tv.name), "=", Value(tv.value)) for tv in program.valuation])
+            if found_mismatch_but_no_transition_mismatch:
+                state_formula = conjunct(t.condition.replace(lambda v: Variable(v.name + str(i))), state_formula)
+                pred_symbol_table = pred_symbol_table | {(v + str(i)):TypedValuation((pred_symbol_table[v].name + str(i)), pred_symbol_table[v].type, None) for v in pred_symbol_table.keys()}
 
-            if entry_predicate == None:
-                raise Exception("Something weird here. Entry predicate to loop is None.")
+                if (not smt_checker.check(And(*(state_formula).to_smt(pred_symbol_table)))):
+                    pred_mismatch = True #len(ce_prog_loop_tran_concretised) < len(tentative_loop)
+                    break
+                else:
+                    state_formula = conjunct(state_formula,
+                                             conjunct_formula_set([BiOp(Variable(a.left.name + str(i + 1)),
+                                                                                       "=",
+                                                                                       a.right.replace(lambda v : Variable(v.name + str(i))))
+                                                                   for a in t.action if Variable(a.left.name + str(i)) in state_formula.variablesin()]))
 
-        if not entry_predicate_as_interpolant or str(entry_predicate).lower() == "true":
-            entry_predicate = conjunct_formula_set([BiOp(Variable(key), "=", Value(value))
+                # else:
+                #     pred_mismatch = len(ce_prog_loop_tran_concretised) + 1 < len(tentative_loop)
+                #     exit = True
+
+        if [] == [t for t, _ in ce_prog_loop_tran_concretised if [] != [a for a in t.action if infinite_type(a.left, program.valuation)]]:
+            return False, None, None, None
+
+        entry_valuation = conjunct_formula_set([BiOp(Variable(key), "=", Value(value))
                                                     for tv in program.valuation
-                                                    for key, value in ce_prog_init_trans_concretised[-1][1].items()
+                                                    for key, value in ce_prog_loop_tran_concretised[0][1].items()
                                                     if key == tv.name])
 
-        entry_preds = (
-            [(pred_label_to_formula[Variable(key)], value) for key, value in ce_prog_init_trans_concretised[-1][1].items() if
-             key.startswith("pred_")])
-        entry_predicate_in_terms_of_preds = conjunct_formula_set([p for (p, v) in entry_preds if v == "TRUE"] + [neg(p) for (p, v) in entry_preds if v == "FALSE"])
+        true_preds = [p for p in pred_label_to_formula.values() if smt_checker.check(And(*conjunct(p, entry_valuation).to_smt(symbol_table)))]
+        false_preds = [neg(p) for p in pred_label_to_formula.values() if p not in true_preds]
+        entry_predicate = conjunct_formula_set(true_preds + false_preds)
 
-        return True, ce_prog_loop_tran_concretised, entry_predicate, entry_predicate_in_terms_of_preds
+        return True, ce_prog_loop_tran_concretised, entry_valuation, entry_predicate, pred_mismatch
     else:
-        return False, None, None, None
+        return False, None, None, None, None

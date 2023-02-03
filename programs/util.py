@@ -16,7 +16,7 @@ from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct_formula_set, conjunct, neg, append_to_variable_name, dnf, disjunct_formula_set
+from prop_lang.util import conjunct_formula_set, conjunct, neg, append_to_variable_name, dnf, disjunct_formula_set, true
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
@@ -24,8 +24,9 @@ smt_checker = SMTChecker()
 
 
 def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmvModel, mon_events,
-                                                  pred_list, include_mismatches_due_to_nondeterminism: bool):
-    program_model = program.to_nuXmv_with_turns(include_mismatches_due_to_nondeterminism, True)
+                                                  pred_list, include_mismatches_due_to_nondeterminism=True,
+                                                  colloborate=False, predicate_mismatch=False):
+    program_model = program.to_nuXmv_with_turns(include_mismatches_due_to_nondeterminism, colloborate)
 
     text = "MODULE main\n"
     vars = sorted(program_model.vars) \
@@ -34,11 +35,19 @@ def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmv
            + ["mismatch : boolean"]
     text += "VAR\n" + "\t" + ";\n\t".join(vars) + ";\n"
     text += "DEFINE\n" + "\t" + ";\n\t".join(program_model.define + strategy_model.define) + ";\n"
-    env_turn = BiOp(Variable("turn"), "=", Value("env"))
 
-    prog_and_mon_events_equality = [BiOp(m, '=', Variable("mon_" + m.name)) for m in mon_events]
-    text += "\tcompatible := !(turn = mon) | (" + str(
-        conjunct_formula_set(prog_and_mon_events_equality)) + ");\n"
+    prog_and_mon_events_equality = [BiOp(m, '=', Variable("mon_" + m.name))
+                                    for m in mon_events if "loop" not in m.name]
+    safety_predicate_truth = [BiOp(label_pred(p, pred_list), '=', p)
+                                    for p in pred_list]
+
+    compatible_events = "\tcompatible_events := " + "(!(turn = mon) | " + str(conjunct_formula_set(prog_and_mon_events_equality)) + ")" + ";\n"
+    compatible_predicates = "\tcompatible_predicates := " + "(!(turn = con) | " + str(conjunct_formula_set(safety_predicate_truth)) + ")" + ";\n"
+    compatible = "\tcompatible := " + ("compatible_predicates & " if predicate_mismatch else "") + "compatible_events" + ";\n"
+
+
+    text += compatible_events + compatible + compatible_predicates
+
     # TODO consider adding checks that state predicates expected by env are true, for debugging predicate abstraction
 
     text += "INIT\n" + "\t(" + ")\n\t& (".join(
@@ -93,37 +102,38 @@ def create_nuxmv_model(nuxmvModel):
 def symbol_table_from_program(program):
     symbol_table = dict()
     for state in program.states:
-        symbol_table[state] = TypedValuation(state, "bool", None)
+        symbol_table[state] = TypedValuation(str(state), "bool", None)
     for ev in program.out_events + program.env_events + program.con_events:
-        symbol_table[ev.name] = TypedValuation(ev, "bool", None)
+        symbol_table[ev.name] = TypedValuation(str(ev), "bool", None)
     for t_val in program.valuation:
         symbol_table[t_val.name] = t_val
     return symbol_table
 
 
-def ce_state_to_predicate_abstraction_trans(ltl_to_program_transitions, symbol_table, mon_state, con_state, env_state):
+def ce_state_to_predicate_abstraction_trans(ltl_to_program_transitions, symbol_table, start, middle, end,
+                                            env_events, con_events):
     # ltl_to_program_transitions is a dict of the form {now: {(con_ev, env_ev) : [(con_trans, env_trans)]}}
 
-    con_start = conjunct_formula_set([Variable(key.removeprefix("mon_")) for key, value in mon_state.items() if
-                                      (key.startswith("mon_") or key.startswith("pred_")) and value == "TRUE"]
-                                     + [neg(Variable(key.removeprefix("mon_"))) for key, value in mon_state.items() if
-                                        (key.startswith("mon_") or key.startswith("pred_")) and value == "FALSE"])
-    env_start = conjunct_formula_set([Variable(key.removeprefix("mon_")) for key, value in con_state.items() if
-                                      (key.startswith("mon_") or key.startswith("pred_")) and value == "TRUE"]
-                                     + [neg(Variable(key.removeprefix("mon_"))) for key, value in con_state.items() if
-                                        (key.startswith("mon_") or key.startswith("pred_")) and value == "FALSE"])
-    env_end = conjunct_formula_set([Variable(key.removeprefix("mon_")) for key, value in env_state.items() if
-                                    (key.startswith("mon_") or key.startswith("pred_")) and value == "TRUE"]
-                                   + [neg(Variable(key.removeprefix("mon_"))) for key, value in env_state.items() if
-                                      (key.startswith("mon_") or key.startswith("pred_")) and value == "FALSE"])
+    start = conjunct_formula_set([Variable(key.removeprefix("mon_")) for key, value in start.items() if
+                                      (key.startswith("mon_") or key.startswith("pred_") or Variable(key) in env_events + con_events) and value == "TRUE"]
+                                     + [neg(Variable(key.removeprefix("mon_"))) for key, value in start.items() if
+                                        (key.startswith("mon_") or key.startswith("pred_") or Variable(key) in env_events + con_events) and value == "FALSE"])
+    middle = conjunct_formula_set([Variable(key.removeprefix("mon_")) for key, value in middle.items() if
+                                      (key.startswith("mon_") or key.startswith("pred_") or Variable(key) in env_events + con_events) and value == "TRUE"]
+                                     + [neg(Variable(key.removeprefix("mon_"))) for key, value in middle.items() if
+                                        (key.startswith("mon_") or key.startswith("pred_") or Variable(key) in env_events + con_events) and value == "FALSE"])
+    end = conjunct_formula_set([Variable(key.removeprefix("mon_")) for key, value in end.items() if
+                                    (key.startswith("mon_") or key.startswith("pred_") or Variable(key) in env_events + con_events) and value == "TRUE"]
+                                   + [neg(Variable(key.removeprefix("mon_"))) for key, value in end.items() if
+                                      (key.startswith("mon_") or key.startswith("pred_") or Variable(key) in env_events + con_events) and value == "FALSE"])
 
     for abs_con_start in ltl_to_program_transitions.keys():
         if abs_con_start == "init":
             continue
-        if smt_checker.check(And(*(conjunct(abs_con_start, con_start).to_smt(symbol_table)))):
+        if smt_checker.check(And(*(conjunct(abs_con_start, start).to_smt(symbol_table)))):
             for (abs_env_start, abs_env_end) in ltl_to_program_transitions[abs_con_start].keys():
-                if smt_checker.check(And(*(conjunct(abs_env_start, env_start).to_smt(symbol_table)))):
-                    if smt_checker.check(And(*(conjunct(abs_env_end, env_end).to_smt(symbol_table)))):
+                if smt_checker.check(And(*(conjunct(abs_env_start, middle).to_smt(symbol_table)))):
+                    if smt_checker.check(And(*(conjunct(abs_env_end, end).to_smt(symbol_table)))):
                         return ltl_to_program_transitions[abs_con_start][(abs_env_start, abs_env_end)]
 
     return []
@@ -135,7 +145,7 @@ def check_for_nondeterminism_last_step(state_before_mismatch, program, raise_exc
     guards = []
     for (key, value) in state_before_mismatch.items():
         if key.startswith("guard_") and value == "TRUE" and len(transitions) != int(key.replace("guard_", "")):
-            guards.append(transitions[int(key.replace("guard_", ""))])
+            guards.append(looping_to_normal(transitions[int(key.replace("guard_", ""))]))
 
     if len(guards) > 1:
         message = ("Nondeterminism in last step of counterexample; monitor has choice between: \n"
@@ -364,14 +374,15 @@ def label_preds(ps, preds):
 
 def there_is_mismatch_between_monitor_and_strategy(system, controller: bool, livenesstosafety: bool,
                                                    ltl_assumptions: Formula,
-                                                   ltl_guarantees: Formula):
+                                                   ltl_guarantees: Formula, debug=False):
     print(system)
     model_checker = ModelChecker()
+    if debug:
     # Sanity check
-    result, out = model_checker.check(system, "F FALSE", None, livenesstosafety)
-    if result:
-        print("Are you sure the counterstrategy given is complete?")
-        return True, None, out
+        result, out = model_checker.check(system, "F FALSE", None, livenesstosafety)
+        if result:
+            print("Are you sure the counterstrategy given is complete?")
+            return True, None, out
 
     if not controller:
         there_is_no_mismatch, out = model_checker.check(system, "G !mismatch", None, livenesstosafety)
@@ -462,7 +473,7 @@ def stutter_transition(program, state, env: bool):
     condition = neg(disjunct_formula_set([t.condition
                                       for t in transitions if t.src == state]))
 
-    if smt_checker.check(And(*condition.to_smt(symbol_table_from_program(program)))):
+    if smt_checker.check(And(*condition.to_smt(program.symbol_table))):
         return Transition(state,
                           condition,
                           [],
@@ -471,18 +482,22 @@ def stutter_transition(program, state, env: bool):
     else:
         return None
 
+def looping_to_normal(t : Transition):
+    return t #Transition(re.split("_loop", t.src)[0], t.condition, t.action, t.output,  re.split("_loop", t.tgt)[0]) \
+              #  if "loop" in ((t.src) + (t.tgt)) else t
 
-def concretize_transitions(program, indices_and_state_list):
-    transitions = program.env_transitions + program.con_transitions
-
+def concretize_transitions(program, looping_program, indices_and_state_list, add_stuttering_transitions: bool):
+    transitions = looping_program.env_transitions + looping_program.con_transitions
     concretized = []
 
     first_transition_index = int(indices_and_state_list[0][0])
     if first_transition_index != -1:
-        concretized += [[(transitions[first_transition_index], indices_and_state_list[0][1])]]
-    if first_transition_index == -1 and len(indices_and_state_list) == 1:
+        concretized += [[(looping_to_normal(transitions[first_transition_index]), indices_and_state_list[0][1])]]
+    if first_transition_index == -1:# and len(indices_and_state_list) == 1:
         trans = stutter_transition(program, program.initial_state, True)
-        concretized += [(trans, indices_and_state_list[0][1])]
+        concretized += [[(trans, indices_and_state_list[0][1])]]
+
+    current_state = concretized[0][0][0].tgt
 
     for i in range(1, len(indices_and_state_list) - 2):
         if i % 2 == 0:
@@ -490,41 +505,67 @@ def concretize_transitions(program, indices_and_state_list):
         trans_here = []
         trans_index_con = int(indices_and_state_list[i][0])
         if trans_index_con != -1:
-            trans_here += [(transitions[trans_index_con], indices_and_state_list[i][1])]
+            trans_here += [(looping_to_normal(transitions[trans_index_con]), indices_and_state_list[i][1])]
+            current_state = trans_here[-1][0].tgt
+        elif add_stuttering_transitions:
+            trans_here += [(stutter_transition(program, current_state, False), indices_and_state_list[i][1])]
+            current_state = trans_here[-1][0].tgt
         if i + 1 < len(indices_and_state_list) - 2:
             trans_index_env = int(indices_and_state_list[i + 1][0])
             if trans_index_env != -1:
-                trans_here += [(transitions[int(trans_index_env)], indices_and_state_list[i + 1][1])]
+                trans_here += [(looping_to_normal(transitions[int(trans_index_env)]), indices_and_state_list[i + 1][1])]
+            elif add_stuttering_transitions:
+                trans_here += [(stutter_transition(program, trans_here[-1][0].tgt, True), indices_and_state_list[i + 1][1])]
         if len(trans_here) > 0:
             concretized += [trans_here]
 
     trans_here = []
 
-    if len(indices_and_state_list) > 1:
+    last_index = len(indices_and_state_list)
+    if indices_and_state_list[-1][1]["turn"] == "con" and indices_and_state_list[-1][1]["compatible_predicates"] == "FALSE":
+        pred_state = [Variable(p) for p,v in indices_and_state_list[-1][1].items() if p.startswith("pred_") and v == "TRUE"] \
+                + [neg(Variable(p)) for p,v in indices_and_state_list[-1][1].items() if p.startswith("pred_") and v == "FALSE"]
+        last_index = last_index - 1
+        pred_state = (pred_state, indices_and_state_list[-1][1])
+
+        # value_expression = conjunct_formula_set(
+        #     [Variable(p) for p,v in indices_and_state_list[-1][1].items() if not p.startswith("pred_") and v == "TRUE"] \
+        #         + [neg(Variable(p)) for p,v in indices_and_state_list[-1][1].items() if not p.startswith("pred_") and v == "FALSE"])
+        #
+        #
+        # for p in pred_state:
+        #     if smt_checker.check(And(*value_expression.to_smt(program.symbol_table), *p.to_smt(program.symbol_table))):
+        #         pred_state = p
+        #         break
+
+    else:
+        pred_state = None
+
+    if last_index > 1:
         # for last two transitions
         con_from_state = concretized[-1][-1][0].tgt
         con_trans = stutter_transition(program, con_from_state, False) \
-            if indices_and_state_list[-2][0] == '-1' \
-            else transitions[int(indices_and_state_list[-2][0])]
+            if indices_and_state_list[last_index-2][0] == '-1' \
+            else looping_to_normal(transitions[int(indices_and_state_list[-2][0])])
 
         if con_trans == None:
             raise Exception("No controller stutter transition found for state " + str(con_from_state))
         else:
-            trans_here += [(con_trans, indices_and_state_list[-2][1])]
+            trans_here += [(con_trans, indices_and_state_list[last_index-2][1])]
 
         env_from_state = con_trans.tgt
         env_trans = stutter_transition(program, env_from_state, True) \
-            if indices_and_state_list[-1][0] == '-1' \
-            else transitions[int(indices_and_state_list[-1][0])]
+            if indices_and_state_list[last_index-1][0] == '-1' \
+            else looping_to_normal(transitions[int(indices_and_state_list[last_index-1][0])])
 
         if env_trans == None:
-            raise Exception("No controller stutter transition found for state " + str(con_from_state))
+            raise Exception("No environment stutter transition found for state " + str(con_from_state))
         else:
-            trans_here += [(env_trans, indices_and_state_list[-1][1])]
+            trans_here += [(env_trans, indices_and_state_list[last_index-1][1])]
 
         concretized += [trans_here]
 
-    return concretized
+    return concretized, pred_state
 
 
 def ground_transitions_and_flatten(program, transitions_and_state_list):
@@ -543,15 +584,19 @@ def ground_transitions(program, transition_and_state_list):
     return grounded
 
 
-def ground_predicate_on_bool_vars(program, predicate, ce_state):
+def ground_predicate_on_vars(program, predicate, ce_state, vars, symbol_table):
     grounded_state = project_ce_state_onto_ev(ce_state,
-                                              program.env_events + program.con_events + [Variable(v.name) for v in
-                                                                                         program.valuation if
-                                                                                         re.match("bool(ean)?",
-                                                                                                  v.type.lower())])
+                                              program.env_events + program.con_events + program.out_events + [Variable(str(v)) for v in vars])
     projected_condition = predicate.ground(
-        [TypedValuation(key, "bool", Value(grounded_state[key].lower())) for key in grounded_state.keys()])
+        [TypedValuation(key, symbol_table[key].type, Value(grounded_state[key])) for key in grounded_state.keys()])
     return projected_condition
+
+def keep_bool_preds(formula: Formula, symbol_table):
+    if not isinstance(formula, BiOp):
+        return formula if not any(v for v in formula.variablesin() if symbol_table[str(v)].type != "bool") else true()
+    else:
+        preds = {p for p in formula.sub_formulas_up_to_associativity() if not any(v for v in p.variablesin() if symbol_table[str(v)].type != "bool")}
+        return conjunct_formula_set(preds)
 
 
 def add_prev_suffix(program, formula):
@@ -604,3 +649,15 @@ def safe_update(d, k, v_arr):
         d[k] = d[k] + v_arr
     else:
         d[k] = v_arr
+
+
+def safe_update_dict_value(d : dict, k, v_dict):
+    if k in d.keys():
+        d[k].update(v_dict)
+    else:
+        d[k] = v_dict
+
+
+def function_is_of_natural_type(f: Formula, invars: Formula, symbol_table):
+    # TODO, should we conjunct or disjunct invars?
+    return not smt_checker.check(And(*conjunct(conjunct_formula_set(invars), BiOp(f, "<", Value(0))).to_smt(symbol_table)))

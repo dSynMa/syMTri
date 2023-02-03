@@ -22,7 +22,11 @@ class Transition:
     def __eq__(self, other):
         """Overrides the default implementation"""
         if isinstance(other, Transition):
-            return self.src == other.src and self.tgt == other.tgt and self.condition == other.condition and self.action == other.action and self.output == other.output
+            return self.src == other.src and \
+                   self.tgt == other.tgt and \
+                   self.condition == other.condition and \
+                   self.action == other.action and \
+                   self.output == other.output
         return NotImplemented
 
     def __hash__(self):

@@ -1,6 +1,6 @@
 program eventually__allow_grant {
     STATES {
-        q0 : init, q1, q2
+        q0 : init, q1, q2, q_loop
     }
 
     ENVIRONMENT EVENTS {
@@ -12,7 +12,7 @@ program eventually__allow_grant {
     }
 
     PROGRAM EVENTS {
-        allow_grant
+        allow_grant, in_loop
     }
 
     VALUATION {
@@ -22,8 +22,10 @@ program eventually__allow_grant {
     ENVIRONMENT TRANSITIONS {
         q0 -> q0 [!request $ cnt := cnt + 1;],
         q0 -> q1 [request],
-        q1 -> q1 [ $ cnt := cnt - 1],
-        q1 -> q2 [ # allow_grant]
+        q1 -> q_loop [cnt > 0 $ cnt := cnt - 1 # in_loop],
+        q_loop -> q_loop [cnt > 0 $ cnt := cnt - 1 # in_loop],
+        q_loop -> q2 [cnt == 0 # allow_grant],
+        q1 -> q2 [cnt == 0 # allow_grant]
     }
 
     CONTROLLER TRANSITIONS {

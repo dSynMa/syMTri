@@ -1,7 +1,7 @@
 from graphviz import Digraph
 from pysmt.shortcuts import And
 
-from programs.abstraction.predicate_abstraction import tran_and_state_preds_after_con_env_step
+from programs.abstraction.predicate_abstraction import tran_and_state_preds_after_con_env_step, PredicateAbstraction
 from programs.analysis.nuxmv_model import NuXmvModel
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
@@ -104,6 +104,9 @@ class MealyMachine:
 
         new_mon_events = [BiOp(m, ":=", Variable("mon_" + m.name)) for m in mon_events] \
                          + [BiOp(m, ":=", Variable(m.name)) for m in pred_acts]
+
+        guards_acts = {}
+
         init_conds = []
 
         for (env_beh, tgt) in self.env_transitions.get(self.init_st):
@@ -111,9 +114,6 @@ class MealyMachine:
             init_conds += [conjunct_formula_set(formula_set)]
 
         init_cond = disjunct_formula_set(init_conds)
-
-        guards_acts = {}
-
         for src in self.con_transitions.keys():
             for (con_behaviour, con_tgt) in self.con_transitions[src]:
                 guard = str(src) + " & " \
@@ -121,7 +121,7 @@ class MealyMachine:
                 if guard not in guards_acts.keys():
                     guards_acts[guard] = list()
 
-                if len(self.env_transitions.get(con_tgt)) == 0:
+                if (con_tgt not in self.env_transitions.keys()) or len(self.env_transitions.get(con_tgt)) == 0:
                     raise Exception("Nothing to do in counter-strategy from state " + str(con_tgt))
 
                 for (env_beh, env_tgt) in self.env_transitions.get(con_tgt):
@@ -180,8 +180,7 @@ class MealyMachine:
         return NuXmvModel(self.name, set(vars), define, init, invar, trans)
 
     # TODO this function needs to be optimised
-    def project_controller_on_program(self, program, predicate_abstraction: Program, state_preds, tran_preds,
-                                      symbol_table):
+    def project_controller_on_program(self, program, predicate_abstraction: PredicateAbstraction, symbol_table, program_on_env_side=True):
         symbol_table |= {tv.name + "_prev": TypedValuation(tv.name + "_prev", tv.type, tv.value) for tv in
                          program.valuation}
 
@@ -190,7 +189,7 @@ class MealyMachine:
 
         smt_checker = SMTChecker()
 
-        pred_list = state_preds + tran_preds
+        pred_list = predicate_abstraction.state_predicates + predicate_abstraction.transition_predicates
 
         replace_preds = []
         i = 0
@@ -209,24 +208,25 @@ class MealyMachine:
         current_states = []
         done_states = []
 
-        for (m_cond, mm_tgt) in self.env_transitions[self.init_st]:
-            for pa_t in predicate_abstraction.env_transitions:
-                if pa_t.src == predicate_abstraction.initial_state:
-                    formula = conjunct_formula_set(
-                        [m_cond.replace(replace_preds), pa_t.condition, at_least_one_state, at_most_one_state,
-                         Variable(pa_t.tgt.state)] +
-                        pa_t.tgt.predicates +
-                        pa_t.output)
-                    formula_smt = And(*formula.to_smt(symbol_table))
-                    compatible = smt_checker.check(formula_smt)
-                    if compatible:
-                        new_env_transitions \
-                            .add(
-                            Transition((self.init_st, predicate_abstraction.initial_state), pa_t.condition, pa_t.action,
-                                       pa_t.output, (mm_tgt, pa_t.tgt)))
-                        current_states.append((mm_tgt, pa_t.tgt))
+        abstraction = predicate_abstraction.abstraction
 
-        done_states += [(self.init_st, predicate_abstraction.initial_state)]
+        for (m_cond, mm_tgt) in self.env_transitions[self.init_st]:
+            for pa_t in abstraction.state_to_env[abstraction.initial_state]:
+                formula = conjunct_formula_set(
+                    [m_cond.replace(replace_preds), pa_t.condition, at_least_one_state, at_most_one_state,
+                     Variable(pa_t.tgt.state)] +
+                    pa_t.tgt.predicates +
+                    pa_t.output)
+                formula_smt = And(*formula.to_smt(symbol_table))
+                compatible = smt_checker.check(formula_smt)
+                if compatible:
+                    new_env_transitions \
+                        .add(
+                        Transition((self.init_st, abstraction.initial_state), pa_t.condition, pa_t.action,
+                                   pa_t.output, (mm_tgt, pa_t.tgt)))
+                    current_states.append((mm_tgt, pa_t.tgt))
+
+        done_states += [(self.init_st, abstraction.initial_state)]
 
         # TODO this needs to be optimised
         while len(current_states) > 0:
@@ -234,41 +234,40 @@ class MealyMachine:
             for (mm_con_src, pa_con_src) in current_states:
                 tentative_con_trans = []
                 for (mm_con_cond, mm_con_tgt) in self.con_transitions[mm_con_src]:
-                    for pa_con_t in predicate_abstraction.con_transitions:
-                        if pa_con_t.src == pa_con_src:
-                            formula = conjunct_formula_set(
-                                [mm_con_cond.replace(replace_preds), pa_con_t.condition])
-                            formula_smt = And(*formula.to_smt(symbol_table))
-                            compatible = smt_checker.check(formula_smt)
-                            if compatible:
-                                tentative_con_trans.append(
-                                    Transition((mm_con_src, pa_con_src), mm_con_cond, pa_con_t.action, pa_con_t.output,
-                                               (mm_con_tgt, pa_con_t.tgt)))
+                    # TODO this can be optimised by keeping a cache
+                    for pa_con_t in abstraction.state_to_con[pa_con_src]:
+                        formula = conjunct_formula_set(
+                            [mm_con_cond.replace(replace_preds), pa_con_t.condition])
+                        formula_smt = And(*formula.to_smt(symbol_table))
+                        compatible = smt_checker.check(formula_smt)
+                        if compatible:
+                            tentative_con_trans.append(
+                                Transition((mm_con_src, pa_con_src), mm_con_cond, pa_con_t.action, pa_con_t.output,
+                                           (mm_con_tgt, pa_con_t.tgt)))
 
                 for mm_con_trans in tentative_con_trans:
                     (mm_env_src, pa_env_src) = mm_con_trans.tgt
                     for (mm_env_cond, mm_env_tgt) in self.env_transitions[mm_env_src]:
-                        for pa_env_t in predicate_abstraction.env_transitions:
-                            if pa_env_t.src == pa_env_src:
-                                try:
-                                    f_trans_preds = tran_and_state_preds_after_con_env_step(pa_env_t)
-                                    formula2 = conjunct_formula_set([mm_env_cond.replace(replace_preds)] +
-                                                                    [pa_env_t.condition] +
-                                                                    pa_env_t.output +
-                                                                    [Variable(pa_env_t.tgt.state)] +
-                                                                    [at_least_one_state] +
-                                                                    [at_most_one_state] +
-                                                                    f_trans_preds)
-                                    formula2_smt = And(*formula2.to_smt(symbol_table))
-                                    compatible = smt_checker.check(formula2_smt)
-                                    if compatible:
-                                        next_states.append((mm_env_tgt, pa_env_t.tgt))
-                                        new_con_transitions.add(mm_con_trans)
-                                        new_env_transitions.add(
-                                            Transition((mm_env_src, pa_env_src), pa_env_t.condition, pa_env_t.action,
-                                                       pa_env_t.output, (mm_env_tgt, pa_env_t.tgt)))
-                                except Exception as e:
-                                    raise e
+                        for pa_env_t in abstraction.state_to_env[pa_env_src]:
+                            try:
+                                f_trans_preds = tran_and_state_preds_after_con_env_step(pa_env_t)
+                                formula2 = conjunct_formula_set([mm_env_cond.replace(replace_preds)] +
+                                                                [pa_env_t.condition] +
+                                                                pa_env_t.output +
+                                                                [Variable(pa_env_t.tgt.state)] +
+                                                                [at_least_one_state] +
+                                                                [at_most_one_state] +
+                                                                f_trans_preds)
+                                formula2_smt = And(*formula2.to_smt(symbol_table))
+                                compatible = smt_checker.check(formula2_smt)
+                                if compatible:
+                                    next_states.append((mm_env_tgt, pa_env_t.tgt))
+                                    new_con_transitions.add(mm_con_trans)
+                                    new_env_transitions.add(
+                                        Transition((mm_env_src, pa_env_src), pa_env_t.condition, pa_env_t.action,
+                                                   pa_env_t.output, (mm_env_tgt, pa_env_t.tgt)))
+                            except Exception as e:
+                                raise e
 
             done_states += [str(s) for s in current_states]
             current_states = set([x for x in next_states if str(x) not in done_states])
@@ -276,10 +275,9 @@ class MealyMachine:
         # TODO need to check that if counter-strategy, then it s complete for controller
         #  and if strategy then complete for environment
 
-        predicate_abstraction.new_env_transitions = new_env_transitions
-        predicate_abstraction.con_transitions = new_con_transitions
         return Program("Strategy", [s for t in (new_con_transitions | new_env_transitions) for s in [t.src, t.tgt]],
-                       (self.init_st, predicate_abstraction.initial_state),
-                       predicate_abstraction.valuation, list(set(new_env_transitions)), list(set(new_con_transitions)),
-                       predicate_abstraction.env_events, predicate_abstraction.con_events,
-                       predicate_abstraction.out_events)
+                       (self.init_st, abstraction.initial_state),
+                       abstraction.valuation, list(set(new_env_transitions)), list(set(new_con_transitions)),
+                       abstraction.env_events, abstraction.con_events,
+                       abstraction.out_events, False, False)
+

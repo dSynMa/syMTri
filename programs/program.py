@@ -38,8 +38,8 @@ class Program:
         else:
             self.env_transitions = env_transitions
             self.con_transitions = con_transitions
-        self.state_to_env = lambda s: [t for t in self.env_transitions if t.src == s]
-        self.state_to_con = lambda s: [t for t in self.con_transitions if t.src == s]
+        self.state_to_env = {s:[t for t in self.env_transitions if t.src == s] for s in self.states}
+        self.state_to_con = {s:[t for t in self.con_transitions if t.src == s] for s in self.states}
 
         if debug:
             # type checking
@@ -120,7 +120,7 @@ class Program:
         for t in self.con_transitions:
             label = str(t.condition)
             if len(t.action) > 0:
-                label + " $ " + ', '.join(map(str, t.action))
+                label = label + " $ " + ', '.join(map(str, t.action))
             dot.edge(to_str(t.src), to_str(t.tgt), label, style="dotted")
 
         return dot
@@ -232,10 +232,10 @@ class Program:
         complete_env = []
         complete_con = []
 
-        assert set(self.states) == set(
+        reachable_states = set(
             [s for t in self.env_transitions for s in [t.tgt, t.src]] + [s for t in self.con_transitions for s in
                                                                          [t.tgt, t.src]])
-        for s in self.states:
+        for s in reachable_states:
             env_from_s = [t for t in self.env_transitions if t.src == s]
             env_stutter_from_s = stutter_transition(self, s, True)
             if env_stutter_from_s != None:

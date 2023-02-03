@@ -39,6 +39,7 @@ def hoa_to_transitions(hoa):
                     raw_cond = raw_cond.replace("f", "false")  # probably we don't need this
                     cond = string_to_prop(raw_cond, True)
                     cond = cond.replace(to_replace)
+                    # cond = cond.replace(lambda var : Variable(re.split("_loop", var.name)[0]))
                     assert isinstance(cond, BiOp)
                     key = (src, cond.left, tgt)
                     if key not in transitions.keys():

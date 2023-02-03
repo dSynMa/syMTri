@@ -1,6 +1,5 @@
 import re
 
-from parsec import *
 from tatsu.grammars import Grammar
 from tatsu.infos import ParserConfig
 from tatsu.tool import compile
@@ -11,6 +10,8 @@ from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
 from prop_lang.value import Value
 from prop_lang.variable import Variable
+import sys
+sys.setrecursionlimit(20000)
 
 GRAMMAR = '''
     @@grammar::PROPLOGIC
@@ -51,6 +52,7 @@ GRAMMAR = '''
         | math_expression '<=' math_expression
         | math_expression '>' math_expression
         | math_expression '>=' math_expression
+        | math_expression '=' math_expression
         | math_expression '==' math_expression
         | math_expression '!=' math_expression
         | term
@@ -66,8 +68,8 @@ GRAMMAR = '''
         ;
         
     math_expression
-        = math_1 '*' math_expression
-        | math_1 '/' math_expression
+        = math_1 '+' math_expression
+        | math_1 '-' math_expression
         | math_1
         ;
         
@@ -75,19 +77,20 @@ GRAMMAR = '''
         = math_expression $ ;
     
     math_1
-        = math_0 '+' math_1
-        | math_0 '-' math_1
+        = math_0 '*' math_1
+        | math_0 '/' math_1
         | math_0
         ;
     
     math_0
         = '(' math_expression ')'
         | number
+        | '-' number
         | atom
         ;
 
     atom = /\_?[a-zA-Z][a-zA-Z0-9\_\-]*/;
-    number = /\d+|\d+\.\d+/;
+    number = /(\d+|\d+\.\d+)/;
 '''
 
 parser: Grammar = compile(GRAMMAR)

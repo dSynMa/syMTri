@@ -5,6 +5,8 @@
 ### In progress
 
 1. Luca -> UI with Jupyter.
+2. Luca -> With pysmt we cannot deal with integer remainder and division: 
+   - Proposal: Use z3 for smt solving formulas with remainder and division; .
 
 ### Not in progress
 

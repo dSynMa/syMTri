@@ -8,26 +8,23 @@ program eventually__allow_grant {
     }
 
     CONTROLLER EVENTS {
-        grant
+        grant, finished
     }
 
     PROGRAM EVENTS {
-        allow_grant
+        here
     }
 
     VALUATION {
         cnt : natural := 0;
+        cntmod2 : natural := 0;
     }
 
     ENVIRONMENT TRANSITIONS {
-        q0 -> q0 [!request $ cnt := cnt + 1;],
-        q0 -> q1 [request],
-        q1 -> q1 [ $ cnt := cnt - 1],
-        q1 -> q2 [ # allow_grant]
+        q0 -> q0 [cntmod2 == 1 $ cnt := cnt + 1; cntmod2 := 0 # here],
+        q0 -> q0 [cntmod2 == 0 $ cnt := cnt + 1; cntmod2 := 1]
     }
 
     CONTROLLER TRANSITIONS {
-        q2 -> q1 [!grant],
-        q2 -> q0 [grant]
     }
 }
