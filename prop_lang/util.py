@@ -144,7 +144,11 @@ def sat(formula: Formula, symbol_table: dict, solver: SMTChecker) -> bool:
 
 
 def is_tautology(formula: Formula, symbol_table: dict, solver: SMTChecker) -> bool:
-    return solver.check(And(*neg(formula).to_smt(symbol_table)))
+    return not solver.check(And(*neg(formula).to_smt(symbol_table)))
+
+
+def is_contradictory(formula: Formula, symbol_table: dict, solver: SMTChecker) -> bool:
+    return not solver.check(And(*formula.to_smt(symbol_table)))
 
 
 def negation_closed(predicates: [Formula]):
@@ -223,23 +227,26 @@ def only_dis_or_con_junctions(f: Formula):
 dnf_cache = {}
 
 
-def dnf(f: Formula):
-    if f in dnf_cache.keys():
-        return dnf_cache[f]
-    simple_f = only_dis_or_con_junctions(f).simplify().to_nuxmv()
-    simple_f_without_math, dic = simple_f.replace_math_exprs(0)
-    for_sympi = parse_expr(str(simple_f_without_math).replace("!", " ~"), evaluate=True)
-    if isinstance(for_sympi, int):
-        return f
-    # if formula has more than 8 variables it can take a long time, dnf is exponential
-    in_dnf = to_dnf(simplify_logic(for_sympi), simplify=True, force=True)
-    print(str(f) + " after dnf becomes " + str(in_dnf).replace("~", "!"))
-    in_dnf_formula = string_to_prop(str(in_dnf).replace("~", "!"))
-    in_dnf_math_back = in_dnf_formula.replace([BiOp(key, ":=", value) for key, value in dic.items()])
+def dnf(f: Formula, symbol_table: dict={}):
+    try:
+        if f in dnf_cache.keys():
+            return dnf_cache[f]
+        simple_f = only_dis_or_con_junctions(f).simplify().to_nuxmv()
+        simple_f_without_math, dic = simple_f.replace_math_exprs(symbol_table)
+        for_sympi = parse_expr(str(simple_f_without_math).replace("!", " ~"), evaluate=True)
+        if isinstance(for_sympi, int):
+            return f
+        # if formula has more than 8 variables it can take a long time, dnf is exponential
+        in_dnf = to_dnf(simplify_logic(for_sympi), simplify=True, force=True)
+        print(str(f) + " after dnf becomes " + str(in_dnf).replace("~", "!"))
+        in_dnf_formula = string_to_prop(str(in_dnf).replace("~", "!"))
+        in_dnf_math_back = in_dnf_formula.replace([BiOp(key, ":=", value) for key, value in dic.items()])
 
-    dnf_cache[f] = in_dnf_math_back
+        dnf_cache[f] = in_dnf_math_back
 
-    return in_dnf_math_back
+        return in_dnf_math_back
+    except:
+        raise Exception("dnf: I do not know how to handle " + str(f) + ", cannot turn it into dnf.")
 
 
 def append_to_variable_name(formula, vars_names, suffix):
@@ -257,3 +264,84 @@ def is_boolean(var, tvs):
 
 def infinite_type(var, tvs):
     return any(tv for tv in tvs if tv.name == str(var) and re.match("(nat(ural)?|int(eger)?|real|rat(ional)?)", str(tv.type)))
+
+
+def related_to(v, F: Formula):
+    related_to = set()
+    done = set()
+    current = {v}
+    while len(current) > 0:
+        next = set()
+        for to_do in current:
+            for sf in F.sub_formulas_up_to_associativity():
+                atom_set = set(sf.variablesin())
+                if to_do in atom_set:
+                    related_to |= atom_set
+                    next |= {a for a in atom_set if a not in done}
+                done |= next
+        current = next
+    return related_to
+
+
+def type_constraints(formula, symbol_table):
+    return conjunct_formula_set(set({type_constraint(v, symbol_table) for v in formula.variablesin()}))
+
+
+def type_constraints_acts(acts : [BiOp], symbol_table):
+    return conjunct_formula_set(set({type_constraint(act.left, symbol_table).replace([BiOp(act.left, ":=", act.right)]) for act in acts}))
+
+
+def type_constraint(variable, symbol_table):
+    if str(variable) not in symbol_table.keys():
+        raise Exception(f"{str(variable)} not in symbol table.")
+    typed_val = symbol_table[str(variable)]
+
+    if isinstance(variable, Variable):
+        if typed_val.type == "int" or typed_val.type == "integer":
+            return Value("TRUE")
+        elif typed_val.type == "bool" or typed_val.type == "boolean":
+            return Value("TRUE")
+        elif typed_val.type == "nat" or typed_val.type == "natural":
+            return BiOp(variable, ">=", Value("0"))
+        elif re.match("[0-9]+..+[0-9]+", typed_val.type):
+            split = re.split("..+", typed_val.type)
+            lower = split[0]
+            upper = split[1]
+            return BiOp(BiOp(variable, ">=", Value(lower)), "&&", BiOp(variable, "<=", Value(upper)))
+        else:
+            raise NotImplementedError(f"Type {typed_val.type} unsupported.")
+    else:
+        raise Exception(f"{str(variable)} not a variable.")
+
+
+def propagate_negations(formula):
+    if isinstance(formula, UniOp):
+        if formula.op == "!":
+            return negate(formula.right)
+    elif isinstance(formula, BiOp):
+        return BiOp(propagate_negations(formula.left), formula.op, propagate_negations(formula.right))
+    else:
+        return formula
+
+
+def negate(formula):
+    if isinstance(formula, UniOp):
+        if formula.op == "!":
+            return formula.right
+        else:
+            return UniOp(formula.op, negate(formula.right))
+    elif isinstance(formula, BiOp):
+        if formula.op == "&" or formula.op == "&&":
+            return BiOp(negate(formula.left), "|", negate(formula.right))
+        elif formula.op == "|" or formula.op == "||":
+            return BiOp(negate(formula.left), "&", negate(formula.right))
+        elif formula.op == "->" or formula.op == "=>":
+            return BiOp(formula.left, "&", negate(formula.right))
+        elif formula.op == "<->" or formula.op == "<=>":
+            return BiOp(BiOp(formula.left, "&", negate(formula.right)), "|", BiOp(negate(formula.left), "&", formula.right))
+        else:
+            return UniOp("!", formula)
+    elif isinstance(formula, MathExpr):
+        return MathExpr(negate(formula.formula))
+    else:
+        return UniOp("!", formula)

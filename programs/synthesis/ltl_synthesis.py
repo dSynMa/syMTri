@@ -6,9 +6,7 @@ from parsing.hoa_parser import hoa_to_transitions
 from programs.program import Program
 from programs.synthesis.mealy_machine import MealyMachine
 from programs.util import synthesis_problem_to_TLSF_script
-from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from prop_lang.util import true
 from prop_lang.variable import Variable
 
 
@@ -46,7 +44,7 @@ def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variab
             tmp.close()
 
             # cmd = strix_tlsf_command + " -v '" + tmp.name + "':./spec.tlsf -m both "
-            cmd = "docker run " + " -v " + tmp.name + ":/spec.tlsf" + " --entrypoint ./strix/scripts/strix_tlsf.sh strix_tlsf /spec.tlsf" + " -m both"
+            cmd = "docker run" + " -v " + tmp.name + ":/spec.tlsf" + " --entrypoint ./strix/scripts/strix_tlsf_file.sh strix_tlsf_file /spec.tlsf" + " -m both"
 
             so = subprocess.getstatusoutput(cmd)
             output: str = so[1]
@@ -80,7 +78,7 @@ def parse_hoa(env_events, con_events, output) -> Program:
 
     init_st, trans = hoa_to_transitions(output)
 
-    mon = MealyMachine("counterstrategy" if counterstrategy else "controller", init_st, env_events, con_events)
+    mon = MealyMachine("counterstrategy" if counterstrategy else "controller", "st_" + init_st, env_events, con_events, {}, {})
 
     mon.add_transitions(trans)
     return mon

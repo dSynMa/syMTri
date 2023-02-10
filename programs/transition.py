@@ -1,6 +1,6 @@
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from prop_lang.util import true
+from prop_lang.util import true, conjunct
 from prop_lang.variable import Variable
 
 
@@ -34,3 +34,6 @@ class Transition:
 
     def with_condition(self, new_condition):
         return Transition(self.src, new_condition, self.action, self.output, self.tgt)
+
+    def add_condition(self, new_condition):
+        return Transition(self.src, conjunct(self.condition, new_condition), self.action, self.output, self.tgt)

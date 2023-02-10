@@ -44,3 +44,6 @@ class Formula(ABC):
     @abstractmethod
     def replace_math_exprs(self, cnt):
         pass
+
+    def sub_formulas_up_to_associativity(self):
+        return [self]

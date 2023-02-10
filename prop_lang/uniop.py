@@ -17,6 +17,8 @@ class UniOp(Formula):
         if self.op == "next" and (
                 isinstance(self.right, UniOp) or isinstance(self.right, Value) or isinstance(self.right, Variable)):
             return self.op + "(" + str(self.right) + ")"
+        if self.op in ["G,F,X"]:
+            return self.op + "(" + str(self.right) + ")"
         if self.op != "!" and self.op != "-":
             return self.op + " " + str(self.right)
         else:
@@ -67,6 +69,9 @@ class UniOp(Formula):
         else:
             raise NotImplementedError(f"{self.op} unsupported")
 
-    def replace_math_exprs(self, cnt):
-        new_right, dic = self.right.replace_math_exprs(cnt)
+    def replace_math_exprs(self, symbol_table, cnt=0):
+        new_right, dic = self.right.replace_math_exprs(symbol_table, cnt)
+        if len(dic) == 0:
+            if self.op == "-" or self.op == "+":
+                new_right, dic = Variable("math_" + str(cnt)), {Variable("math_" + str(cnt)): self}
         return UniOp(self.op, new_right), dic

@@ -23,7 +23,7 @@ MAIN {
   }
 
   GUARANTEES {
-      (F start) -> F win;
+      (G F start) -> G F win;
   }
 
 }

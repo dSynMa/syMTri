@@ -46,6 +46,8 @@ class Variable(Atom):
                     return val.right
         elif hasattr(context, '__call__'):
             return context(self)
+        else:
+            raise Exception("Variable.replace: context is not a list of assignments or a mapping function.")
         return self
 
     def to_nuxmv(self):
@@ -69,5 +71,5 @@ class Variable(Atom):
         else:
             raise NotImplementedError(f"Type {typed_val.type} unsupported.")
 
-    def replace_math_exprs(self, cnt):
+    def replace_math_exprs(self, symbol_table, cnt=0):
         return self, {}

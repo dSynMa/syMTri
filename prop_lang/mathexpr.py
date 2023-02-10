@@ -49,5 +49,5 @@ class MathExpr(Formula):
     def to_smt(self, symbol_table: Any):
         return self.formula.to_smt(symbol_table)
 
-    def replace_math_exprs(self, cnt):
+    def replace_math_exprs(self, symbol_table, cnt=0):
         return Variable("math_" + str(cnt)), {Variable("math_" + str(cnt)): self}

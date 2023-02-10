@@ -28,13 +28,21 @@ GRAMMAR = '''
         | level_1 '|' level_2
         | level_1 '||' level_2
         | level_1
-        | atomic
         ;
 
     level_1 
         =
-        | atomic '&&' level_1
-        | atomic '&' level_1
+        | level_0 '&&' level_1
+        | level_0 '&' level_1
+        | level_0
+        ;
+
+    level_0 
+        =
+        | atomic 'U' level_0
+        | atomic 'W' level_0
+        | atomic 'R' level_0
+        | atomic 'M' level_0
         | atomic
         ;
 
@@ -45,10 +53,6 @@ GRAMMAR = '''
         | 'F' atomic
         | 'G' atomic
         | '(' @:expression ')'
-        | atomic 'U' atomic
-        | atomic 'W' atomic
-        | atomic 'R' atomic
-        | atomic 'M' atomic
         | term
         ;
 

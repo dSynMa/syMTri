@@ -1,10 +1,10 @@
 import argparse
 
 from programs.analysis.model_checker import ModelChecker
-from parsing.string_to_program import string_to_program
+from parsing.string_to_program_with_action_guards import string_to_program
 from programs.synthesis.synthesis import synthesize
 # inputs: date_file ltl_file
-from programs.util import create_nuxmv_model, check_determinism
+from programs.util import create_nuxmv_model, is_deterministic
 import time
 
 def main():
@@ -30,16 +30,16 @@ def main():
 
     date_file = open(args.program, "r").read()
 
-    date = string_to_program(date_file)
-    check_determinism(date)
+    program = string_to_program(date_file)
+    print(program.to_dot())
 
     if args.translate is not None:
         if args.translate.lower() == "dot":
-            print(date.to_dot())
+            print(program.to_dot())
         elif args.translate.lower() == "nuxmv":
-            print(create_nuxmv_model(date.to_nuXmv_with_turns()))
+            print(create_nuxmv_model(program.to_nuXmv_with_turns()))
         elif args.translate.lower() == "vmt":
-            model = create_nuxmv_model(date.to_nuXmv_with_turns())
+            model = create_nuxmv_model(program.to_nuXmv_with_turns())
             ltl_spec = None
             if args.ltl != None:
                 ltl_spec = args.ltl
@@ -52,7 +52,7 @@ def main():
             raise Exception("No property specified.")
 
         start = time.time()
-        (realiz, mm) = synthesize(date, args.ltl, args.tlsf, args.docker)
+        (realiz, mm) = synthesize(program, args.ltl, args.tlsf, args.docker)
         end = time.time()
 
         if realiz:

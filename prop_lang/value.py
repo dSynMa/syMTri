@@ -61,5 +61,5 @@ class Value(Atom):
         else:
             return Int(int(self.name)), TRUE()
 
-    def replace_math_exprs(self, cnt):
+    def replace_math_exprs(self, symbol_table, cnt=0):
         return self, {}

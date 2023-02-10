@@ -24,7 +24,10 @@ class BiOp(Formula):
         self.right = right
 
     def __str__(self):
-        return "(" + (" " + self.op + " ").join([str(c) for c in self.sub_formulas_up_to_associativity()]) + ")"
+        if len(self.sub_formulas_up_to_associativity()) == 1:
+            return "(" + str(self.left) + " " + self.op + " " + str(self.right) + ")"
+        else:
+            return "(" + (" " + self.op + " ").join([str(c) for c in self.sub_formulas_up_to_associativity()]) + ")"
 
     def sub_formulas_up_to_associativity(self):
         if self.op == "&&" or self.op == "&" or self.op == "||" or self.op == "|":
@@ -38,7 +41,7 @@ class BiOp(Formula):
             else:
                 sub_formulas += self.right.sub_formulas_up_to_associativity()
         else:
-            sub_formulas = [self.left, self.right]
+            sub_formulas = [self]
         return sub_formulas
 
     def __eq__(self, other):
@@ -98,8 +101,13 @@ class BiOp(Formula):
                 return UniOp("!", right).simplify()
             elif isinstance(right, Value) and right.is_true():
                 return left
+            elif right == left:
+                return Value("True")
             elif isinstance(right, Value) and right.is_false():
                 return UniOp("!", left).simplify()
+        elif self.op in ["=="]:
+            if right == left:
+                return Value("True")
         return self
 
     def ops_used(self):
@@ -163,7 +171,10 @@ class BiOp(Formula):
         else:
             return op(left_expr, right_expr), And(left_invar, right_invar)
 
-    def replace_math_exprs(self, cnt):
-        new_left, dic_left = self.left.replace_math_exprs(cnt)
-        new_right, dic_right = self.right.replace_math_exprs(cnt + len(dic_left))
+    def replace_math_exprs(self, symbol_table, cnt=0):
+        new_left, dic_left = self.left.replace_math_exprs(symbol_table, cnt)
+        new_right, dic_right = self.right.replace_math_exprs(symbol_table, cnt + len(dic_left))
+        if len(dic_left) == 0 and len(dic_right) == 0:
+            if self.op == "=" or self.op == "==" or self.op == "!=" or self.op == "<=" or self.op == ">=" or self.op == "<" or self.op == ">":
+                return Variable("math_" + str(cnt)), {Variable("math_" + str(cnt)): self}
         return BiOp(new_left, self.op, new_right), dic_left | dic_right
