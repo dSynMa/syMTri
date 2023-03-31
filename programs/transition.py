@@ -1,6 +1,8 @@
+from sympy import to_dnf
+
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from prop_lang.util import true, conjunct
+from prop_lang.util import true, conjunct, dnf, conjunct_formula_set
 from prop_lang.variable import Variable
 
 
@@ -37,3 +39,6 @@ class Transition:
 
     def add_condition(self, new_condition):
         return Transition(self.src, conjunct(self.condition, new_condition), self.action, self.output, self.tgt)
+
+    def dnf_condition(self, symbol_table):
+        return Transition(self.src, dnf(self.condition, symbol_table), self.action, self.output, self.tgt)

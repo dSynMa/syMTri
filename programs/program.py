@@ -37,23 +37,8 @@ class Program:
         if len(self.con_transitions) == 0:
             self.con_transitions = [Transition(s, true(), [], [], s) for s in self.states]
 
-        unsat_env_trans = []
-        for t in self.env_transitions:
-            if not sat(t.condition, self.symbol_table, SMTChecker()):
-                unsat_env_trans.append(t)
-
-        unsat_con_trans = []
-        for t in self.con_transitions:
-            if not sat(t.condition, self.symbol_table, SMTChecker()):
-                unsat_con_trans.append(t)
-
-        self.env_transitions = [t for t in self.env_transitions if t not in unsat_env_trans]
-        if len(unsat_env_trans) > 0:
-            print("Removed environment transitions with unsat transitions: " + ",\n".join(map(str, unsat_env_trans)))
-
-        if len(unsat_env_trans) > 0:
-            print("Removed controller transitions with unsat transitions: " + ",\n".join(map(str, unsat_con_trans)))
-        self.con_transitions = [t for t in self.con_transitions if t not in unsat_con_trans]
+        self.env_transitions = [Transition(t.src, t.condition, self.complete_action_set(t.action), t.output, t.tgt) for t in self.env_transitions]
+        self.con_transitions = [Transition(t.src, t.condition, self.complete_action_set(t.action), t.output, t.tgt) for t in self.con_transitions]
 
         self.state_to_env = {s:[t for t in self.env_transitions if t.src == s] for s in self.states}
         self.state_to_con = {s:[t for t in self.con_transitions if t.src == s] for s in self.states}
@@ -66,7 +51,7 @@ class Program:
             condition = neg(disjunct_formula_set([t.condition
                                                                   for t in env_transitions
                                                                   if t.src == otherwise_trans.src
-                                                                  and t != otherwise_trans]))
+                                                                    and t.condition != otherwise_trans.condition]))
             if sat(condition, self.symbol_table, SMTChecker()):
                 concrete_trans = Transition(otherwise_trans.src,
                                                 condition,
@@ -96,6 +81,25 @@ class Program:
 
         self.env_transitions = [self.add_type_constraints_to_guards(t) for t in self.env_transitions]
         self.con_transitions = [self.add_type_constraints_to_guards(t) for t in self.con_transitions]
+
+
+        unsat_env_trans = []
+        for t in self.env_transitions:
+            if not sat(t.condition, self.symbol_table, SMTChecker()):
+                unsat_env_trans.append(t)
+
+        unsat_con_trans = []
+        for t in self.con_transitions:
+            if not sat(t.condition, self.symbol_table, SMTChecker()):
+                unsat_con_trans.append(t)
+
+        self.env_transitions = [t for t in self.env_transitions if t not in unsat_env_trans]
+        if len(unsat_env_trans) > 0:
+            print("Removed environment transitions with unsat transitions: " + ",\n".join(map(str, unsat_env_trans)))
+
+        if len(unsat_env_trans) > 0:
+            print("Removed controller transitions with unsat transitions: " + ",\n".join(map(str, unsat_con_trans)))
+        self.con_transitions = [t for t in self.con_transitions if t not in unsat_con_trans]
 
         if debug:
             # type checking
@@ -131,6 +135,11 @@ class Program:
                                     "local/internal variables: " + str(transition) + ".")
 
         self.deterministic = is_deterministic(self)
+
+    def dnf_transition_conditions(self):
+        self.env_transitions = [t.dnf_condition(self.symbol_table) for t in self.env_transitions]
+        self.con_transitions = [t.dnf_condition(self.symbol_table) for t in self.con_transitions]
+
 
     def add_type_constraints_to_guards(self, transition: Transition):
         return transition.add_condition(type_constraints_acts(transition.action, self.symbol_table).to_nuxmv())
@@ -302,6 +311,9 @@ class Program:
     def complete_action_set(self, actions: [BiOp]):
         non_updated_vars = [tv.name for tv in self.valuation if tv.name not in [str(act.left) for act in actions]]
         return actions + [BiOp(Variable(var), ":=", Variable(var)) for var in non_updated_vars]
+
+    def complete_transition_action_set(self, t: Transition):
+        return Transition(t.src, t.condition, self.complete_action_set(t.action), t.output, t.tgt)
 
     def __str__(self):
         return str(self.to_dot())

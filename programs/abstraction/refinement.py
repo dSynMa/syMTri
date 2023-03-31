@@ -2,7 +2,8 @@ import re
 
 from click._compat import raw_input
 from pysmt.fnode import FNode
-from pysmt.shortcuts import And
+from pysmt.shortcuts import And, Not, serialize
+# from pysmt.rewritings import cnf
 
 from parsing.string_to_prop_logic import string_to_prop, string_to_math_expression
 from programs.analysis.ranker import Ranker
@@ -11,18 +12,20 @@ from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
 from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_on_ce_state_with_index, \
-    project_ce_state_onto_ev, get_differently_value_vars
+    project_ce_state_onto_ev, get_differently_value_vars, ground_formula_on_ce_state, transition_associated_with_state
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean, dnf, infinite_type, type_constraints, propagate_negations
+from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean, dnf, infinite_type, type_constraints, \
+    propagate_negations, simplify_formula_with_math, cnf, disjunct_formula_set, is_tautology, implies
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 smt_checker = SMTChecker()
 
 def safety_refinement(ce: [dict], agreed_on_transitions: [(Transition, dict)],
-                      disagreed_on_state: (Formula, dict), symbol_table, program, use_dnf=False) -> [FNode]:
+                      disagreed_on_state: (Formula, dict), abstract_transitions : [[[Transition]]],
+                      symbol_table, program, use_dnf=False) -> [FNode]:
     # we collect interpolants in this set
     Cs = set()
 
@@ -33,9 +36,59 @@ def safety_refinement(ce: [dict], agreed_on_transitions: [(Transition, dict)],
     if concurring_transitions == []:
         concurring_transitions = [(Transition(program.initial_state, true(), [], [], program.initial_state), ce[0])]
 
+    # abstract_path = [abstract_transitions[0][0]]
+    # # identify one path in abstraction
+    # for abs_ts in abstract_transitions:
+    #     abstract_path += [t for t in abs_ts if t.src == abstract_path[-1].tgt]
+    #
+    # abstract_transitions = [[t] for t in abstract_path]
+
     for s in disagreed_on_state[0]:
+        # ground and DNF disagreed_on_state formula
+        grounded_condition = ground_formula_on_ce_state(s,
+                                                        project_ce_state_onto_ev(disagreed_on_state[1],
+                                                                                            program.env_events
+                                                                                            + program.con_events))
+        if use_dnf:
+            # some simplification before DNFing
+            if isinstance(grounded_condition, BiOp) and grounded_condition.op[0] == "|":
+                Bs = grounded_condition.sub_formulas_up_to_associativity()
+                Bs = [b for b in Bs if not (isinstance(b, Value) and b.is_false())
+                                        and not (isinstance(b, UniOp) and b.op == "!" and isinstance(b.right, Value) and b.right.is_true())]
+            else:
+                Bs = [grounded_condition]
+
+            if use_dnf:
+                new_Bs = []
+                for b in Bs:
+                    b_simplified = simplify_formula_with_math(b, symbol_table)
+                    after_dnf = dnf((b_simplified), symbol_table)
+                    if isinstance(after_dnf, BiOp) and after_dnf.op[0] == "|":
+                        new_Bs += after_dnf.sub_formulas_up_to_associativity()
+                    else:
+                        new_Bs += [after_dnf]
+                Bs = new_Bs
+        else:
+            # some simplification before DNFing
+            if isinstance(grounded_condition, BiOp) and grounded_condition.op[0] == "&":
+                Bs = grounded_condition.sub_formulas_up_to_associativity()
+                Bs = [b for b in Bs if not (isinstance(b, Value) and b.is_true())
+                                        and not (isinstance(b, UniOp) and b.op == "!" and isinstance(b.right, Value) and b.right.is_false())]
+            else:
+                Bs = [grounded_condition]
+
+            new_Bs = []
+            for b in Bs:
+                b_simplified = simplify_formula_with_math(b, symbol_table)
+                after_dnf = cnf((b_simplified), symbol_table)
+                if isinstance(after_dnf, BiOp) and after_dnf.op[0] == "&":
+                    new_Bs += after_dnf.sub_formulas_up_to_associativity()
+                else:
+                    new_Bs += [after_dnf]
+            Bs = new_Bs
+
         for j in reversed(range(0, len(concurring_transitions) + 1)):
-            Css = interpolation(program, concurring_transitions, (neg(s), disagreed_on_state[1]), j, symbol_table, use_dnf=use_dnf)
+            Css = interpolation(program, concurring_transitions, abstract_transitions, Bs, disagreed_on_state[1], j, symbol_table, use_dnf=use_dnf)
             if Css is None:
                 print("I think that interpolation is being checked against formulas that are not contradictory.")
                 break
@@ -57,11 +110,14 @@ def safety_refinement(ce: [dict], agreed_on_transitions: [(Transition, dict)],
                 else:
                     Cs |= {C}
 
-    return Cs
+            # if not use_dnf and len(Cs) > 0:
+            #     break
+
+    return {C.to_nuxmv() for C in Cs}
 
 
-def interpolation(program: Program, concurring_transitions: [(Transition, dict)],
-                  disagreed_on_state: (Formula, dict), cut_point: int, symbol_table, use_dnf=False):
+def interpolation(program: Program, concurring_transitions: [(Transition, dict)], abstract_transitions : [[[Transition]]],
+                  Bs : [Formula], disagreed_on_state: dict, cut_point: int, symbol_table, use_dnf=False, use_abstract_knowledge=False):
     assert cut_point <= len(concurring_transitions)
     assert len(concurring_transitions) > 0
 
@@ -69,7 +125,10 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
     smt_checker = SMTChecker()
 
     # this will be used to add intermediate variables for each monitor state
-    ith_vars = lambda i: [BiOp(Variable(v), ":=", Variable(v + "_" + str(i))) for v in symbol_table.keys()]
+    ith_vars = lambda i: [BiOp(Variable(v), ":=", Variable(v + "_" + str(i))) for v in symbol_table.keys() if not v.endswith("_prev")] + \
+                         [BiOp(Variable(v), ":=", Variable(v.split("_prev")[0] + "_" + str(i-1))) for v in symbol_table.keys() if
+                        v.endswith("_prev")]
+
 
     # symbol table is updated with intermediate variables (plus last one, len(prefix), for state after last transition
     new_symbol_table = {}
@@ -77,11 +136,15 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
         new_symbol_table.update({key + "_" + str(i): value for key, value in symbol_table.items()})
 
     # this will be used to generalise the interpolants references to intermediate variables to the original variable name
-    reset_vars_i = lambda i, suffix : [BiOp(Variable(v + "_" + str(i)), ":=", Variable(v) + "_" + suffix) for v in symbol_table.keys()]
+    reset_vars_i = lambda i, suffix : [BiOp(Variable(v + "_" + str(i)), ":=", Variable(v) + "_" + suffix) for v in symbol_table.keys() if not v.endswith("_prev")]
     reset_vars = [BiOp(Variable(v + "_" + str(i)), ":=", Variable(v)) for v in symbol_table.keys() for i in
-                  range(0, len(concurring_transitions) + 1)]
+                  range(0, len(concurring_transitions) + 1) if not v.endswith("_prev")]
 
-    init_prop = ce_state_to_formula(concurring_transitions[0][1], symbol_table).replace(ith_vars(0))
+    # init_prop = ce_state_to_formula(concurring_transitions[0][1], symbol_table).replace(ith_vars(0))
+    init_prop = conjunct_formula_set([BiOp(Variable(tv.name), " = ", Value(tv.value)) for tv in program.valuation])
+    init_prop = init_prop.replace(ith_vars(0))
+
+    abstract_states = []
 
     path_formula_set_A = []
     path_formula_set_A += [init_prop]
@@ -90,6 +153,23 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
                                     "=",
                                     act.right.replace(ith_vars(i))) for act in
                                program.complete_action_set(concurring_transitions[i][0].action)]
+
+        if use_abstract_knowledge:
+            if i == 0:
+                abstract_states += [disjunct_formula_set({conjunct_formula_set(
+                    [p for p in t.tgt.predicates if not any(v for v in p.variablesin() if v.name.endswith("_prev"))])
+                                                         .replace(ith_vars(i + 1)) for t in abstract_transitions[i]})]
+            else:
+                src_preds = {frozenset(t.src.predicates) for t in abstract_transitions[i]}
+                src_preds_to_tgt_preds = {src: frozenset([frozenset(t.tgt.predicates)
+                                                            for t in abstract_transitions[i]
+                                                                if set(t.src.predicates) == src])
+                                                                    for src in src_preds}
+
+                abstract_states += [implies(conjunct_formula_set([p for p in src if not any(v for v in p.variablesin() if v.name.endswith("_prev"))]).replace(ith_vars(i)),
+                                                disjunct_formula_set([conjunct_formula_set([p for p in tgt if not any(v for v in p.variablesin() if v.name.endswith("_prev"))]).replace(ith_vars(i+1))
+                                                                      for tgt in src_preds_to_tgt_preds[src]]))
+                                        for src in src_preds]
 
     path_formula_A = conjunct_formula_set(path_formula_set_A)
 
@@ -101,61 +181,103 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
                                     "=",
                                     act.right.replace(ith_vars(i))) for act in
                                program.complete_action_set(concurring_transitions[i][0].action)]
-        i += 1
-
-    disagreed_on_value_state = disagreed_on_state[1]
-    projected_condition = disagreed_on_state[0].replace(ith_vars(len(concurring_transitions)))
-    if any(v for v in projected_condition.variablesin() if "_prev" in str(v)):
-        print()
-        projected_condition = projected_condition.replace([BiOp(Variable(str(v)), ":=", Variable(str(v).split("_prev")[0] + "_" + str(i-1))) for v in projected_condition.variablesin() if "_prev" in str(v)])
-    grounded_condition = ground_formula_on_ce_state_with_index(projected_condition,
-                                                               project_ce_state_onto_ev(disagreed_on_value_state,
-                                                                                        program.env_events
-                                                                                        + program.con_events),
-                                                               len(concurring_transitions))
-
-    # some simplification before DNFing
-    if isinstance(grounded_condition, BiOp) and grounded_condition.op[0] == "&":
-        Bs = list(map(neg, grounded_condition.sub_formulas_up_to_associativity()))
-    elif isinstance(grounded_condition, UniOp) and grounded_condition.op == "!":
-        if isinstance(grounded_condition.right, BiOp) and grounded_condition.right.op[0] == "|":
-            Bs = grounded_condition.right.sub_formulas_up_to_associativity()
-        else:
-            Bs = [grounded_condition.right]
-    else:
-        Bs = [neg(grounded_condition)]
-
-    if use_dnf:
-        new_Bs = []
-        for b in Bs:
-            after_dnf = dnf(propagate_negations(b), symbol_table)
-            if isinstance(after_dnf, BiOp) and after_dnf.op[0] == "|":
-                new_Bs += after_dnf.sub_formulas_up_to_associativity()
+        if use_abstract_knowledge:
+            if i == 0:
+                abstract_states += [disjunct_formula_set({conjunct_formula_set(
+                    [p for p in t.tgt.predicates if not any(v for v in p.variablesin() if v.name.endswith("_prev"))])
+                                                         .replace(ith_vars(i + 1)) for t in abstract_transitions[i]})]
             else:
-                new_Bs += [after_dnf]
-        Bs = new_Bs
+                src_preds = {frozenset(t.src.predicates) for t in abstract_transitions[i]}
+                src_preds_to_tgt_preds = {src: frozenset([frozenset(t.tgt.predicates)
+                                                            for t in abstract_transitions[i]
+                                                                if set(t.src.predicates) == src])
+                                                                    for src in src_preds}
+
+                abstract_states += [implies(conjunct_formula_set([p for p in src if not any(v for v in p.variablesin() if v.name.endswith("_prev"))]).replace(ith_vars(i)),
+                                                disjunct_formula_set([conjunct_formula_set([p for p in tgt if not any(v for v in p.variablesin() if v.name.endswith("_prev"))]).replace(ith_vars(i+1))
+                                                                      for tgt in src_preds_to_tgt_preds[src]]))
+                                        for src in src_preds]
+
+        i += 1
 
     Cs = set()
 
-    for BB in Bs:
-        path_formula_B = conjunct_formula_set(path_formula_set_B + [BB])
+    for B in Bs:
+        projected_condition = B.replace(ith_vars(len(concurring_transitions)))
+        if any(v for v in projected_condition.variablesin() if "_prev" in str(v)):
+            print()
+            projected_condition = projected_condition.replace(
+                [BiOp(Variable(str(v)), ":=", Variable(str(v).split("_prev")[0] + "_" + str(i - 1))) for v in
+                 projected_condition.variablesin() if "_prev" in str(v)])
+
+        B_formulas = path_formula_set_B + [projected_condition]
+        if use_abstract_knowledge:
+            B_formulas += abstract_states
+
+        path_formula_B = conjunct_formula_set(B_formulas)
 
         A = And(*conjunct(init_prop, path_formula_A).to_smt(new_symbol_table))
         B = And(*path_formula_B.to_smt(new_symbol_table))
+        # B_cnf = cnf(path_formula_B, new_symbol_table)
+        # if(B_cnf.op[0] == "&"):
+        #     Bs = B_cnf.sub_formulas_up_to_associativity()
+        # else:
+        #     Bs = [B_cnf]
+        #
+        # new_Bs = set()
+        # for b in Bs:
+        #     b_smt = b.to_smt(new_symbol_table)
+        #     new_Bs |= {b_smt[0], b_smt[1]}
+        # A_min, B_min = smt_checker.unsatcore(A, B)
+        # print(serialize(A_min))
+        # print(serialize(B_min))
 
+        # for B in new_Bs:
         C = smt_checker.binary_interpolant(A, B, logic)
 
         if C is not None:
-            Cf = fnode_to_formula(C)
-            previous_vars_related_to_current_vars = [v for v in Cf.variablesin() if Variable(str(v).split("_")[0] + "_" + str(int(str(v).split("_")[1]) - 1)) in Cf.variablesin()]
-            if len(previous_vars_related_to_current_vars) > 0:
-                # ground previous variables on their values; TODO instead of just looking one step back, have to go back to the first action, or just use the variables value in the previous step
-                for v in previous_vars_related_to_current_vars:
-                    var_name = (str(v).split("_")[0])
-                    prev_var = Variable(var_name + "_" + str(i - 1))
-                    Cf = Cf.replace([BiOp(prev_var, ":=", act.right) for act in concurring_transitions[i-1][0].action if str(act.left) == var_name])
-            Cf = Cf.replace(reset_vars)
-            Cs |= {Cf}
+            Cfs = []
+            C_formula = fnode_to_formula(C)
+            # TODO do cnf here instead?
+            if isinstance(C_formula, BiOp) and C_formula.op[0] == "&":
+                Cfs = C_formula.sub_formulas_up_to_associativity()
+            else:
+                Cfs = [C_formula]
+            for Cf in Cfs:
+                Cf_normalized = Cf.replace(reset_vars)
+                Cf_smt = Cf_normalized.to_smt(symbol_table)
+                # if C is not a tautology and not a contradiction
+                if smt_checker.check((And(Not(Cf_smt[0]), Cf_smt[1]))) and\
+                    smt_checker.check((And((Cf_smt[0]), Cf_smt[1]))):
+                    Cf = Cf_normalized
+                    Cs |= {Cf}
+                else: # if C is a tautology or a contradiction, resolve previous vars until it s not either
+                    # previous_vars_related_to_current_vars = \
+                    #     [v for v in Cf.variablesin()
+                    #      if Variable(str(v).split("_")[0] + "_" + str(int(str(v).split("_")[1]) - 1)) in Cf.variablesin()]
+                    # if len(previous_vars_related_to_current_vars) > 0:
+                    # ground previous variables on their values;
+                    # TODO instead of just looking one step back, have to go back to the first action,
+                    #  or just use the variables value in the previous step
+                    for j in reversed(range(1, i)):
+                        Cf = Cf.replace([BiOp(Variable(act.left.name + "_" + str(j)), ":=", act.right.replace(ith_vars(j - 1))) for act in concurring_transitions[j][0].action])
+                        Cf = Cf.replace(
+                            [BiOp(Variable(v + "_" + str(j)), ":=", Variable(v + "_" + str(j - 1))) for v in symbol_table.keys()])
+                        # if not is_tautology(Cf.replace(reset_vars), symbol_table, smt_checker):
+                            #     break
+                        if not is_tautology(Cf.replace(reset_vars), symbol_table, smt_checker)\
+                                and not is_tautology(neg(Cf.replace(reset_vars)), symbol_table, smt_checker):
+                            break
+                    if not is_tautology(Cf.replace(reset_vars), symbol_table, smt_checker)\
+                                and not is_tautology(neg(Cf.replace(reset_vars)), symbol_table, smt_checker):
+                        Cf = Cf.replace(reset_vars)
+                        Cs |= {Cf}
+                    else:
+                        Cf = Cf.replace([BiOp(Variable(tv.name + "_0"), " = ", Value(tv.value)) for tv in program.valuation])
+                        if not is_tautology(Cf.replace(reset_vars), symbol_table, smt_checker) \
+                                and not is_tautology(neg(Cf.replace(reset_vars)), symbol_table, smt_checker):
+                            Cf = Cf.replace(reset_vars)
+                            Cs |= {Cf}
 
     if len(Cs) == 0:
         return None
@@ -163,10 +285,10 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
         return Cs
 
 
-def liveness_refinement(symbol_table, program, entry_condition, unfolded_loop: [Transition], exit_predicate_grounded):
+def liveness_refinement(symbol_table, program, entry_condition, unfolded_loop: [Transition], exit_predicate_grounded, add_natural_conditions=True):
     try:
         c_code = loop_to_c(symbol_table, program, entry_condition, unfolded_loop,
-                           exit_predicate_grounded)
+                           exit_predicate_grounded, add_natural_conditions)
         print(c_code)
         ranker = Ranker()
         success, ranking_function, invars = ranker.check(c_code)
@@ -204,7 +326,7 @@ def liveness_refinement(symbol_table, program, entry_condition, unfolded_loop: [
 
 
 def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_before_exit: [Transition],
-              exit_cond: Formula):
+              exit_cond: Formula, add_natural_conditions=True):
     # params
     params = list(set(symbol_table[str(v)].type + " " + str(v)
                       for v in {v.name for v in program.valuation} | set(entry_condition.variablesin())
@@ -225,8 +347,10 @@ def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_bef
     natural_conditions = [v.split(" ")[1] + " >= 0 " for v in params if
                           not v.endswith("_prev") and symbol_table[v.split(" ")[1]].type in ["natural",
                                                                                              "nat"]]
-    init = ["if(!(" + " && ".join(natural_conditions) + ")) return;" if len(natural_conditions) > 0 else ""]
-
+    if add_natural_conditions:
+        init = ["if(!(" + " && ".join(natural_conditions) + ")) return;" if len(natural_conditions) > 0 else ""]
+    else:
+        init = []
     choices = []
 
     for t in loop_before_exit:
@@ -235,7 +359,7 @@ def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_bef
             " | ", " || ")
         cond_simpl = str(t.condition.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ", " || ")
         acts = "\n\t\t".join([str(act.left) + " = " + str(act.right) + ";" for act in t.action if
-                              not is_boolean(act.left, program.valuation)])
+                              not is_boolean(act.left, program.valuation) if act.left != act.right])
 
         if isinstance(string_to_prop(cond_simpl).simplify(), Value):
             if string_to_prop(cond_simpl).simplify().is_false():
@@ -243,11 +367,12 @@ def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_bef
             elif string_to_prop(cond_simpl).simplify().is_true():
                 choices += ["\t" + acts]
         else:
-            choices += ["\tif(" + cond_simpl + ") {" + acts + "}\n\t\t else break;"]
+            # choices += ["\tif(" + cond_simpl + ") {" + acts + "}\n\t\t else break;"]
+            choices += ["\t" + acts + ""]
         if safety != "true":
             if "..." in safety:
                 raise Exception("Error: The loop contains a transition with a condition that is not a formula.")
-            choices += ["\tif(!(" + safety + ")) break;"]
+            # choices += ["\tif(!(" + safety + ")) break;"]
 
     exit_cond_simplified = str(exit_cond.simplify()) \
         .replace(" = ", " == ") \
@@ -332,7 +457,9 @@ def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, disagreed_o
             any_var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in any_var_differences]
             any_var_differences = [[v for v in vs if v in symbol_table.keys()] for vs in any_var_differences]
             any_var_differences = [[] != [v for v in vs if
-                                      re.match("(int(eger)?|nat(ural)?|real|rational)", symbol_table[v].type)] for vs in
+                                      not re.match("(bool(boolean)?)", symbol_table[v].type)] for vs in
+                                      # the below only identifies loops when there are changes in infinite-domain variables in the loop
+                                      # re.match("(int(eger)?|nat(ural)?|real|rational)", symbol_table[v].type)] for vs in
                                any_var_differences]
             if True in any_var_differences:
                 var_differences += [True]
@@ -340,10 +467,10 @@ def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, disagreed_o
                 var_differences += [False]
 
         if True in var_differences:
-            index_of_first_loop_entry = var_differences.index(True)
-            # index_of_last_loop_entry = len(var_differences) - 1 - var_differences[::-1].index(True)
-            first_index = new_i_to_old_i[previous_visits[index_of_first_loop_entry]]
-
+            # index_of_first_loop_entry = var_differences.index(True)
+            # first_index = new_i_to_old_i[previous_visits[index_of_first_loop_entry]]
+            index_of_last_loop_entry = len(var_differences) - 1 - var_differences[::-1].index(True)
+            first_index = new_i_to_old_i[previous_visits[index_of_last_loop_entry]]
             return True, first_index
         else:
             return False, None
@@ -398,6 +525,7 @@ def use_liveness_refinement_trans(ce: [dict], symbol_table):
 def use_liveness_refinement(program,
                             agreed_on_transitions,
                             disagreed_on_state,
+                            program_taken_transition,
                             last_counterstrategy_state,
                             symbol_table, pred_label_to_formula):
     yes = False
@@ -406,13 +534,26 @@ def use_liveness_refinement(program,
 
     # TODO we can do more analysis here
     # check first if there are actions that change the value of a variable
-    if not any(a for t, _ in mon_transitions for a in t.action if not isinstance(a.right, Value) and not symbol_table[str(a.left)] == "bool"):
-        return False, None, None, None, None
+    if not any(a for t, _ in mon_transitions for a in t.action if not isinstance(a.right, Value) and
+                                                                  not symbol_table[str(a.left)] == "bool" and
+                                                                  not a.left == a.right):
+        return False, None, None, None, None, None
 
+    # check if the counterstrategy tried to remain in a loop in its structure
+    # checking if the last compatible state was already seen, and there was a change in an infinite valued variable in a non-boolean variable
     yes_state, first_index_state = use_liveness_refinement_state(ce, last_counterstrategy_state, disagreed_on_state[1], symbol_table)
     if yes_state:
         yes = True
         first_index = first_index_state
+        loop_in_cs = True
+
+    # check if the program is actually looping
+    if not yes_state:
+        prev_appearance = [t == program_taken_transition[0] for t, _ in mon_transitions]
+        if True in prev_appearance:
+            yes = True
+            first_index = len(prev_appearance) - 1 - prev_appearance[::-1].index(True)
+            loop_in_cs = False
 
     if yes:
         ce_prog_loop_tran_concretised = mon_transitions[first_index:]
@@ -426,8 +567,8 @@ def use_liveness_refinement(program,
         # TODO simplify loop by finding repeated sequences
 
 
-        if [] == [t for t, _ in ce_prog_loop_tran_concretised if [] != [a for a in t.action if infinite_type(a.left, program.valuation)]]:
-            return False, None, None, None, None
+        if [] == [t for t, _ in ce_prog_loop_tran_concretised if [] != [a for a in t.action if a.left != a.right and infinite_type(a.left, program.valuation)]]:
+            return False, None, None, None, None, None, None
 
         entry_valuation = conjunct_formula_set([BiOp(Variable(key), "=", Value(value))
                                                     for tv in program.valuation
@@ -438,6 +579,6 @@ def use_liveness_refinement(program,
         false_preds = [neg(p) for p in pred_label_to_formula.values() if p not in true_preds]
         entry_predicate = conjunct_formula_set(true_preds + false_preds)
 
-        return True, ce_prog_loop_tran_concretised, entry_valuation, entry_predicate, pred_mismatch
+        return True, ce_prog_loop_tran_concretised, entry_valuation, entry_predicate, pred_mismatch, loop_in_cs
     else:
-        return False, None, None, None, None
+        return False, None, None, None, None, None

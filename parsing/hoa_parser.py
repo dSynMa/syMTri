@@ -2,11 +2,12 @@ import re
 
 from parsing.string_to_prop_logic import string_to_prop
 from prop_lang.biop import BiOp
+from prop_lang.util import dnf
 from prop_lang.variable import Variable
 
 
-def hoa_to_transitions(hoa):
-    preamble_body = hoa.split("--BODY--")
+def hoa_to_transitions(hoa : str, controller):
+    preamble_body = hoa.strip().split("--BODY--")
 
     hoa_preamble = preamble_body[0]
     lines = hoa_preamble.splitlines()
@@ -41,9 +42,13 @@ def hoa_to_transitions(hoa):
                     cond = cond.replace(to_replace)
                     # cond = cond.replace(lambda var : Variable(re.split("_loop", var.name)[0]))
                     assert isinstance(cond, BiOp)
-                    key = (src, cond.left, tgt)
+                    env_cond = cond.left
+                    # if controller:
+                    #     env_cond = dnf(env_cond)
+                    con_cond = cond.right
+                    key = (src, env_cond, tgt)
                     if key not in transitions.keys():
-                        transitions[key] = [cond.right]
+                        transitions[key] = [con_cond]
                     else:
-                        transitions[key] += [cond.right]
+                        transitions[key] += [con_cond]
     return hoa_dict["Start"], transitions

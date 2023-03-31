@@ -1,0 +1,28 @@
+INFO {
+  TITLE:       "Arbiter Case Study"
+  DESCRIPTION: ""
+  SEMANTICS:   Mealy
+  TARGET:      Mealy
+}
+
+
+MAIN {
+
+  INPUTS {
+    inc1;
+    finished;
+    overflow;
+  }
+
+  OUTPUTS {
+    empty12;
+  }
+
+  ASSUMPTIONS {
+  }
+
+  GUARANTEES {
+      G(!overflow);
+  }
+
+}

@@ -139,33 +139,53 @@ class BiOp(Formula):
         else:
             return BiOp(self.left.to_nuxmv(), self.op, self.right.to_nuxmv())
 
+    def to_strix(self):
+        if self.op == "==":
+            return BiOp(self.left.to_strix(), '==', self.right.to_strix())
+        elif self.op == "=>":
+            return BiOp(self.left.to_strix(), '->', self.right.to_strix())
+        elif self.op == "<=>":
+            return BiOp(self.left.to_strix(), '<->', self.right.to_strix())
+        elif self.op == "&":
+            return BiOp(self.left.to_strix(), '&&', self.right.to_strix())
+        elif self.op == "|":
+            return BiOp(self.left.to_strix(), '||', self.right.to_strix())
+        # elif self.op == "W":
+        #     return BiOp(BiOp(self.left, "U", self.right), "|", UniOp("G", self.left)).to_nuxmv()
+        # elif self.op == "R":
+        #     return BiOp(self.right, "W", BiOp(self.right, "&", self.left)).to_nuxmv()
+        # elif self.op == "M":
+        #     return BiOp(self.right, "U", BiOp(self.right, "&", self.left)).to_nuxmv()
+        else:
+            return BiOp(self.left.to_strix(), self.op, self.right.to_strix())
+
+    ops = {
+        "&": And,
+        "&&": And,
+        "|": Or,
+        "||": Or,
+        "->": Implies,
+        "=>": Implies,
+        "==": EqualsOrIff,
+        "=": EqualsOrIff,
+        "!=": NotEquals,
+        "<->": EqualsOrIff,
+        ">": GT,
+        ">=": GE,
+        "<": LT,
+        "<=": LE,
+        "+": Plus,
+        "-": Minus,
+        "*": Times,
+        "/": Div,
+        "%": BVSRem
+    }
     def to_smt(self, symbol_table) -> (FNode, FNode):
-        ops = {
-            "&": And,
-            "&&": And,
-            "|": Or,
-            "||": Or,
-            "->": Implies,
-            "=>": Implies,
-            "==": EqualsOrIff,
-            "=": EqualsOrIff,
-            "!=": NotEquals,
-            "<->": EqualsOrIff,
-            ">": GT,
-            ">=": GE,
-            "<": LT,
-            "<=": LE,
-            "+": Plus,
-            "-": Minus,
-            "*": Times,
-            "/": Div,
-            "%": BVSRem
-        }
         left_expr, left_invar = self.left.to_smt(symbol_table)
         right_expr, right_invar = self.right.to_smt(symbol_table)
 
         try:
-            op = ops[self.op]
+            op = self.ops[self.op]
         except KeyError:
             raise NotImplementedError(f"{self.op} unsupported")
         else:
@@ -176,5 +196,5 @@ class BiOp(Formula):
         new_right, dic_right = self.right.replace_math_exprs(symbol_table, cnt + len(dic_left))
         if len(dic_left) == 0 and len(dic_right) == 0:
             if self.op == "=" or self.op == "==" or self.op == "!=" or self.op == "<=" or self.op == ">=" or self.op == "<" or self.op == ">":
-                return Variable("math_" + str(cnt)), {Variable("math_" + str(cnt)): self}
+                return Variable("math_" + str(cnt)), {("math_" + str(cnt)): self}
         return BiOp(new_left, self.op, new_right), dic_left | dic_right

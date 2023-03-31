@@ -47,14 +47,27 @@ class Variable(Atom):
         elif hasattr(context, '__call__'):
             return context(self)
         else:
-            raise Exception("Variable.replace: context is not a list of assignments or a mapping function.")
+            try:
+                val = context
+                if (val.op == "=" or val.op == ":=") and (str(val.left.name) == self.name):
+                    return val.right
+            except:
+                raise Exception("Variable.replace: context is not a list of assignments, an assignment, or a mapping function.")
         return self
 
     def to_nuxmv(self):
         return self
 
+    def to_strix(self):
+        return self
+
     def to_smt(self, symbol_table) -> (FNode, FNode):
-        typed_val = symbol_table[self.name]
+        if self.name in symbol_table.keys():
+            typed_val = symbol_table[self.name]
+        elif self.name.split("_prev")[0] in symbol_table.keys():
+            typed_val = symbol_table[self.name.split("_prev")[0]]
+        else:
+            raise Exception("Variable.to_smt: variable " + self.name + " not in symbol table.")
 
         if typed_val.type == "int" or typed_val.type == "integer":
             return Symbol(self.name, INT), TRUE()

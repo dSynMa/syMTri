@@ -1,6 +1,6 @@
 program eventually__allow_grant {
     STATES {
-        q0 : init, q1, q2
+        q0 : init, q1
     }
 
     ENVIRONMENT EVENTS {

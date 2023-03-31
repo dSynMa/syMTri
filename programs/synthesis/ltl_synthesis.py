@@ -7,35 +7,33 @@ from programs.program import Program
 from programs.synthesis.mealy_machine import MealyMachine
 from programs.util import synthesis_problem_to_TLSF_script
 from prop_lang.formula import Formula
+from prop_lang.util import conjunct, conjunct_formula_set, implies
 from prop_lang.variable import Variable
 
 
-def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variable], out_act: [Variable],
+def ltl_synthesis(outside_guarantees : [Formula], assumptions: [Formula], guarantees: [Formula], in_act: [Variable], program_out : [Variable], program_preds : [Variable], out_act: [Variable],
                   strix_tlsf_command: str) -> Tuple[
     bool, MealyMachine]:
     # prepare for tlsf
     in_acts_lowered = [str(a) for a in in_act]
+    program_acts_lowered = [str(a) for a in program_preds + program_out]
     out_acts_lowered = [str(a) for a in out_act]
 
-    assumptions_tlsf = [str(a).replace("TRUE", "true") \
-                            .replace("True", "true") \
-                            .replace("FALSE", "false") \
-                            .replace("False", "false") \
-                            .replace(" & ", " && ") \
-                            .replace(" | ", " || ") \
-                            .replace("\"", "") for a in assumptions]
+    # new_guarantees = conjunct(conjunct_formula_set(outside_guarantees), implies(conjunct_formula_set(assumptions), conjunct_formula_set(guarantees)))
 
-    guarantees_tlsf = [str(g).replace("TRUE", "true") \
-                           .replace("True", "true") \
-                           .replace("FALSE", "false") \
-                           .replace("False", "false") \
-                           .replace(" & ", " && ") \
-                           .replace(" | ", " || ") \
-                           .replace("\"", "") for g in guarantees]
+    ass_tlsf = [str(a.to_strix())
+                               .replace("\"", "") for a in assumptions]
+    guarantees_tlsf = [str(g.to_strix())
+                               .replace("\"", "") for g in guarantees]
+    # new_guarantees_tlsf = [str(g.to_strix())
+    #                        .replace("\"", "") for g in outside_guarantees]
 
-    tlsf_script = synthesis_problem_to_TLSF_script(in_acts_lowered,
+    # new_guarantees_tlsf = [str(new_guarantees.to_strix())
+    #                        .replace("\"", "")]
+
+    tlsf_script = synthesis_problem_to_TLSF_script(in_acts_lowered + program_acts_lowered,
                                                    out_acts_lowered,
-                                                   assumptions_tlsf,
+                                                   ass_tlsf,
                                                    guarantees_tlsf)
     print(tlsf_script)
     try:
@@ -51,12 +49,12 @@ def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variab
 
             if "UNREALIZABLE" in output:
                 print("\nINFO: Strix thinks the current abstract problem is unrealisable! I will check..\n")
-                mon = parse_hoa(env_events=in_act, con_events=out_act, output=output)
+                mon = parse_hoa(env_events=in_act, program_out=program_out, program_preds=program_preds, con_events=out_act, output=output)
                 return False, mon
             elif "REALIZABLE" in output:
                 print("\nINFO: Strix thinks the current abstract problem is realisable! I will check..\n")
                 try:
-                    mon = parse_hoa(env_events=in_act, con_events=out_act, output=output)
+                    mon = parse_hoa(env_events=in_act, program_out=program_out, program_preds=program_preds, con_events=out_act, output=output)
                     return True, mon
                 except Exception as err:
                     raise err
@@ -68,7 +66,7 @@ def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variab
     pass
 
 
-def parse_hoa(env_events, con_events, output) -> Program:
+def parse_hoa(env_events, program_out, program_preds, con_events, output) -> Program:
     if "UNREALIZABLE" in output:
         counterstrategy = True
     else:
@@ -76,11 +74,13 @@ def parse_hoa(env_events, con_events, output) -> Program:
 
     print(output)
 
-    init_st, trans = hoa_to_transitions(output)
+    print("Parsing Strix output..")
+    init_st, trans = hoa_to_transitions(output, not counterstrategy)
+    print("Finished parsing Strix output.. Constructing expanded Mealy Machine now..")
 
-    mon = MealyMachine("counterstrategy" if counterstrategy else "controller", "st_" + init_st, env_events, con_events, {}, {})
+    mon = MealyMachine("counterstrategy" if counterstrategy else "controller", "st_" + init_st, env_events + program_out + program_preds, con_events, {}, {})
 
-    mon.add_transitions(trans)
+    mon.add_transitions(not counterstrategy, trans, resolve_env_turns=True, env_events=env_events, prog_out=program_out, prog_preds=program_preds, con_events=con_events)
     return mon
 
 

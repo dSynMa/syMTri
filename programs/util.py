@@ -17,7 +17,7 @@ from prop_lang.formula import Formula
 from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
 from prop_lang.util import conjunct_formula_set, conjunct, neg, append_to_variable_name, dnf, disjunct_formula_set, \
-    true, sat, is_tautology, iff, negate, propagate_negations
+    true, sat, is_tautology, iff, negate, propagate_negations, cnf, simplify_formula_with_math
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
@@ -26,7 +26,7 @@ smt_checker = SMTChecker()
 
 def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmvModel, mon_events,
                                                   pred_list, include_mismatches_due_to_nondeterminism=False,
-                                                  colloborate=False, predicate_mismatch=False, prefer_lassos=False):
+                                                  colloborate=True, predicate_mismatch=False, prefer_lassos=True, controller_transition_explicit=False):
     program_model = program.to_nuXmv_with_turns(include_mismatches_due_to_nondeterminism, colloborate)
 
     text = "MODULE main\n"
@@ -55,10 +55,11 @@ def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmv
     mon_state_equality = [BiOp(Variable(s), '=', Variable("mon_" + s))
                                     for s in program.states]
 
+    mon_conds = "" if not controller_transition_explicit else " | turn = mon_con"
     compatible_output = "\tcompatible_outputs := " + "((turn == mon_env) -> (" + str(conjunct_formula_set(mon_output_equality)) + "))" + ";\n"
-    compatible_states = "\tcompatible_states := " + "((turn == mon_env | turn == mon_con) -> (" + str(conjunct_formula_set(mon_state_equality)) + "))" + ";\n"
-    compatible_state_predicates = "\tcompatible_state_predicates := " + "((turn == mon_env | turn == mon_con) -> (" + str(conjunct_formula_set(safety_predicate_truth)) + "))" + ";\n"
-    compatible_tran_predicates = "\tcompatible_tran_predicates := " + "((turn == mon_env | turn == mon_con) -> (" + str(conjunct_formula_set(tran_predicate_truth)) + "))" + ";\n"
+    compatible_states = "\tcompatible_states := " + "((turn == mon_env" + mon_conds + ") -> (" + str(conjunct_formula_set(mon_state_equality)) + "))" + ";\n"
+    compatible_state_predicates = "\tcompatible_state_predicates := " + "((turn == mon_env" + mon_conds + ") -> (" + str(conjunct_formula_set(safety_predicate_truth)) + "))" + ";\n"
+    compatible_tran_predicates = "\tcompatible_tran_predicates := " + "((turn == mon_env" + mon_conds + ") -> (" + str(conjunct_formula_set(tran_predicate_truth)) + "))" + ";\n"
     compatible = "\tcompatible := " + ("compatible_state_predicates & compatible_tran_predicates & " if predicate_mismatch else "") + "compatible_outputs & compatible_states" + ";\n"
 
     text += compatible_output + compatible_states + compatible + compatible_state_predicates + compatible_tran_predicates
@@ -71,15 +72,21 @@ def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmv
            [s.split(" : ")[0] + "_seen_more_than_once = FALSE" for s in strategy_states])) if prefer_lassos else [])) + ")\n"
     text += "INVAR\n" + "\t((" + ")\n\t& (".join(program_model.invar + strategy_model.invar) + "))\n"
 
-    turn_logic = ["(turn = con -> next(turn) = mon_con)"]
-    turn_logic += ["(turn = env -> next(turn) = mon_env)"]
-    turn_logic += ["(turn = mon_env -> next(turn) = con)"]
-    turn_logic += ["(turn = mon_con -> next(turn) = env)"]
-
     maintain_mon_vars = str(conjunct_formula_set(
         [BiOp(UniOp("next", Variable("mon_" + m.name)), ' = ', Variable("mon_" + m.name)) for m in (mon_events)]
         + [BiOp(UniOp("next", Variable(m.name)), ' = ', Variable(m.name)) for m in
            [label_pred(p, pred_list) for p in pred_list]]))
+
+    maintain_mon_vars_without_outputs = str(conjunct_formula_set(
+        [BiOp(UniOp("next", Variable("mon_" + m.name)), ' = ', Variable("mon_" + m.name)) for m in (mon_events) if m not in program.out_events]
+        + [BiOp(UniOp("next", Variable(m.name)), ' = ', Variable(m.name)) for m in
+           [label_pred(p, pred_list) for p in pred_list]]))
+
+    turn_logic = ["(turn = con -> (next(turn) = mon_con & " + maintain_mon_vars + "))"]
+    turn_logic += ["(turn = env -> (next(turn) = mon_env & " + maintain_mon_vars + "))"]
+    turn_logic += ["(turn = mon_env -> (next(turn) = con))"]
+    turn_logic += ["(turn = mon_con -> next(turn) = env)"]
+
     new_trans = ["compatible", "!next(mismatch)"] + program_model.trans + strategy_model.trans + turn_logic
     normal_trans = "\t((" + ")\n\t& (".join(new_trans) + "))\n"
 
@@ -142,6 +149,7 @@ def symbol_table_from_program(program):
         symbol_table[ev.name] = TypedValuation(str(ev), "bool", None)
     for t_val in program.valuation:
         symbol_table[t_val.name] = t_val
+        symbol_table[t_val.name + "_prev"] = t_val
     return symbol_table
 
 
@@ -205,6 +213,15 @@ def parse_nuxmv_ce_output_finite(transition_no, out: str):
 
     return prefix, tran_indices, incompatible_state
 
+def transition_associated_with_state(transition_no, state: dict):
+    transition = "-1"
+    for (key, value) in state.items():
+        if key.startswith("guard_") and value == "TRUE":
+            if state[key.replace("guard_", "act_")] == "TRUE":
+                no = key.replace("guard_", "")
+                if no != str(transition_no):
+                    transition = no
+    return transition
 
 def prog_transition_indices_and_state_from_ce(transition_no, prefix):
     program_transitions_and_state = []
@@ -380,6 +397,13 @@ def ground_formula_on_ce_state_with_index(formula: Formula, state: dict, i) -> F
     return formula.replace(to_replace_with)
 
 
+def ground_formula_on_ce_state(formula: Formula, state: dict) -> Formula:
+    to_replace_with = []
+    for key, value in state.items():
+        to_replace_with.append(BiOp(Variable(key), ":=", Value(value)))
+    return formula.replace(to_replace_with)
+
+
 def label_pred(p, preds):
     if p not in preds:
         if (isinstance(p, UniOp) and p.op == "!"):
@@ -389,10 +413,19 @@ def label_pred(p, preds):
     else:
         return stringify_pred(p)
 
+def stringify_formula(f):
+    if isinstance(f, BiOp):
+        return BiOp(stringify_formula(f.left), f.op, stringify_formula(f.right))
+    elif isinstance(f, UniOp):
+        return UniOp(f.op, stringify_formula(f.right))
+    elif isinstance(f, MathExpr) or isinstance(f, Variable):
+        return stringify_pred(f)
+    else:
+        return f
 
 def stringify_pred(p):
     return Variable("pred_" +
-                    str(p)
+                    str(p.to_nuxmv())
                     .replace(" ", "")
                     .replace("_", "")
                     .replace("(", "_")
@@ -428,11 +461,12 @@ def there_is_mismatch_between_program_and_strategy(system, controller: bool, liv
                                                    ltl_guarantees: Formula, debug=False, mismatch_condition=None):
     model_checker = ModelChecker()
     if debug:
-        print(system)
+        # print(system)
         # Sanity check
         result, out = model_checker.check(system, "F FALSE", None, livenesstosafety)
         if result:
             print("Are you sure the counterstrategy given is complete?")
+            print(system)
             return True, None, out
 
     if not controller:
@@ -455,7 +489,7 @@ def reduce_up_to_iff(old_preds, new_preds, symbol_table):
     for p in new_preds:
         if p and neg(p) not in keep_these and p and neg(p) not in remove_these and \
                 not has_equiv_pred(p, set(old_preds) | keep_these, symbol_table) and \
-                not has_equiv_pred(neg(p), set(old_preds) | keep_these, symbol_table):
+                not (is_tautology(p, symbol_table, smt_checker) or is_tautology(neg(p), symbol_table, smt_checker)):
             keep_these.add(p)
         else:
             remove_these.add(p)
@@ -465,16 +499,27 @@ def reduce_up_to_iff(old_preds, new_preds, symbol_table):
 
 
 def has_equiv_pred(p, preds, symbol_table):
+    if p in preds or neg(p) in preds:
+        return True
+
+    # # check if p can be expressed in terms of preds
+    # Pss = set()
+    # for old_p in preds:
+    #     if smt_checker.check(And(*conjunct(p, old_p).to_smt(symbol_table))):
+    #         Pss.add(frozenset(ps | {new_pred}))
+    #
+    #         if smt_checker.check(And(*conjunct_formula_set(ps | {f, neg(new_pred)}).to_smt(symbol_table))):
+    #             Pss.add(frozenset(ps | {neg(new_pred)}))
+    #     else:
+    #         Pss.add(frozenset(ps | {neg(new_pred)}))
+
     for pp in preds:
-        if p is pp:
+        #technically should check if it can be expressed using a set of the existing predicates
+        if is_tautology(iff(p, pp), symbol_table, smt_checker) or \
+                is_tautology(iff(neg(p), pp), symbol_table, smt_checker):
             return True
-        else:
-            #technically should check if it can be expressed using a set of the existing predicates
-            if is_tautology(iff(p, pp), symbol_table, smt_checker) or \
-                    is_tautology(iff(neg(p), pp), symbol_table, smt_checker):
-                return True
-            else:
-                return False
+
+    return False
             # if not smt_checker.check(And(*p_smt)) or not smt_checker.check(Not(And(*p_smt))):
             #     # if p or !p is unsat (i.e., p or !p is False), then no need to add it
             #     return True
@@ -522,20 +567,35 @@ def stutter_transitions(program, env: bool):
             stutter_transitions.append(st)
     return stutter_transitions
 
-
+stutter_trans = {}
 def stutter_transition(program, state, env: bool):
+    if program in stutter_trans.keys():
+        if state in stutter_trans[program].keys():
+            if env in stutter_trans[program][state].keys():
+                return stutter_trans[program][state][env]
+        else:
+            stutter_trans[program][state] = {}
+    else:
+        stutter_trans[program] = {}
+        stutter_trans[program][state] = {}
+
     transitions = program.env_transitions if env else program.con_transitions
-    condition = neg(disjunct_formula_set([t.condition
+    condition = (conjunct_formula_set([negate((t.condition))
                                       for t in transitions if t.src == state]))
+    # condition = (conjunct_formula_set([negate(cnf(t.condition, program.symbol_table))
+    #                                   for t in transitions if t.src == state]))
 
     if smt_checker.check(And(*condition.to_smt(program.symbol_table))):
-        return Transition(state,
+        t = Transition(state,
                           condition,
-                          [],
+                          program.complete_action_set([]),
                           [],
                           state)
     else:
-        return None
+        t = None
+
+    stutter_trans[program][state][env] = t
+    return t
 
 def looping_to_normal(t : Transition):
     return t #Transition(re.split("_loop", t.src)[0], t.condition, t.action, t.output,  re.split("_loop", t.tgt)[0]) \
@@ -558,18 +618,18 @@ def concretize_transitions(program, looping_program, indices_and_state_list, add
             else:
                 concretized += [(stutter_trans, st)]
 
-
     # two options, either we stopped because of a predicate mismatch, or a transition mismatch
     incompatibility_formula = []
     if incompatible_state["compatible_states"] == "FALSE" or incompatible_state["compatible_outputs"] == "FALSE":
         if program.deterministic:
-            return concretized[:-1], ([neg(concretized[-1][0].condition)], concretized[-1][1])
+            return concretized[:-1], ([neg(concretized[-1][0].condition)], concretized[-1][1]), concretized[-1]
         else:
             # if program is not deterministic, we need to identify the transitions the counterstrategy wanted to take rather than the one the program actually took
             state_before_mismatch = concretized[-2][1]
             src_state = concretized[-2][0].tgt
             tgt_state_env_wanted = [p for p in program.states if incompatible_state["mon_" + str(p)] == "TRUE"][0]
             outputs_env_wanted = [p for p in program.out_events if incompatible_state["mon_" + str(p)] == "TRUE"]
+            outputs_env_wanted += [neg(p) for p in program.out_events if incompatible_state["mon_" + str(p)] == "FALSE"]
             if incompatible_state["turn"] == "mon_env":
                 candidate_transitions = [t for t in program.env_transitions if t.src == src_state and t.tgt == tgt_state_env_wanted and set(t.output) == set(outputs_env_wanted)]
                 if tgt_state_env_wanted == src_state:
@@ -589,16 +649,19 @@ def concretize_transitions(program, looping_program, indices_and_state_list, add
             compatible_with_abstract_state += [neg(state_pred_label_to_formula[p]) for p in state_pred_label_to_formula.keys() if isinstance(p, Variable) and state_before_mismatch[str(p)] == "FALSE"]
 
             abstract_state = conjunct_formula_set(compatible_with_abstract_state)
-            env_desired_transitions = [t for t in candidate_transitions if smt_checker.check(And(*abstract_state.to_smt(program.symbol_table), *t.condition.to_smt(program.symbol_table)))]
-            return concretized[:-1], ([disjunct_formula_set([propagate_negations(t.condition) for t in env_desired_transitions] + [negate(concretized[-1][0].condition)])], concretized[-1][1])
+            env_desired_transitions = [t for t in candidate_transitions
+                                       if smt_checker.check(And(*abstract_state.to_smt(program.symbol_table),
+                                                                *t.condition.to_smt(program.symbol_table)))]
+            formula = disjunct_formula_set([t.condition for t in env_desired_transitions] + [propagate_negations(neg(cnf(concretized[-1][0].condition, program.symbol_table)))])
+            return concretized[:-1], ([formula], concretized[-1][1]), concretized[-1]
     else:
         env_pred_state = None
-        if incompatible_state["compatible_state_predicates"] == "FALSE":
+        if incompatible_state["compatible_state_predicates"] == "FALSE" or incompatible_state["compatible_tran_predicates"] == "FALSE":
             #pred mismatch
             incompatibility_formula += preds_in_state(incompatible_state, state_pred_label_to_formula)
             env_pred_state = (incompatibility_formula, incompatible_state)
 
-        return concretized, env_pred_state
+        return concretized, env_pred_state, concretized[-1]
 
 
 def preds_in_state(ce_state: dict, state_pred_label_to_formula):
@@ -635,8 +698,12 @@ def keep_bool_preds(formula: Formula, symbol_table):
         return conjunct_formula_set(preds)
 
 
-def add_prev_suffix(program, formula):
+def add_prev_suffix(formula):
     return append_to_variable_name(formula, [str(v) for v in formula.variablesin()], "_prev")
+
+
+def add_next_suffix(formula):
+    return append_to_variable_name(formula, [str(v) for v in formula.variablesin()], "_next")
 
 
 def transition_up_to_dnf(transition: Transition, symbol_table):
@@ -801,3 +868,15 @@ def guarded_action_transitions_to_normal_transitions(guarded_transition, valuati
     if sat((conjunct(guarded_transition.condition, neg(disjunct_formula_set(collect_guards)))), symbol_table, checker):
         raise Exception("Not all transitions are covered by guards")
     return transitions
+
+
+transition_formulas = {}
+def transition_formula(t):
+    if t not in transition_formulas.keys():
+        formula = conjunct(add_prev_suffix(t.condition),
+             conjunct_formula_set([BiOp(act.left, "=", add_prev_suffix(act.right)) for act in
+                                   t.action]))
+        transition_formulas[t] = formula
+        return formula
+    else:
+        return transition_formulas[t]

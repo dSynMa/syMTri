@@ -1,7 +1,7 @@
 import os
 from unittest import TestCase
 
-from parsing.string_to_program import string_to_program
+from parsing.string_to_program_with_action_guards import string_to_program
 from programs.synthesis.synthesis import synthesize
 
 

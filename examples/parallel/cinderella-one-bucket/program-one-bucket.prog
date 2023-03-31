@@ -1,0 +1,37 @@
+program eventually__allow_grant {
+    STATES {
+        stepmother : init, cinderella, won
+    }
+
+    ENVIRONMENT EVENTS {
+        inc1, finished
+    }
+
+    CONTROLLER EVENTS {
+        empty12
+    }
+
+    PROGRAM EVENTS {
+        overflow
+    }
+
+    VALUATION {
+        bucket1 : natural := 0;
+        bucket2 : natural := 0;
+        bucket3 : natural := 0;
+        bucket4 : natural := 0;
+        bucket5 : natural := 0;
+        capacity : natural := 5;
+        n : natural := 3;
+    }
+
+    ENVIRONMENT TRANSITIONS [semantics=by-order]{
+        stepmother -> stepmother [inc1 & n > 0 $ bucket1 := bucket1 + 1; n := n - 1],
+        stepmother -> cinderella [finished $ n := 3],
+        stepmother -> won [bucket1 > 5 # overflow]
+    }
+
+    CONTROLLER TRANSITIONS [semantics=by-order]{
+        cinderella -> stepmother [empty12 $ bucket1 := 0, bucket2 := 0]
+    }
+}

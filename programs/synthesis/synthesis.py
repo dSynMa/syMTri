@@ -1,6 +1,7 @@
 from itertools import chain
 from typing import Tuple
 
+from Config import env, con
 from click._compat import raw_input
 from pysmt.shortcuts import And
 from programs.analysis.smt_checker import SMTChecker
@@ -24,13 +25,14 @@ from programs.util import create_nuxmv_model_for_compatibility_checking, \
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.mathexpr import MathExpr
-from prop_lang.util import neg, G, F, implies, conjunct, disjunct, true, conjunct_formula_set, dnf, is_tautology, related_to
+from prop_lang.util import neg, G, F, implies, conjunct, disjunct, true, conjunct_formula_set, dnf, is_tautology, \
+    related_to, iff, X, expand_LTL_to_env_con_steps, UniOp
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 smt_checker = SMTChecker()
 
-def synthesize(program: Program, ltl_text: str, tlsf_path: str, docker: bool, project_on_abstraction=True) -> Tuple[bool, Program]:
+def synthesize(program: Program, ltl_text: str, tlsf_path: str, docker: bool, project_on_abstraction=False) -> Tuple[bool, Program]:
     # if not program.deterministic:
     #     raise Exception("We do not handle non-deterministic programs yet.")
 
@@ -71,36 +73,55 @@ def synthesize(program: Program, ltl_text: str, tlsf_path: str, docker: bool, pr
 def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable],
                             out_acts: [Variable], docker: str, project_on_abstraction=False, debug=False) -> \
         Tuple[bool, MealyMachine]:
-    eager = True
+    eager = False
     keep_only_bool_interpolants = False
     use_explicit_loops_abstraction = False
     no_analysis_just_user_input = False
     choose_predicates = False
-    conservative_with_state_predicates = True
+    conservative_with_state_predicates = False
     prefer_lasso_counterexamples = True
+    minimal_state_predicates = False
+    controller_transition_explicit = True
 
     old_state_predicates = set()
     state_predicates = []
-    rankings = []
+    rankings = {}
     old_transition_predicates = set()
     transition_predicates = []
-    ranking_invars = {}
+    # ranking_invars = {}
 
-    transition_fairness = []
     predicate_abstraction = PredicateAbstraction(program)
-    predicate_abstraction.compute_with_predicates([], [], True)
+    init_abs, trans_abs = predicate_abstraction.initialise()
 
     while True:
+        state_predicates = [p for p in state_predicates if not (isinstance(p, UniOp) and p.op == "!")]
+        state_predicates += [p.right for p in state_predicates if isinstance(p, UniOp) and p.op == "!"]
+
         symbol_table = predicate_abstraction.program.symbol_table
+
+        pred_list = list(state_predicates) + list(transition_predicates)
+
+        #transition_predicates_prev = [add_prev_suffix(t) for t in transition_predicates]
+        pred_name_dict = {p: label_pred(p, pred_list) for p in pred_list}
+        pred_name_dict_with_negs = pred_name_dict | {neg(p): neg(label_pred(p, pred_list)) for p in pred_list}
+        state_pred_label_to_formula = {label_pred(p, pred_list): p for p in state_predicates + transition_predicates}# + transition_predicates_prev}
+        state_pred_label_to_formula |= {neg(label_pred(p, pred_list)): neg(p) for p in state_predicates + transition_predicates}# + transition_predicates_prev}
+        pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
+
         new_state_preds = [s for s in state_predicates if s not in old_state_predicates]
         new_trans_preds = [t for t in transition_predicates if t not in old_transition_predicates]
-        if False:
-            for s in new_state_preds:
-                predicate_abstraction.add_predicates([s], [], True)
-            for t in new_trans_preds:
-                predicate_abstraction.add_predicates([], [t], True)
+        if len(new_state_preds + new_trans_preds) > 0:
+            if False:
+                for s in new_state_preds:
+                    predicate_abstraction.add_predicates([s], [], True)
+                for t in new_trans_preds:
+                    predicate_abstraction.add_predicates([], [t], True)
+            else:
+                init_abs, trans_abs = predicate_abstraction.add_predicates(new_state_preds, new_trans_preds, pred_name_dict_with_negs, True)
         else:
-            predicate_abstraction.add_predicates(new_state_preds, new_trans_preds, True)
+            pass
+            # abstraction = predicate_abstraction.add_predicates([true()], [], True)
+
         # predicate_abstraction.compute_with_predicates(state_predicates, transition_predicates, True)
 
         old_state_predicates |= {s for s in state_predicates if s not in old_state_predicates}
@@ -108,39 +129,30 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         symbol_table["inloop"] = TypedValuation("inloop", "bool", True)
         symbol_table["notinloop"] = TypedValuation("notinloop", "bool", True)
 
-        mon_events = predicate_abstraction.program.out_events \
-                     + [Variable(s) for s in predicate_abstraction.program.states]
+        program_out_vars = predicate_abstraction.program.out_events
+        program_state_vars = [Variable(s) for s in predicate_abstraction.program.states]
+
+        program_out_and_states_vars = program_out_vars + program_state_vars
         ## Compute abstraction
-        print(predicate_abstraction.simplified_transitions_abstraction().to_dot())
+        # print(predicate_abstraction.abstraction.to_dot())
 
-        pred_list = list(state_predicates) + list(transition_predicates)
-
-        abstraction, ltl_to_program_transitions = predicate_abstraction.abstraction_to_ltl()
-        print(", ".join(map(str, abstraction)))
-
-        #transition_predicates_prev = [add_prev_suffix(t) for t in transition_predicates]
-        pred_name_dict = {p: label_pred(p, pred_list) for p in pred_list}
-        state_pred_label_to_formula = {label_pred(p, pred_list): p for p in state_predicates + transition_predicates}# + transition_predicates_prev}
-        state_pred_label_to_formula |= {neg(label_pred(p, pred_list)): neg(p) for p in state_predicates + transition_predicates}# + transition_predicates_prev}
-        pred_acts = [pred_name_dict[v] for v in pred_name_dict.keys()]
 
         # should be computed incrementally
-        transition_fairness = []
-        safety_predicate_constraints = []
-        i = 0
-        while i < len(transition_predicates):
-            dec = pred_name_dict[transition_predicates[i]]
-            inc = pred_name_dict[transition_predicates[i + 1]]
-            # dec_prev = pred_name_dict[add_prev_suffix(program, transition_predicates[i])]
-            # inc_prev = pred_name_dict[add_prev_suffix(program, transition_predicates[i + 1])]
-            # safety_predicate_constraints += [(G(neg(conjunct(dec, inc))))]
-
-            invar_vars = [pred_name_dict[p] for p in ranking_invars[rankings[i // 2]]]
-            invar_formula = conjunct_formula_set(invar_vars)
-
-            transition_fairness += [implies(G(F(conjunct(invar_formula, dec))), G(F((disjunct(inc, neg(invar_formula)))))).simplify()]
-            # transition_fairness += [implies(G(F(conjunct(invar_formula, disjunct(dec, dec_prev)))), G(F(disjunct(inc, inc_prev))))]
-            i += 2
+        # transition_fairness = []
+        # i = 0
+        # while i < len(transition_predicates):
+        #     dec = pred_name_dict[transition_predicates[i]]
+        #     inc = pred_name_dict[transition_predicates[i + 1]]
+        #     # dec_prev = pred_name_dict[add_prev_suffix(transition_predicates[i])]
+        #     # inc_prev = pred_name_dict[add_prev_suffix(transition_predicates[i + 1])]
+        #     # safety_predicate_constraints += [(G(neg(conjunct(dec, inc))))]
+        #
+        #     invar_vars = [pred_name_dict[p] for p in ranking_invars[rankings[i // 2]]]
+        #     invar_formula = conjunct_formula_set(invar_vars)
+        #
+        #     transition_fairness += [implies(G(F(conjunct(invar_formula, dec))), G(F((disjunct(inc, neg(invar_formula)))))).simplify()]
+        #     # transition_fairness += [implies(G(F(conjunct(invar_formula, disjunct(dec, dec_prev)))), G(F(disjunct(inc, inc_prev))))]
+        #     i += 2
 
 
         symbol_table_preds = {
@@ -149,19 +161,57 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         symbol_table_prevs = {tv.name + "_prev": TypedValuation(tv.name + "_prev", tv.type, tv.value) for tv in
                               program.valuation}
 
-        assumptions = [ltl_assumptions] + transition_fairness + safety_predicate_constraints + abstraction
-        guarantees = [ltl_guarantees]
+        # abstraction = predicate_abstraction.abstraction_to_ltl(symbol_table_preds
+        #                                                                                    | {str(o): TypedValuation(str(o), "bool", None) for o in mon_events + list(program.states) + program.env_events + program.con_events},
+        #                                                                                    simplified=True)
+        # print(", ".join(map(str, abstraction)))
 
-        (real, mm) = ltl_synthesis.ltl_synthesis(assumptions,
+
+
+        at_least_and_at_most_one_state = UniOp("G",
+                                               conjunct_formula_set(
+                                                   [iff(Variable(str(q)),
+                                                         conjunct_formula_set([neg(Variable(str(r))) for r in
+                                                                                program.states
+                                                                               if
+                                                                               r != q]))
+                                                    for q in program.states])).to_nuxmv()
+
+        pure_env_in_acts = [p for p in in_acts if p not in program_out_vars]
+
+        program_abstraction = ([init_abs, trans_abs] + \
+                              [a for _, _, A, _ in rankings.values() for a in A] + \
+                              [at_least_and_at_most_one_state])
+
+        original_assumptions = ([expand_LTL_to_env_con_steps(ltl_assumptions, pure_env_in_acts)])
+
+        env_turn_assumptions = ([env, G(implies(env, X(con))), G(implies(con, X(env))),
+                       G(implies(env, (conjunct_formula_set([iff(p, X(p)) for p in pure_env_in_acts]))))] )
+
+        guarantees = ([expand_LTL_to_env_con_steps(ltl_guarantees, pure_env_in_acts)] + \
+                     [G(implies(con, (conjunct_formula_set([iff(p, X(p)) for p in out_acts]))))])
+
+        controller_rankings = conjunct_formula_set([g for _, _, _, G in rankings.values() for g in G])
+
+        if len([g for _, _, _, G in rankings.values() for g in G]) > 0:
+            print()
+
+        # env is making controller_rankings FALSE
+        # formula = conjunct(controller_rankings,
+        #                   implies(conjunct(env_turn_assumptions, conjunct(program_abstraction, original_assumptions)), (guarantees)))
+
+        (real, mm) = ltl_synthesis.ltl_synthesis([], original_assumptions + env_turn_assumptions + program_abstraction,
                                                  guarantees,
-                                                 in_acts + mon_events + pred_acts,
-                                                 out_acts,
+                                                 pure_env_in_acts + [env] + [e for E, _, _, _ in rankings.values() for e in E],
+                                                 program_out_vars,
+                                                 program_state_vars + pred_acts,
+                                                 out_acts + [c for _, C, _, _ in rankings.values() for c in C],
                                                  docker)
 
         if real and not debug:
             print("Realizable")
+            print(mm.to_dot(pred_list))
             if project_on_abstraction:
-                print(mm.to_dot(pred_list))
                 return True, mm.project_controller_on_program((
                     "strategy" if real else "counterstrategy"),
                     program, predicate_abstraction,
@@ -171,8 +221,9 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 return True, mm.to_dot(pred_list)
 
         print(mm.to_dot(pred_list))
-        mm = mm.fill_in_predicates_at_controller_states_label_tran_preds_appropriately(predicate_abstraction, program)
-        print(mm.to_dot(pred_list))
+        # if controller_transition_explicit:
+        #     mm = mm.fill_in_predicates_at_controller_states_label_tran_preds_appropriately(predicate_abstraction, program)
+        #     print(mm.to_dot(pred_list))
 
         ## checking for mismatch
         mealy = mm.to_nuXmv_with_turns(predicate_abstraction.program.states, predicate_abstraction.program.out_events,
@@ -187,14 +238,22 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         else:
             mismatch_condition = None
 
-        system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, not program.deterministic, not program.deterministic, predicate_mismatch=False, prefer_lassos=prefer_lasso_counterexamples)
+        system = create_nuxmv_model_for_compatibility_checking(program, mealy, program_out_and_states_vars, pred_list,
+                                                               not program.deterministic, not program.deterministic,
+                                                               predicate_mismatch=True,
+                                                               prefer_lassos=prefer_lasso_counterexamples,
+                                                               controller_transition_explicit=controller_transition_explicit)
         print(system)
         contradictory, there_is_mismatch, out = there_is_mismatch_between_program_and_strategy(system, real, False,
                                                                                                ltl_assumptions,
                                                                                                ltl_guarantees, mismatch_condition)
 
         if not there_is_mismatch or contradictory:
-            system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, not program.deterministic, not program.deterministic, predicate_mismatch=True)
+            system = create_nuxmv_model_for_compatibility_checking(program, mealy, program_out_and_states_vars, pred_list,
+                                                                   not program.deterministic, not program.deterministic,
+                                                                   predicate_mismatch=True,
+                                                               prefer_lassos=prefer_lasso_counterexamples,
+                                                               controller_transition_explicit=controller_transition_explicit)
             contradictory, there_is_mismatch, out = there_is_mismatch_between_program_and_strategy(system, real, False,
                                                                                                    ltl_assumptions,
                                                                                                    ltl_guarantees)
@@ -269,10 +328,18 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         print(out)
         ## Compute mismatch trace
-        ce, transition_indices_and_state, incompatible_state = parse_nuxmv_ce_output_finite(
-            len(program.env_transitions) + len(program.con_transitions), out)
-        transitions_without_stutter_program_took, env_desired_abstract_state = \
-            concretize_transitions(program, program, transition_indices_and_state, False, predicate_abstraction.abstraction, state_pred_label_to_formula, incompatible_state)
+        ce, transition_indices_and_state, incompatible_state = \
+            parse_nuxmv_ce_output_finite(len(program.env_transitions) + len(program.con_transitions), out)
+        transitions_without_stutter_program_took, env_desired_abstract_state, program_taken_transition = \
+            concretize_transitions(program, program, transition_indices_and_state, False,
+                                   predicate_abstraction.abstraction, state_pred_label_to_formula,
+                                   incompatible_state)
+
+        # if env_desired_abstract_state is None:
+        #     transitions_without_stutter_program_took, env_desired_abstract_state = \
+        #         concretize_transitions(program, program, transition_indices_and_state, False,
+        #                                predicate_abstraction.abstraction, state_pred_label_to_formula,
+        #                                incompatible_state)
 
         # if pred_state is not None:
         agreed_on_transitions = transitions_without_stutter_program_took
@@ -280,18 +347,10 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         disagreed_on_state = ([p for p in env_desired_abstract_state[0] if not any(v for v in p.variablesin() if "_prev" in str(v))], env_desired_abstract_state[1])
 
         write_counterexample_state(program, agreed_on_transitions, disagreed_on_state)
-        # else:
-        #     agreed_on_transitions = transitions_without_stutter_program_took[:-1]
-        #     # disagreed_on_transitions = []
-        #     program_actually_took = transitions_without_stutter_program_took[-1]
-        #     disagreed_on_state = neg(program_actually_took[0].condition)
-        #     disagreed_on_state_dict = program_actually_took[1]
-        #     # TODO
-        #     # environment_wanted_to_take =
-        #
-        #     write_counterexample(program, agreed_on_transitions, program_actually_took)
-        #     # check_for_nondeterminism_last_step(agreed_on_transitions[0][1], predicate_abstraction.program, False, None)
-
+        # _, abstract_trans = predicate_abstraction.allowed_in_abstraction([t[0] for t in transitions_without_stutter_program_took])
+        # TODO handle this
+        abstract_trans = []
+        print("Abstract trans:\n" + "\n--\n".join(["\nor ".join(map(str, ats)) for ats in abstract_trans]))
 
         ## end compute mismatch trace
 
@@ -301,9 +360,9 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                       if key.startswith("st_") and (ce_state["turn"] in ["env", "con"]) and "_seen" not in key and v == "TRUE"]
             print("Counterstrategy states before environment step: " + ", ".join(counterstrategy_states))
             last_counterstrategy_state = counterstrategy_states[-1]
-            use_liveness, counterexample_loop, entry_valuation, entry_predicate, pred_mismatch \
+            use_liveness, counterexample_loop, entry_valuation, entry_predicate, pred_mismatch, loop_in_cs \
                 = use_liveness_refinement(program, agreed_on_transitions,
-                                          disagreed_on_state,
+                                          disagreed_on_state, program_taken_transition,
                                           last_counterstrategy_state,
                                           symbol_table | symbol_table_prevs, state_pred_label_to_formula)
         except Exception as e:
@@ -325,8 +384,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                         pass
 
                 invars = []
-                transition_predicates += list(chain.from_iterable([[BiOp(add_prev_suffix(program, r), ">", r),
-                                                                    BiOp(add_prev_suffix(program, r), "<", r)]
+                transition_predicates += list(chain.from_iterable([[BiOp(add_prev_suffix(r), ">", r),
+                                                                    BiOp(add_prev_suffix(r), "<", r)]
                                                                    for r in new_rankings]))
 
                 for ranking in new_rankings:
@@ -350,9 +409,10 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     #     exit_trans = program_actually_took[0]
                     #     exit_trans_state = program_actually_took[1]
 
-                        # TODO this isn't the real exit trans, it's a good approximation for now, but it may be a just
-                        #  an explicit or implicit stutter transition
-                    exit_condition = neg(conjunct_formula_set([p for p in disagreed_on_state[0]]))
+                    # TODO this isn't the real exit trans, it's a good approximation for now, but it may be a just
+                    #  an explicit or implicit stutter transition
+                    mismatch_desired_state = conjunct_formula_set([p for p in disagreed_on_state[0]])
+                    exit_condition = mismatch_desired_state #neg(mismatch_desired_state) if loop_in_cs else mismatch_desired_state
                     ranking, invars, sufficient_entry_condition, exit_predicate = \
                         liveness_step(program, loop, symbol_table | symbol_table_prevs,
                                         entry_valuation, entry_predicate,
@@ -361,7 +421,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
                     # TODO in some cases we can use ranking abstraction as before:
                     #  -DONE if ranking function is a natural number
-                    #  -if ranking function does not decrease outside the loop
+                    #  -if ranking function does not decrease or increase outside the loop
                     #  -DONE if supporting invariant ensures ranking function is bounded below
 
                     if ranking is not None:# and function_is_of_natural_type(ranking, invars, symbol_table):
@@ -387,28 +447,47 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                             wellfounded_invar = MathExpr(BiOp(ranking, ">=", Value(0)))
                             invars += [wellfounded_invar]
                             # invars.append(wellfounded_invar)
-                        new_transition_predicates = [BiOp(add_prev_suffix(program, ranking), ">", ranking),
-                                                      # conjunct(invar_formula, BiOp(add_prev_suffix(program, ranking), "<", ranking))
-                                                      BiOp(add_prev_suffix(program, ranking), "<", ranking)
-                                                      ]
+
+                        # mismatch_predicate_state = [Variable(p) for p in disagreed_on_state[1].keys() if p.startswith("_pred") and disagreed_on_state[1][p] == "TRUE"]
+                        # mismatch_predicate_state += [neg(Variable(p)) for p in disagreed_on_state[1].keys() if p.startswith("_pred") and disagreed_on_state[1][p] == "FALSE"]
+                        new_env_variables, new_con_variables, new_transition_predicates, new_state_predicates, new_assumptions, new_guarantees =\
+                            predicate_abstraction.loop_abstraction(sufficient_entry_condition,
+                                                                   counterexample_loop,
+                                                                   mismatch_desired_state,
+                                                                   ranking,
+                                                                   conjunct_formula_set(invars),
+                                                                   disagreed_on_state[1],
+                                                                   program_taken_transition)
+
+                        # new_transition_predicates = [BiOp(add_prev_suffix(ranking), ">", ranking),
+                        #                               # conjunct(invar_formula, BiOp(add_prev_suffix(ranking), "<", ranking))
+                        #                               BiOp(add_prev_suffix(ranking), "<", ranking)
+                        #                               ]
 
                         new_all_trans_preds = {x.simplify() for x in new_transition_predicates} | {x for x in transition_predicates}
                         new_all_trans_preds = reduce_up_to_iff(transition_predicates, list(new_all_trans_preds),
                                                                symbol_table | symbol_table_prevs)
 
-                        if not len(new_all_trans_preds) == len(transition_predicates)\
+                        if len(new_state_predicates) != 0:
+                            # ranking_invars[ranking] = []
+                            rankings[ranking] = (new_env_variables, new_con_variables, new_assumptions, new_guarantees)
+                            state_predicates += invars + new_state_predicates
+                            transition_predicates += new_transition_predicates
+                            pass
+                        elif not len(new_all_trans_preds) == len(transition_predicates)\
                                 or (ranking in ranking_invars.keys() and set(ranking_invars[ranking]) != set(invars)):
                             # important to add this, since later on assumptions depend on position of predicates in list
-                            ranking_invars[ranking] = invars
-                            rankings.append(ranking)
+                            # ranking_invars[ranking] = invars
+                            rankings[ranking] = (new_env_variables, new_con_variables, new_assumptions, new_guarantees)
                             state_predicates += invars
                             transition_predicates += new_transition_predicates
                         else:
-                            print("I did something wrong, "
-                                  "it turns out the new transition predicates "
+                            print("The new transition predicates "
                                   "(" + ", ".join(
                                 [str(p) for p in new_transition_predicates]) + ") are a subset of "
                                                                                "previous predicates.")
+                            print("Safety refinement should do the trick here instead. I'll do that.")
+                            use_liveness = False
                             # print("I will try safety refinement instead.")
                             # use_liveness = False
 
@@ -455,7 +534,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                         pass
             else:
                 pred_formula = conjunct_formula_set([p for p in disagreed_on_state[0]])
-                new_preds = safety_refinement(ce, agreed_on_transitions, ([pred_formula], disagreed_on_state[1]), symbol_table | symbol_table_prevs, program, use_dnf=True)
+                new_preds = safety_refinement(ce, agreed_on_transitions, ([pred_formula], disagreed_on_state[1]),
+                                              abstract_trans, symbol_table | symbol_table_prevs, program, use_dnf=True)
 
                 print("Found state predicates: " + ", ".join([str(p) for p in new_preds]))
                 if len(new_preds) == 0:
@@ -491,6 +571,20 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                      for v in vars_mentioned_in_preds
                                      for state in [st for (_, st) in agreed_on_transitions + [disagreed_on_state]]}
                 new_all_preds |= {p for p in state_predicates if p not in old_state_predicates} #ranking invars may have been added
+                new_all_preds = reduce_up_to_iff(state_predicates,
+                                                 list(new_all_preds),
+                                                 symbol_table
+                                                 | {str(v): TypedValuation(str(v),
+                                                                           symbol_table[
+                                                                               str(v).removesuffix("_prev")].type,
+                                                                           "true")
+                                                    for p in new_all_preds
+                                                    for v in p.variablesin()
+                                                    if str(v).endswith(
+                                                         "prev")})  # TODO symbol_table needs to be updated with prevs
+                if len(new_all_preds) == len(state_predicates):
+                    raise Exception("No new state predicates identified.")
+
                 # print("For debugging:\nComputing projection of counterstrategy onto predicate abstraction..")
                 # controller_projected_on_program = mm.project_controller_on_program("counterstrategy", program, predicate_abstraction,
                 #                                                                    symbol_table | symbol_table_preds)
@@ -535,7 +629,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
 
 def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, entry_predicate,
-                  exit_condition, exit_prestate):
+                  exit_condition, exit_prestate, expand_termination_argument=False):
     # ground transitions in the counterexample loop
     # on the environment and controller events in the counterexample\
 
@@ -567,7 +661,7 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
     else:
          # then discover which variables are related to the variables updated in the loop
          # TODO may also need to look at the guards of the transitions in the loop
-        updated_in_loop_vars = [str(act.left) for t, _ in counterexample_loop for act in t.action]
+        updated_in_loop_vars = [str(act.left) for t, _ in counterexample_loop for act in t.action if act.left != act.right]
 
         relevant_vars = [str(v) for f in disjuncts_in_exit_pred for v in f.variablesin() if any(v for v in f.variablesin() if str(v) in updated_in_loop_vars)]
         irrelevant_vars = [v for v in symbol_table.keys() if v not in relevant_vars]
@@ -583,17 +677,18 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
 
     sufficient_entry_condition = None
 
-    conditions = [true(), entry_predicate_grounded.simplify(), entry_valuation_grounded]
+    conditions = [(true(), True), (entry_predicate_grounded.simplify(), True), (entry_valuation_grounded, False)]
 
     ranking = None
-    for cond in conditions:
+    for (cond, add_natural_conditions) in conditions:
         for exit_pred in disjuncts_in_exit_pred_grounded:
             try:
                 ranking, invars = liveness_refinement(symbol_table,
                                                       program,
                                                       cond,
                                                       loop_before_exit,
-                                                      exit_pred)
+                                                      exit_pred,
+                                                      add_natural_conditions)
                 if ranking is None:
                     continue
                 sufficient_entry_condition = keep_bool_preds(entry_predicate, symbol_table)
@@ -611,7 +706,7 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
         if not isinstance(exit_predicate_grounded, Value) or\
              is_tautology(exit_predicate_grounded, symbol_table, smt_checker):
             # for each variable in ranking function, check if they are related in the exit condition, or transitively so
-            updated_in_loop_vars = [str(act.left) for t in loop_before_exit for act in t.action]
+            updated_in_loop_vars = [str(act.left) for t in loop_before_exit for act in t.action if act.left != act.right]
 
             vars_in_ranking = ranking.variablesin()# + [Variable(v) for v in updated_in_loop_vars]
 
@@ -650,16 +745,20 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
                 loop_before_exit = ground_transitions(program, counterexample_loop, irrelevant_vars + bool_vars + all_extra_vars,
                                                       symbol_table)
 
-                conditions = [true(), entry_predicate_grounded.simplify(), entry_valuation_grounded]
+                conditions = [(true(), True),
+                              (entry_predicate_grounded.simplify(), True),
+                              (entry_valuation_grounded, False)]
 
-                for cond in conditions:
+                ranking = None
+                for (cond, add_natural_conditions) in conditions:
                     for exit_pred in disjuncts_in_exit_pred_grounded:
                         try:
                             ranking, invars = liveness_refinement(symbol_table,
                                                                   program,
                                                                   cond,
                                                                   loop_before_exit,
-                                                                  exit_pred)
+                                                                  exit_pred,
+                                                                  add_natural_conditions)
                             if ranking is None:
                                 continue
                             sufficient_entry_condition = keep_bool_preds(entry_predicate, symbol_table)

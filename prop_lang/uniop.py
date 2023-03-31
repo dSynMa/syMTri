@@ -9,7 +9,8 @@ from prop_lang.variable import Variable
 
 class UniOp(Formula):
     def __init__(self, op: str, right: Formula):
-        assert isinstance(right, Formula)
+        if not isinstance(right, Formula):
+            print()
         self.op = op
         self.right = right
 
@@ -59,6 +60,9 @@ class UniOp(Formula):
 
     def to_nuxmv(self):
         return UniOp(self.op, self.right.to_nuxmv())
+
+    def to_strix(self):
+        return UniOp(self.op, self.right.to_strix())
 
     def to_smt(self, symbol_table) -> (FNode, FNode):
         expr, invar = self.right.to_smt(symbol_table)

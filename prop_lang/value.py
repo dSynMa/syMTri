@@ -53,6 +53,14 @@ class Value(Atom):
         else:
             return self
 
+    def to_strix(self):
+        if self.is_true():
+            return Value("true")
+        elif self.is_false():
+            return Value("false")
+        else:
+            return self
+
     def to_smt(self, _) -> (FNode, FNode):
         if self.is_true():
             return TRUE(), TRUE()

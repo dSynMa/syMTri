@@ -1,34 +1,67 @@
+import time
 from itertools import chain, combinations
-import re
+from multiprocessing import Process, Queue
 
+from func_timeout import func_timeout
 from pysmt.shortcuts import And, Not, TRUE
 
-from parsing.string_to_prop_logic import string_to_prop
-from programs.abstraction.abstract_state import AbstractState
+from Config import env, con
 from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
 from programs.util import label_preds, add_prev_suffix, stutter_transitions, \
-    stutter_transition, symbol_table_from_program, safe_update_set_vals, safe_update_list_vals
+    stutter_transition, symbol_table_from_program, safe_update_set_vals, safe_update_list_vals, transition_formula, \
+    reduce_up_to_iff, label_pred, stringify_pred, stringify_formula
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
+from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
 from prop_lang.util import conjunct, neg, conjunct_formula_set, conjunct_typed_valuation_set, disjunct_formula_set, \
-    implies, G, X, true, false, disjunct
+    implies, G, X, true, false, disjunct, simplify_formula_without_math, cnf, iff, is_tautology, sat, \
+    keep_only_vars, dnf, partially_evaluate, is_dnf, abstract_out_conjunctions_of_atoms, depth_of_formula, \
+    abstract_out_disjunctions_of_atoms, atomic_predicates, F, type_constraints, U, W
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 smt_checker = SMTChecker()
 
+queue = Queue()
+
+def dnfguard(d_and_guard):
+    dnfed = dnf(d_and_guard, simplify=False)
+    print(str(dnfed))
+    queue.put(dnfed)
+
 
 class PredicateAbstraction:
     def __init__(self, program: Program):
+        self.transition_state_tags = {}
+        self.transition_unaffected_tags = {}
+        self.transition_constant_tags = {}
+        self.transition_tran_tags = {}
+        self.con_tags = {}
+        self.pred_transition_invars = {}
+        self.formula_to_trans = {}
+        self.formula_to_formula_without_identity_actions = {}
+        self.abstract_effect_invars = {}
+        self.abstract_effect_constant = {}
+        self.abstract_effect = {}
+
+        self.init_program_trans = None
+        self.abstract_guard_con = None
+        self.abstract_guard_con_disjuncts = None
+        self.abstract_guard_env = None
+        self.abstract_guard_env_disjuncts = None
         self.state_predicates = []
         self.transition_predicates = []
+        self.loops = []
 
         self.con_to_program_transitions = None
         self.env_to_program_transitions = None
+
+        self.con_program_transitions_to_abstract = None
+        self.env_program_transitions_to_abstract = None
 
         self.state_to_env_transitions = None
         self.state_to_con_transitions = None
@@ -39,6 +72,317 @@ class PredicateAbstraction:
         self.f_cache = {}
         self.loop_counter = 0
         self.loops = []
+
+    def compute_abstract_effect_with_p(self, t : Transition, env_trans : bool, predicate):
+        if env_trans:
+            Es = self.abstract_guard_env_disjuncts[t]
+        else:
+            Es = self.abstract_guard_con_disjuncts[t]
+
+        is_tran_pred = lambda q: any(v for v in q.variablesin() if str(v).endswith("_prev"))
+
+        action = t.action
+        vars_modified_in_action_without_identity = [a.left for a in action if not a.left == a.right]
+        vars_used_in_action_without_identity = [v for a in action if not a.left == a.right for v in a.right.variablesin()]
+
+        t_formula = transition_formula(t)
+        # if the predicate is a state predicate and is not mentioned in both the guard and action
+        if not is_tran_pred(predicate) and not any(v for v in predicate.variablesin() if v in t.condition.variablesin()
+                                                                                         or v in vars_modified_in_action_without_identity + vars_used_in_action_without_identity):
+            self.abstract_effect_invars[t_formula] += [predicate]
+        # if the predicate is a transition predicate and is not mentioned in the action
+        elif is_tran_pred(predicate) and not any(v for v in predicate.variablesin() if v in vars_modified_in_action_without_identity):
+            self.abstract_effect_constant[t_formula] += [neg(predicate)]
+        else:
+            action_formula = conjunct_formula_set([BiOp(a.left, "=", add_prev_suffix(a.right)) for a in action])
+            prev_predicate = add_prev_suffix(predicate)
+            for (guard_disjunct, E) in Es:
+                # E_formula = add_prev_suffix(conjunct_formula_set(E))
+                new_formula = conjunct(action_formula, add_prev_suffix(guard_disjunct))
+                formula_pos = conjunct(new_formula, prev_predicate)
+                if sat(formula_pos, self.program.symbol_table):
+                    try_pos = True
+                else:
+                    try_pos = False
+
+                formula_neg = conjunct(new_formula, neg(prev_predicate))
+                if sat(formula_neg, self.program.symbol_table):
+                    try_neg = True
+                else:
+                    try_neg = False
+                newNextPss = {}
+                for (nextPs, Pss) in self.abstract_effect[t][E].items():
+                    nextPs_with_p = frozenset(p for p in nextPs | {predicate})
+                    nextPs_with_neg_p = frozenset(p for p in nextPs | {neg(predicate)})
+                    new_pos_Ps = []
+                    new_neg_Ps = []
+                    for Ps in Pss:
+                        if try_pos and sat(conjunct(conjunct_formula_set(nextPs_with_p),
+                                       conjunct(formula_pos, conjunct_formula_set([add_prev_suffix(P) for P in Ps]))), self.program.symbol_table):
+                            new_pos_Ps += [Ps + [predicate]]
+
+                        if try_neg and sat(conjunct(conjunct_formula_set(nextPs_with_p),
+                                        conjunct(formula_neg, conjunct_formula_set([add_prev_suffix(P) for P in Ps]))), self.program.symbol_table):
+                            new_pos_Ps += [Ps + [neg(predicate)]]
+
+                        if try_pos and sat(conjunct(conjunct_formula_set(nextPs_with_neg_p),
+                                       conjunct(formula_pos, conjunct_formula_set([add_prev_suffix(P) for P in Ps]))), self.program.symbol_table):
+                            new_neg_Ps += [Ps + [predicate]]
+
+                        if try_neg and sat(conjunct(conjunct_formula_set(nextPs_with_neg_p),
+                                        conjunct(formula_neg, conjunct_formula_set([add_prev_suffix(P) for P in Ps]))), self.program.symbol_table):
+                            new_neg_Ps += [Ps + [neg(predicate)]]
+                    if len(new_pos_Ps) == 0 and len(new_neg_Ps) == 0:
+                        print()
+                    if len(new_pos_Ps) > 0:
+                        newNextPss[nextPs_with_p] = new_pos_Ps
+                    if len(new_neg_Ps) > 0:
+                        newNextPss[nextPs_with_neg_p] = new_neg_Ps
+
+                if len(newNextPss) > 0:
+                    self.abstract_effect[t][E] = newNextPss
+                else:
+                    self.abstract_effect[t].pop(E)
+
+                    if env_trans:
+                        self.abstract_guard_env_disjuncts[t].remove((guard_disjunct, E))
+                    else:
+                        self.abstract_guard_con_disjuncts[t].remove((guard_disjunct, E))
+
+
+    def abstract_program_transitions(self):
+        orig_env_transitions, orig_con_transitions = self.program.complete_transitions()
+
+        self.abstract_guard_env = {}
+        self.abstract_guard_con = {}
+        self.abstract_guard_env_disjuncts = {}
+        self.abstract_guard_con_disjuncts = {}
+
+        self.init_program_trans = []
+
+        init_conf = conjunct_typed_valuation_set(self.program.valuation)
+        for env_trans in orig_env_transitions:
+            env_trans.output += [neg(o) for o in self.program.out_events if o not in env_trans.output]
+            disjuncts, formula = self.abstract_guard(env_trans.condition, self.program.env_events)
+            self.abstract_guard_env[env_trans] = formula
+            self.abstract_guard_env_disjuncts[env_trans] = disjuncts
+            self.abstract_effect[env_trans] = {E:[[]] for _, E in disjuncts}
+
+            if env_trans.src == self.program.initial_state:
+                init_cond = conjunct(init_conf, env_trans.condition)
+                if smt_checker.check(And(*init_cond.to_smt(self.program.symbol_table))):
+                    new_init_trans = Transition(env_trans.src, init_cond, env_trans.action, env_trans.output, env_trans.tgt)
+                    disjuncts, formula = self.abstract_guard(new_init_trans.condition, self.program.env_events)
+                    new_disjuncts = disjuncts #set()
+                    # for (guard, disjunct) in disjuncts:
+                    #     if not sat((conjunct(neg(conjunct_formula_set(disjunct)), init_cond)), self.program.symbol_table):
+                    #         new_disjuncts.add((guard, disjunct))
+                    #     else:
+                    #         print("")
+                    if len(new_disjuncts) > 0:
+                        disjuncts = new_disjuncts
+                        self.abstract_guard_env[new_init_trans] = formula
+                        self.abstract_guard_env_disjuncts[new_init_trans] = disjuncts
+                        self.init_program_trans.append(new_init_trans)
+                        self.abstract_effect[new_init_trans] = {E:[[]] for _, E in disjuncts}
+                    else:
+                        print("")
+
+        for con_trans in orig_con_transitions:
+            con_trans.output += [neg(o) for o in self.program.out_events if o not in con_trans.output]
+            disjuncts, formula = self.abstract_guard(con_trans.condition, self.program.con_events)
+            self.abstract_guard_con[con_trans] = formula
+            self.abstract_guard_con_disjuncts[con_trans] = disjuncts
+            self.abstract_effect[con_trans] = {E: [[]] for _, E in disjuncts}
+
+        self.all_program_trans = orig_env_transitions + orig_con_transitions + self.init_program_trans
+
+    def abstract_guard_explicitly(self, guard, events):
+        vars_in_cond = guard.variablesin()
+        events_in_cond = [e for e in vars_in_cond if e in events]
+        powerset = powerset_complete(events_in_cond)
+
+        int_disjuncts_only_events = [E for E in powerset if
+                                     smt_checker.check(
+                                         And(*conjunct_formula_set(E | {guard}).to_smt(self.program.symbol_table)))]
+
+        satisfying_behaviour = int_disjuncts_only_events
+        dnfed = disjunct_formula_set([conjunct_formula_set(d) for d in int_disjuncts_only_events])
+        return [(conjunct(guard, conjunct_formula_set(E)), E) for E in satisfying_behaviour], dnfed
+
+    def abstract_guard(self, guard: Formula, events, use_set_method=True):
+        if use_set_method:
+            return self.abstract_guard_explicitly(guard, events)
+
+        guard_without_math = guard.replace_math_exprs(0)
+        # when there is a disjunction, instead of resolving vars to false, resolve them to a var 'program_choice'
+        # then, if there is a disjunct with just program_choice in it, it denotes the transition may be activated
+        # regardless of what the env does with env vars
+        guard_with_only_events0 = keep_only_vars(guard_without_math[0], events, make_program_choices_explicit=True).simplify()
+        guard_with_only_events = simplify_formula_without_math(guard_with_only_events0)
+        abstract_out_disjunctions = abstract_out_disjunctions_of_atoms(guard_with_only_events)
+        new_abstract_out_disjunctions = {}
+        for var, disjunct in abstract_out_disjunctions[1].items():
+            if isinstance(disjunct, BiOp) and disjunct.op[0] == "|":
+                disjuncts = set(disjunct.sub_formulas_up_to_associativity())
+                if Variable("program_choice") in disjuncts:
+                    disjuncts.remove(Variable("program_choice"))
+                    disjuncts.add(conjunct_formula_set([neg(d) for d in disjuncts]))
+                new_abstract_out_disjunctions[var] = disjunct_formula_set(disjuncts)
+            else:
+                if not disjunct == Variable("program_choice"):
+                    new_abstract_out_disjunctions[var] = disjunct
+
+        guard_with_only_events = abstract_out_disjunctions[0].replace(lambda x: x if str(x) not in new_abstract_out_disjunctions.keys()
+                                                                            else new_abstract_out_disjunctions[str(x)])
+        guard_with_only_events = guard_with_only_events.replace(BiOp(Variable("program_choice"), ":=", Value("TRUE")))
+        # TODO need to timeout and give up on this dnfing sometimes too
+        # dnf_guard_with_only_events = dnf(guard_with_only_events, simplify=False)
+        p1 = Process(target=dnfguard, name='Process', args=(guard_with_only_events,))
+        p1.start()
+        p1.join(timeout=1)
+        if p1.exitcode is None:
+            print("Giving up on dnfing, and using explicit method.")
+            use_set_method = True
+            p1.terminate()
+            vars_in_cond = guard.variablesin()
+            events_in_cond = [e for e in vars_in_cond if e in events]
+            powerset = powerset_complete(events_in_cond)
+
+            int_disjuncts_only_events = [E for E in powerset if
+                                         smt_checker.check(And(*conjunct_formula_set(E | {guard}).to_smt(self.program.symbol_table)))]
+
+        else:
+            dnf_guard_with_only_events = queue.get()
+            p1.terminate()
+
+            if Variable("program_choice") in dnf_guard_with_only_events.variablesin():
+                print()
+            int_disjuncts_only_events = set()
+            if isinstance(dnf_guard_with_only_events, BiOp) and dnf_guard_with_only_events.op[0] == "|":
+                for d in dnf_guard_with_only_events.sub_formulas_up_to_associativity():
+                    if isinstance(d, BiOp) and d.op[0] == "&":
+                        atoms = d.sub_formulas_up_to_associativity()
+                        contradictions = [a for a in d.variablesin() if a in atoms and neg(a) in atoms]
+                        basic_atoms = [a for a in atoms if isinstance(a, Variable) and a not in contradictions
+                                       or isinstance(a, UniOp) and a.right not in contradictions]
+                        new_conjuncts = [basic_atoms]
+                        while len(contradictions) > 0:
+                            next_conjuncts = []
+                            for at in new_conjuncts:
+                                next_conjuncts.append(at + [contradictions[0]])
+                                next_conjuncts.append(at + [neg(contradictions[0])])
+                            contradictions.pop(0)
+                            new_conjuncts = next_conjuncts
+                        unique_new_conjuncts = frozenset({frozenset(dd) for dd in new_conjuncts})
+                        for dd in unique_new_conjuncts:
+                            int_disjuncts_only_events.add(dd)
+                    else:
+                        int_disjuncts_only_events.add(frozenset({d}))
+            else:
+                if isinstance(dnf_guard_with_only_events, BiOp) and dnf_guard_with_only_events.op[0] == "&":
+                        atoms = dnf_guard_with_only_events.sub_formulas_up_to_associativity()
+                        contradictions = [a for a in dnf_guard_with_only_events.variablesin() if a in atoms and neg(a) in atoms]
+                        basic_atoms = [a for a in atoms if isinstance(a, Variable) and a not in contradictions
+                                       or isinstance(a, UniOp) and a.right not in contradictions]
+                        new_conjuncts = [basic_atoms]
+                        while len(contradictions) > 0:
+                            next_conjuncts = set(new_conjuncts)
+                            for at in new_conjuncts:
+                                next_conjuncts.add(at + [contradictions[0]])
+                                next_conjuncts.add(at + [neg(contradictions[0])])
+                            contradictions.pop(0)
+                            new_conjuncts = next_conjuncts
+                        unique_new_conjuncts = frozenset({frozenset(dd) for dd in new_conjuncts})
+                        for dd in unique_new_conjuncts:
+                            int_disjuncts_only_events.add(dd)
+                else:
+                    int_disjuncts_only_events.add(frozenset({dnf_guard_with_only_events}))
+
+            if len(int_disjuncts_only_events) > 1 and frozenset({Value("TRUE")}) in int_disjuncts_only_events:
+                int_disjuncts_only_events.remove(frozenset({Value("TRUE")}))
+            event_guard = disjunct_formula_set([conjunct_formula_set(d) for d in int_disjuncts_only_events])
+            if not is_tautology(implies(guard, event_guard), self.program.symbol_table):
+                disjuncts_to_add = set()
+                for d in int_disjuncts_only_events:
+                    for dd in d:
+                        disjuncts_to_add |= {frozenset({neg(dd).simplify()})}
+                for d in disjuncts_to_add:
+                    int_disjuncts_only_events.add(d)
+
+            put_math_back = lambda f,d: f.replace(lambda v : d[str(v)] if str(v) in d.keys() else v)
+
+            int_disjuncts = set()
+            for d in int_disjuncts_only_events:
+                new_guard = partially_evaluate(guard, [v for v in d if isinstance(v, Variable)],
+                                               [v.right for v in d if isinstance(v, UniOp) and v.op[0] == "!"] +
+                                               [e for e in events if e not in d and neg(e) not in d],
+                                            self.program.symbol_table)
+                if isinstance(new_guard, Value) and new_guard.is_false():
+                    continue
+                d_and_guard_without_atomic_conjunctions, conj_dict = abstract_out_conjunctions_of_atoms(new_guard, {})
+                d_and_guard_without_math = d_and_guard_without_atomic_conjunctions.replace_math_exprs(0)
+                d_and_guard = d_and_guard_without_math[0]
+                # dnf is exponential, so if more than 8 variables we give up and just compute all possible combinations of events
+                # TODO consider also a timeout, and/or anlayse if d_and_guard is already in dnf form
+                # TODO this will mostly happen for the implicit stutter transitions,
+                #  so if we leave them for last, we can collect all the info from the smaller transitions
+                if is_dnf(d_and_guard):
+                    dnf_d_and_guard = d_and_guard
+                else:
+                    if len(d_and_guard.variablesin()) > 8 and depth_of_formula(d_and_guard) > 3:
+                        print("Giving up on dnfing, and using explicit method.")
+                        use_set_method = True
+                        break
+
+                    p1 = Process(target=dnfguard, name='Process', args=(d_and_guard,))
+                    p1.start()
+                    p1.join(timeout=1)
+                    if p1.exitcode is None:
+                        print("Giving up on dnfing, and using explicit method.")
+                        use_set_method = True
+                        p1.terminate()
+                        break
+                    else:
+                        dnf_d_and_guard = queue.get()
+                        p1.terminate()
+
+                new_d = d
+                if isinstance(dnf_d_and_guard, BiOp) and dnf_d_and_guard.op[0] == "|":
+                    collect_disjuncts = set()
+                    for dd in dnf_d_and_guard.sub_formulas_up_to_associativity():
+                        dd_with_math = put_math_back(dd, conj_dict | d_and_guard_without_math[1])
+                        if sat(conjunct(guard, dd_with_math), self.program.symbol_table):
+                            collect_disjuncts.add(dd_with_math)
+                    if len(collect_disjuncts) > 0:
+                        int_disjuncts.add((disjunct_formula_set(collect_disjuncts), new_d))
+                else:
+                    d_with_math = put_math_back(dnf_d_and_guard, conj_dict | d_and_guard_without_math[1])
+                    if sat(conjunct(guard, d_with_math), self.program.symbol_table):
+                        int_disjuncts.add((d_with_math, new_d))
+
+        if not use_set_method:
+            dnfed = disjunct_formula_set([conjunct_formula_set(d) for _, d in int_disjuncts])
+            print(str(guard) + " -> " + str(dnfed))
+            return int_disjuncts, dnfed
+        else:
+            # vars_in_cond = guard.variablesin()
+            # events_in_cond = [e for e in vars_in_cond if e in events]
+            # powerset = powerset_complete(events_in_cond)
+
+            satisfying_behaviour = int_disjuncts_only_events
+            dnfed = disjunct_formula_set([conjunct_formula_set(d) for d in int_disjuncts_only_events])
+            print(str(guard) + " -> " + str(dnfed))
+
+            # [E for E in powerset if
+            #                             smt_checker.check(And(*conjunct_formula_set(E | {guard}).to_smt(self.program.symbol_table)))]
+
+            # if len(powerset) == len(satisfying_behaviour):
+            #     satisfying_behaviour_formula = true()
+            # else:
+            #     satisfying_behaviour_formula = disjunct_formula_set([conjunct_formula_set(E) for E in satisfying_behaviour])
+
+            return [(conjunct(guard, conjunct_formula_set(E)), E) for E in satisfying_behaviour], dnfed
 
     def getFromCache(self, f: Formula):
         if f in self.cache.keys():
@@ -58,351 +402,677 @@ class PredicateAbstraction:
         Ps = self.getFromCache(f)
         return meaning_within_incremental(f, Ps, predicates, symbol_table)
 
-    def add_predicates(self, state_predicatess: [Formula], transition_predicatess: [Formula], simplified: bool):
-        if len(state_predicatess) + len(transition_predicatess) == 0:
-            return
-        print("Adding predicates to predicate abstraction:")
-        print("state preds: [" + ", ".join(list(map(str, state_predicatess))) + "]")
-        print("trans preds: [" + ", ".join(list(map(str, transition_predicatess))) + "]")
-        program = self.program
-        init_st = program.initial_state
-        init_conf = conjunct_typed_valuation_set(program.valuation)
-        env_transitions = set()
-        con_transitions = set()
+    def prune_predicate_sets(self):
+        new_abstract_effect = {}
+        for t in self.abstract_guard_env.keys():
+            if t in self.init_program_trans:
+                new_abstract_effect[t] = self.abstract_effect[t]
+            else:
+                new_abstract_effect[t] = {}
+                t_f = transition_formula(t)
+                prev_trans = [t for t in self.abstract_guard_con.keys() if t.tgt == t.src]
 
-        orig_env_transitions, orig_con_transitions = program.complete_transitions()
+                prev_pred_states = set()
+                for tt in prev_trans:
+                    tt_prev_pred_state = set()
+                    for _, effects in self.abstract_effect[tt].items():
+                        tt_f = transition_formula(tt)
+                        effects_tt_prev_pred_states = [Ps for Ps in effects.keys()]
+                        if len(self.abstract_effect_constant[tt_f]) > 0:
+                            effects_tt_prev_pred_states = [Ps | {c} for c in self.abstract_effect_constant[tt_f] for Ps in effects_tt_prev_pred_states]
+                        if len(self.abstract_effect_invars[tt_f]) > 0:
+                            effects_tt_prev_pred_states = [Ps | {p} for p in self.abstract_effect_invars[tt_f] for Ps in effects_tt_prev_pred_states]
+                            effects_tt_prev_pred_states += [Ps | {neg(p)} for p in self.abstract_effect_invars[tt_f] for Ps in effects_tt_prev_pred_states if p not in Ps]
+                        tt_prev_pred_state |= set(effects_tt_prev_pred_states)
+                    prev_pred_states |= tt_prev_pred_state
 
-        symbol_table = self.program.symbol_table
+                current_pred_states = [Ps for _, effects in self.abstract_effect[t].items() for Pss in effects.values() for Ps in Pss]
+                if len(self.abstract_effect_constant[t_f]) > 0:
+                    current_pred_states = [Ps + [c] for c in self.abstract_effect_constant[t_f] for Ps in current_pred_states]
+                if len(self.abstract_effect_invars[t_f]) > 0:
+                    current_pred_states = [Ps + [p] for p in self.abstract_effect_invars[t_f] for Ps in current_pred_states]
+                    current_pred_states += [Ps + [neg(p)] for p in self.abstract_effect_invars[t_f] for Ps in current_pred_states]
 
-        symbol_table = symbol_table | {(str(key) + "_prev"): value for key, value in
-                                                      symbol_table.items()}\
-                                    | {(str(key) + "_prev" + "_prev"): value for key, value in
-                                       symbol_table.items()}
+                pruned_current_pred_states = [Ps for Ps in current_pred_states if set(Ps) in prev_pred_states]
+                pruned_current_pred_states = [[p for p in Ps
+                                               if p not in self.abstract_effect_constant[t_f] and neg(p).simplify()
+                                               not in self.abstract_effect_invars[t_f]] for Ps in pruned_current_pred_states]
 
-        self.state_predicates += state_predicatess
-        self.transition_predicates += transition_predicatess
-
-        # TODO we are not doing this incrementally...
-        predicates = self.state_predicates + self.transition_predicates
-        new_predicates = state_predicatess + transition_predicatess
-
-        new_env_to_program_transitions = {}
-        new_con_to_program_transitions = {}
-
-        new_state_to_env_transitions = {}
-        new_state_to_con_transitions = {}
-
-        # new_program_env_to_abs_transitions = {}
-        # new_program_con_to_abs_transitions = {}
-
-        done_states = set()
-
-        # these will be pairs of old states and a set of sets of predicates
-        current_states = {(True, init_st, frozenset({p for p in state_predicatess
-                                   if smt_checker.check(And(*(conjunct(init_conf, p).to_smt(symbol_table))))} | \
-                                                    {neg(p) for p in state_predicatess
-                                                     if smt_checker.check(
-                                                        And(*(conjunct(init_conf, neg(p)).to_smt(symbol_table))))}
-                                                    ))}
-
-        while len(current_states) > 0:
-            next_states = set()
-            for (env_turn, st, new_Ps) in current_states:
-                done_states.add((env_turn, st, new_Ps))
-                for abstract_trans in (self.state_to_env_transitions[st]
-                                            if env_turn else self.state_to_con_transitions[st]):
-                    for program_trans in (self.env_to_program_transitions[abstract_trans]
-                                            if env_turn else self.con_to_program_transitions[abstract_trans]):
-                        events = abstract_trans.condition
-                        if isinstance(abstract_trans.src, AbstractState):
-                            state = conjunct_formula_set(abstract_trans.src.predicates)
+                for E, effects in self.abstract_effect[t].items():
+                    new_abstract_effect[t][E] = {}
+                    for nextPs in effects.keys():
+                        newPss = [Ps for Ps in effects[nextPs] if Ps in pruned_current_pred_states]
+                        if len(newPss) < len(effects[nextPs]):
+                            print()
+                        if len(newPss) > 0:
+                            new_abstract_effect[t][E][nextPs] = newPss
                         else:
-                            state = init_conf
-                        pre_smt_formula = conjunct_formula_set({events, state, program_trans.condition} | new_Ps)
-                        smt_formula = And(*pre_smt_formula.to_smt(symbol_table))
+                            new_abstract_effect[t][E][nextPs] = [[]]
+                    if len(new_abstract_effect[t][E]) == 0:
+                        del new_abstract_effect[t][E]
 
-                        if smt_checker.check(smt_formula):
-                            prev_condition = add_prev_suffix(program, pre_smt_formula)
+        for t in self.abstract_guard_con.keys():
+            new_abstract_effect[t] = {}
+            t_f = transition_formula(t)
+            prev_trans = [t for t in self.abstract_guard_env.keys() if t.tgt == t.src]
 
-                            complete_action = program.complete_action_set(program_trans.action)
-                            prev_action = [BiOp(act.left, "=", add_prev_suffix(program, act.right)) for act in
-                                           complete_action]
+            prev_pred_states = set()
+            for tt in prev_trans:
+                tt_prev_pred_state = set()
+                for _, effects in self.abstract_effect[tt].items():
+                    tt_f = transition_formula(tt)
+                    effects_tt_prev_pred_states = [Ps for Ps in effects.keys()]
+                    if len(self.abstract_effect_constant[tt_f]) > 0:
+                        effects_tt_prev_pred_states = [Ps | {c} for c in self.abstract_effect_constant[tt_f] for Ps
+                                                       in effects_tt_prev_pred_states]
+                    if len(self.abstract_effect_invars[tt_f]) > 0:
+                        effects_tt_prev_pred_states = [Ps | {p} for p in self.abstract_effect_invars[tt_f] for Ps in
+                                                       effects_tt_prev_pred_states]
+                        effects_tt_prev_pred_states += [Ps | {neg(p)} for p in self.abstract_effect_invars[tt_f] for
+                                                        Ps in effects_tt_prev_pred_states if p not in Ps]
+                    tt_prev_pred_state |= set(effects_tt_prev_pred_states)
+                prev_pred_states |= tt_prev_pred_state
 
-                            f = conjunct_formula_set(list(prev_action) + [prev_condition] + abstract_trans.tgt.predicates)
+            current_pred_states = [Ps for _, effects in self.abstract_effect[t].items() for Pss in effects.values()
+                                   for Ps in Pss]
+            if len(self.abstract_effect_constant[t_f]) > 0:
+                current_pred_states = [Ps + [c] for c in self.abstract_effect_constant[t_f] for Ps in
+                                       current_pred_states]
+            if len(self.abstract_effect_invars[t_f]) > 0:
+                current_pred_states = [Ps + [p] for p in self.abstract_effect_invars[t_f] for Ps in
+                                       current_pred_states]
+                current_pred_states += [Ps + [neg(p)] for p in self.abstract_effect_invars[t_f] for Ps in
+                                        current_pred_states]
 
-                            if not smt_checker.check(And(*f.to_smt(symbol_table))):
-                                continue
-                            else:
-                                if f in self.cache.keys():
-                                    next_Ps = self.cache[f]
-                                else:
-                                    next_Ps = self.meaning_within(f, new_predicates, symbol_table)
-                                    self.cache[f] = next_Ps
-                                for next_P in next_Ps:
-                                    if len(next_P) != len(state_predicatess) + len(transition_predicatess):
-                                        raise Exception("Something went wrong")
-                                    if env_turn:
-                                        new_output = set(program_trans.output)
-                                        new_output |= {neg(o) for o in program.out_events if o not in program_trans.output}
-                                        new_output = list(new_output)
-                                    else:
-                                        new_output = []
+            pruned_current_pred_states = [Ps for Ps in current_pred_states if set(Ps) in prev_pred_states]
+            pruned_current_pred_states = [[p for p in Ps
+                                           if p not in self.abstract_effect_constant[t_f] and neg(p).simplify()
+                                           not in self.abstract_effect_invars[t_f]] for Ps in
+                                          pruned_current_pred_states]
 
-                                    if isinstance(abstract_trans.src, AbstractState):
-                                        new_abs_src = AbstractState(abstract_trans.src.state,
-                                                                    set(abstract_trans.src.predicates) | set(new_Ps))
-                                    else:
-                                        new_abs_src = abstract_trans.src
-                                    new_abs_tgt = AbstractState(abstract_trans.tgt.state, set(abstract_trans.tgt.predicates) | next_P)
+            for E, effects in self.abstract_effect[t].items():
+                new_abstract_effect[t][E] = {}
+                for nextPs in effects.keys():
+                    newPss = [Ps for Ps in effects[nextPs] if Ps in pruned_current_pred_states]
+                    if len(newPss) < len(effects[nextPs]):
+                        print()
+                    if len(newPss) > 0:
+                        new_abstract_effect[t][E][nextPs] = newPss
+                    else:
+                        new_abstract_effect[t][E][nextPs] = [[]]
+                if len(new_abstract_effect[t][E]) == 0:
+                    del new_abstract_effect[t][E]
 
-                                    if not smt_checker.check(And(*conjunct_formula_set(set(abstract_trans.tgt.predicates) | next_P).to_smt(symbol_table))):
-                                        raise Exception("Something went wrong")
+        self.abstract_effect = new_abstract_effect
+                # need to deal with invars and constants
 
-                                    new_abstract_trans = Transition(new_abs_src, events, [], new_output, new_abs_tgt)
+    def loop_abstraction(self,
+                         entry_condition,
+                         loop_body,
+                         exit_predicate_state : Formula,
+                         ranking_function: MathExpr,
+                         invars: Formula,
+                         disagreed_on_program_state : dict,
+                         program_taken_transition : Transition):
+        #ASSUMPTION: the loop body has been pre-processes to keep only actions that affect the ranking function
+        # as in synthesis.liveness_step
+        #
+        # if there are only decreases of the ranking function in the loop body, then just GF rf_dec -> GF rf_inc is enough
+        # if there are also increases, then need to specialise to the actions that affect the rf in the loop body
 
-                                    next = (not env_turn, abstract_trans.tgt, frozenset(next_P))
-                                    if next not in done_states | current_states:
-                                        next_states |= {next}
+        new_env_variables = []
+        new_con_variables = []
+        new_state_predicates = []
+        new_transition_predicates = []
+        new_guarantees = []
+        new_assumptions = []
 
-                                    if env_turn:
-                                        env_transitions |= {new_abstract_trans}
-                                        safe_update_set_vals(new_env_to_program_transitions, new_abstract_trans, {program_trans})
-                                        # safe_update_list_vals(new_program_env_to_abs_transitions, program_trans, [abs_t])
-                                        safe_update_set_vals(new_state_to_env_transitions, new_abstract_trans.src, {new_abstract_trans})
-                                    else:
-                                        con_transitions |= {new_abstract_trans}
-                                        safe_update_set_vals(new_con_to_program_transitions, new_abstract_trans, {program_trans})
-                                        # safe_update_list_vals(new_program_con_to_abs_transitions, program_trans, [abs_t])
-                                        safe_update_set_vals(new_state_to_con_transitions, new_abstract_trans.src, {new_abstract_trans})
+        # first check who wanted to remain in the loop
+        # last_mm_state = [st for st in disagreed_on_program_state.keys() if st.startswith("st_") and "seen" not in st and disagreed_on_program_state[st] == "TRUE"][0]
+        env_wanted_to_remain_in_loop = program_taken_transition[0] != loop_body[0][0] #any(True for _, dict in loop_body if dict[last_mm_state] == "TRUE")
 
-                                    # trans_from_here.add(abs_t)
-            current_states = next_states
+        # # check if the actual predicate state of the program appears already in the loop body (counterexample_loop)
+        # actual_program_true_preds = [p for p in disagreed_on_program_state.keys() if
+        #                              str(p).startswith("pred_") and disagreed_on_program_state[p] == "TRUE"]
+        # actual_program_false_preds = [neg(p) for p in disagreed_on_program_state.keys() if
+        #                               str(p).startswith("pred_") and disagreed_on_program_state[p] == "FALSE"]
+        # actual_program_predicate_state = conjunct_formula_set(
+        #     actual_program_true_preds + actual_program_false_preds, sort=True)
+        #
+        # for _, dict in loop_body:
+        #     true_preds = [p for p in dict.keys() if
+        #                   str(p).startswith("pred_") and dict[p] == "TRUE"]
+        #     false_preds = [neg(p) for p in dict.keys() if
+        #                    str(p).startswith("pred_") and dict[p] == "FALSE"]
+        #     predicate_state = conjunct_formula_set(true_preds + false_preds, sort=True)
+        #     if predicate_state == actual_program_predicate_state:
+        #         env_wanted_to_remain_in_loop = False
+        #         break
 
-        states = {s for t in (env_transitions | con_transitions) for s in
-                  {t.src, t.tgt}}  # done_states_env | done_states_con
+        rf_dec = BiOp(add_prev_suffix(ranking_function), ">", ranking_function)
+        rf_inc = BiOp(add_prev_suffix(ranking_function), "<", ranking_function)
+        rf_stutter = BiOp(ranking_function, "=", add_prev_suffix(ranking_function))
 
-        # For debugging
-        for t in env_transitions:
-            good = False
-            for x in con_transitions:
-                if t.tgt == x.src:
-                    good = True
-                    break
-            if not good:
-                raise Exception("Predicate abstraction has state, " + str(t.tgt) + ", without output transitions.\n"
-                                                                                   "" + "\n".join(
-                    map(str, orig_env_transitions + orig_con_transitions)))
+        #entry_condition can be of three types:
+        # (1) true
+        # (2) a conjunction of known state predicates
+        # (3) a valuation,
+        #TODO in the latter two cases we will want to try and expand the entry_condition
+        # for now, we add predicates in the entry_condition that are not already present as new state predicates
+        entry_predicates = atomic_predicates(entry_condition)
+        entry_predicates = [p for p in entry_predicates if not(isinstance(p, Value) and (p.is_true() or p.is_false()))]
+        # TODO check if can be expressed with current predicates, with meaning_within
+        # entry_predicates = reduce_up_to_iff(entry_predicates, self.state_predicates, self.program.symbol_table)
 
-        for t in con_transitions:
-            good = False
-            for x in env_transitions:
-                if t.tgt == x.src:
-                    good = True
-                    break
-            if not good:
-                raise Exception("Predicate abstraction has state, " + str(t.tgt) + ", without output transitions.")
+        # now computing the transition predicates
+        # check whether given the loop invariants, and the type constrains of the variables,
+        # an action is associated with an increase or decrease or it could be either
 
-        self.env_to_program_transitions = new_env_to_program_transitions
-        self.con_to_program_transitions = new_con_to_program_transitions
+        only_dec = False
+        action_sequence = []
+        for t, _ in loop_body:
+            actions = []
+            for act in t.action:
+                if act.left != act.right:
+                    action_formula = BiOp(act.left, "=", add_prev_suffix(act.right))
+                    type_constraint = type_constraints(action_formula, self.program.symbol_table)
 
-        self.state_to_env_transitions = {s: [t for t in env_transitions if t.src == s] for s in states}
-        self.state_to_con_transitions = {s: [t for t in con_transitions if t.src == s] for s in states}
+                    if sat(conjunct_formula_set([rf_dec, type_constraint, action_formula, invars, add_prev_suffix(invars)]), self.program.symbol_table):
+                        if not sat(conjunct_formula_set([rf_inc, type_constraint, action_formula, invars, add_prev_suffix(invars)]), self.program.symbol_table):
+                            only_dec = True
 
-        self.env_to_program_transitions = new_env_to_program_transitions
-        self.con_to_program_transitions = new_con_to_program_transitions
+                    actions.append(action_formula)
+            if len(actions) > 0:
+                action_sequence.append(conjunct_formula_set(actions, sort=True))
+        if only_dec and env_wanted_to_remain_in_loop:
+            new_assumptions += [implies(G(F(conjunct(stringify_pred(rf_dec), invars))), G(F(disjunct(stringify_pred(rf_inc), neg(invars)))))]
+            new_transition_predicates += [rf_dec, rf_inc]
+        else:
+            new_state_predicates += list(entry_predicates) + list(set(action_sequence))
+            new_transition_predicates += action_sequence + [rf_stutter]
+            action_sequence = [stringify_pred(p) for p in action_sequence]
 
-        self.abstraction = Program("pred_abst_" + program.name, states | {init_st}, init_st, [],
-                                   env_transitions, con_transitions, program.env_events,
-                                   program.con_events, program.out_events, False)
+            in_loop = Variable("inloop_" + str(len(self.loops)))
+            loop_index = len(self.loops)
 
-    def compute_with_predicates(self, state_predicatess: [Formula], transition_predicatess: [Formula],
-                                simplified: bool):
-        print("state preds: " + ", ".join(list(map(str, state_predicatess))))
-        print("trans preds: " + ", ".join(list(map(str, transition_predicatess))))
+            new_env_variables += [in_loop]
+            # building abstract loop constraints
+            safety = []
+            # initially not in loop
+            safety.append(neg(in_loop))
+
+            # entry into abstract loop
+            if str(entry_condition).lower() == "true":
+                entering_loop = conjunct(neg(in_loop), X(action_sequence[0]))
+            else:
+                entering_loop = conjunct(neg(in_loop), entry_condition)
+                not_entering_loop = conjunct(neg(in_loop), neg(entry_condition))
+
+                safety.append(G(implies(not_entering_loop, X(neg(in_loop)))))
+
+            if len(action_sequence) > 1:
+                steps = []
+                for i in range(len(action_sequence[1:])):
+                    steps.append(Variable("step_" + str(loop_index) + "_" + str(i + 1)))
+
+                new_env_variables += steps
+
+                safety.append(conjunct_formula_set(neg(s) for s in steps))
+                # being in one step implies not being in the other steps
+                safety.append(conjunct_formula_set(
+                    [G(implies(s, neg(disjunct_formula_set([not_s for not_s in steps if not_s != s]))))
+                              for s in steps]))
+                safety.append(G(implies(entering_loop, X(conjunct(in_loop, steps[0])))))
+
+                looping_steps = steps + [steps[0]]
+                # stepping through loop
+                for i in range(1, len(looping_steps)):
+                    now = conjunct(looping_steps[i-1], X(action_sequence[i-1]))
+                    safety.append(G(implies(now, X(conjunct(in_loop, looping_steps[i])))))
+
+                    # stutter
+                    now_stutter = conjunct(looping_steps[i-1], X(stringify_pred(rf_stutter)))
+                    safety.append(G(implies(now_stutter, X(conjunct(in_loop, looping_steps[i-1])))))
+
+                    # other action
+                    now_other_change = conjunct(looping_steps[i-1], X(conjunct(neg(action_sequence[i-1]), neg(stringify_pred(rf_stutter)))))
+                    safety.append(G(implies(now_other_change, X(neg(in_loop)))))
+
+                if not env_wanted_to_remain_in_loop:
+                    # TODO allow_exit needs to allow the environment to choose a certain predicate state (the exit condition)
+                    controller_choice = Variable("allow_exit_" + str(len(self.loops)))
+                    new_con_variables.append(controller_choice)
+
+                    # at last step, controller can choose to disallow the environment from exiting the loop
+                    controller_disallows_exit = conjunct(conjunct(in_loop, steps[-1]), neg(controller_choice))
+
+                    safety.append(G(implies(controller_disallows_exit, X(in_loop))))
+
+                    # to reduce size of game, only allowing controller to set choice variable when at the last step
+                    new_guarantees.append(G(implies(neg(steps[-1]), neg(controller_disallows_exit))))
+
+                    new_guarantees.append(G((implies(steps[-1], F(conjunct(env, disjunct(neg(in_loop), controller_choice)))))))
+                    new_guarantees.append(G((implies(steps[-1], F(conjunct(con, disjunct(neg(in_loop), controller_choice)))))))
+                    # new_guarantees.append(implies(G(F(in_loop)), G(F(neg(in_loop)))))
+                else:
+                    new_assumptions += [implies(G(F(in_loop)), G(F(neg(in_loop))))]
+            else:
+                safety.append(G(implies(entering_loop, X(in_loop))))
+
+                now = conjunct(in_loop, X(action_sequence[0]))
+                safety.append(G(implies(now, X(in_loop))))
+
+                # stutter
+                now_stutter = conjunct(in_loop, X(stringify_pred(rf_stutter)))
+                safety.append(G(implies(now_stutter, X(in_loop))))
+
+                # other action
+                now_other_change = conjunct(in_loop, X(W(stringify_pred(rf_stutter), conjunct(neg(action_sequence[0]), neg(stringify_pred(rf_stutter))))))
+                safety.append(G(implies(now_other_change, X(neg(in_loop)))))
+
+                if not env_wanted_to_remain_in_loop:
+                    controller_choice = Variable("allow_exit_" + str(len(self.loops)))
+                    new_con_variables.append(controller_choice)
+
+                    # at last step, controller can choose to disallow the environment from exiting the loop
+                    controller_disallows_exit = conjunct(in_loop, neg(controller_choice))
+
+                    exit_condition = stringify_formula(exit_predicate_state)
+                    safety.append(G(implies(controller_disallows_exit, X(conjunct(in_loop, neg(exit_condition))))))
+                    new_state_predicates += [p for p in atomic_predicates(exit_predicate_state)]
+
+                    # to reduce size of game, only allowing controller to set choice variable when at the last step
+                    # new_guarantees.append(G(implies(neg(in_loop), X(neg(controller_choice)))))
+
+                    new_guarantees.append(G((implies(in_loop, disjunct(G(con), F(conjunct(env, controller_choice)))))))
+                    new_guarantees.append(G((implies(in_loop, disjunct(G(env), F(conjunct(con, controller_choice)))))))
+                else:
+                    new_assumptions += [implies(G(F(in_loop)), G(F(neg(in_loop))))]
+
+            new_assumptions += safety
+
+            self.loops.append((entry_condition, loop_body, ranking_function))
+
+        return new_env_variables, new_con_variables, new_transition_predicates, new_state_predicates, new_assumptions, new_guarantees
+
+    def initialise(self, debug=True):
+        print("Initialising predicate abstraction.")
+
+        self.abstract_program_transitions()
+
+        # Formula -> (P -> [P])
+        for t in self.all_program_trans:
+            disjuncts = self.abstract_guard_env_disjuncts[t] if t in self.abstract_guard_env_disjuncts.keys() else self.abstract_guard_con_disjuncts[t]
+
+            formula = transition_formula(t)
+            self.formula_to_trans[formula] = t
+            self.transition_state_tags[formula] = {frozenset({d}): [[]] for d in disjuncts}
+            self.transition_tran_tags[formula] = {frozenset({d}): [[]] for d in disjuncts}
+            self.transition_unaffected_tags[formula] = set()
+            self.transition_constant_tags[formula] = set()
+            self.pred_transition_invars[formula] = set()
+            self.abstract_effect_invars[formula] = []
+            self.abstract_effect_constant[formula] = []
+            self.abstract_effect[t] = {E:{frozenset(): [[]]} for _, E in disjuncts}
+
+        # construct transition ltl
+        init_transitions = [conjunct_formula_set([self.abstract_guard_env[t], Variable(t.tgt)] + t.output)
+                                for t in self.init_program_trans]
+
+        init_transition_ltl = disjunct_formula_set([conjunct(phi, X(phi)) for phi in init_transitions])
+
+        transition_ltl = []
+        for env_trans in self.abstract_guard_env.keys():
+            if env_trans in self.init_program_trans: continue
+            now = conjunct_formula_set([env, Variable(env_trans.src), self.abstract_guard_env[env_trans]])
+            next = X(conjunct_formula_set([Variable(env_trans.tgt)] + env_trans.output))
+            transition_ltl += [conjunct(now, next)]
+
+        for con_trans in self.abstract_guard_con.keys():
+            now = conjunct_formula_set([con, Variable(con_trans.src), self.abstract_guard_con[con_trans]])
+
+            next = X(conjunct_formula_set([Variable(con_trans.tgt)] + [(neg(o)) for o in self.program.out_events]))
+            transition_ltl += [conjunct(now, next)]
+
+        ltl = conjunct(init_transition_ltl, X(G(disjunct_formula_set(transition_ltl))))
+
+        print(ltl)
+        return init_transition_ltl, X(G(disjunct_formula_set(transition_ltl)))
+
+    def add_predicates(self, new_state_predicates: [Formula], new_transition_predicates: [Formula], pred_name_dict : dict, simplified: bool):
+        if len(new_state_predicates) + len(new_transition_predicates) == 0:
+            return
+
+        # TODO maybe Nir's idea is better
+        # T : 2^{P \cup Q} -> 2^2^{P \cup Q}
+
+        print("Adding predicates to predicate abstraction:")
+        print("state preds: [" + ", ".join(list(map(str, new_state_predicates))) + "]")
+        print("trans preds: [" + ", ".join(list(map(str, new_transition_predicates))) + "]")
+
+
+        print("Tagging abstract transitions with predicates..")
+        start = time.time()
+        for p in new_state_predicates + new_transition_predicates:
+            for t in self.all_program_trans:
+                self.compute_abstract_effect_with_p(t, t in self.abstract_guard_env.keys(), p)
+
+        end = time.time()
+        print(end - start)
+
+        # start = time.time()
+        # self.prune_predicate_sets()
+        # end = time.time()
+        # print(end - start)
+
+        self.state_predicates += new_state_predicates
+        self.transition_predicates += new_transition_predicates
+
+        rename_pred = lambda p: pred_name_dict[p] if p in pred_name_dict.keys() else p
+
+        init_transitions = []
+        for t in self.init_program_trans:
+            for E, effect in self.abstract_effect[t].items():
+                if len(effect.keys()) > 1:
+                    raise Exception("init transition " + str(t) + " has more than one possible effect")
+                elif len(effect.keys()) == 1:
+                    E_effects = [rename_pred(p) for p in list(effect.keys())[0]]
+                else:
+                    E_effects = []
+                E_effects += [neg(rename_pred(p)) for p in self.abstract_effect_invars[transition_formula(t)]]
+                E_effects += [rename_pred(p) for p in self.abstract_effect_constant[transition_formula(t)]]
+                if len(E_effects) == 0:
+                    raise Exception("init transition " + str(t) + " has no effect")
+                init_transitions += [conjunct_formula_set(E_effects + [Variable(t.tgt)] + list(E) + t.output)]
+
+        init_transition_ltl = disjunct_formula_set([conjunct(phi, X(phi)) for phi in init_transitions])
+
+        transition_ltl = []
+        for env_trans in self.abstract_guard_env.keys():
+            # exclude initial transitions
+            if env_trans in self.init_program_trans: continue
+
+            t_formula = transition_formula(env_trans)
+            now = conjunct_formula_set([env, Variable(env_trans.src)])
+
+            invar_preds_effects = []
+
+            if t_formula in self.abstract_effect_invars.keys():
+                invar_preds_effects += [iff(pred_name_dict[p], X(pred_name_dict[p])) for p in self.abstract_effect_invars[t_formula]]
+
+            if t_formula in self.abstract_effect_constant.keys():
+                invar_preds_effects += [X(pred_name_dict[p]) for p in self.abstract_effect_constant[t_formula]]
+
+            invar_preds_formula = conjunct_formula_set(invar_preds_effects)
+            pred_effects = []
+
+            for E, effect in self.abstract_effect[env_trans].items():
+                E_effects = []
+                for next_pred_state, pred_states in effect.items():
+                    E_now = disjunct_formula_set(
+                        [conjunct_formula_set([rename_pred(p) for p in pred_state]) for pred_state in pred_states])
+                    E_now_simplified = simplify_formula_without_math(E_now)
+
+                    E_next = X(conjunct_formula_set([rename_pred(p) for p in next_pred_state]))
+                    E_effects += [conjunct(E_now_simplified, E_next)]
+                pred_effects += [conjunct(conjunct_formula_set(E), disjunct_formula_set(E_effects))]
+
+            pred_effect_formula = disjunct_formula_set(pred_effects)
+            output_formula = conjunct_formula_set([X(o) for o in env_trans.output])
+            effect_formula = conjunct(conjunct(pred_effect_formula, invar_preds_formula), output_formula)
+
+            next = conjunct(effect_formula, X(conjunct_formula_set([Variable(env_trans.tgt)])))
+            transition_ltl += [conjunct(now, next)]
+
+        for con_trans in self.abstract_guard_con.keys():
+            t_formula = transition_formula(con_trans)
+            now = conjunct_formula_set([con, Variable(con_trans.src)])
+
+            invar_preds_effects = []
+
+            if t_formula in self.abstract_effect_invars.keys():
+                invar_preds_effects += [iff(pred_name_dict[p], X(pred_name_dict[p])) for p in self.abstract_effect_invars[t_formula]]
+
+            if t_formula in self.abstract_effect_constant.keys():
+                invar_preds_effects += [X(pred_name_dict[p]) for p in self.abstract_effect_constant[t_formula]]
+
+            invar_preds_formula = conjunct_formula_set(invar_preds_effects)
+
+            pred_effects = []
+
+            for E, effect in self.abstract_effect[con_trans].items():
+                E_effects = []
+                for next_pred_state, pred_states in effect.items():
+                    E_now = disjunct_formula_set(
+                                            [conjunct_formula_set([rename_pred(p) for p in pred_state]) for pred_state in pred_states])
+                    E_now_simplified = simplify_formula_without_math(E_now)
+
+                    E_next = X(conjunct_formula_set([rename_pred(p) for p in next_pred_state]))
+                    E_effects += [conjunct(E_now_simplified, E_next)]
+                pred_effects += [conjunct(conjunct_formula_set(E), disjunct_formula_set(E_effects))]
+            pred_effect_formula = disjunct_formula_set(pred_effects)
+            output_formula = conjunct_formula_set([X(neg(o)) for o in self.program.out_events])
+            effect_formula = conjunct(conjunct(pred_effect_formula, invar_preds_formula), output_formula)
+
+            next = conjunct(effect_formula, X(conjunct_formula_set([Variable(con_trans.tgt)])))
+            transition_ltl += [conjunct(now, next)]
+
+        ltl = conjunct(init_transition_ltl, X(G(disjunct_formula_set(transition_ltl))))
+
+        print(ltl)
+        return init_transition_ltl, X(G(disjunct_formula_set(transition_ltl)))
+
+    def add_predicates_old(self, new_state_predicates: [Formula], new_transition_predicates: [Formula], pred_name_dict : dict, simplified: bool):
+        if len(new_state_predicates) + len(new_transition_predicates) == 0:
+            return
+
+        # TODO maybe Nir's idea is better
+        # T : 2^{P \cup Q} -> 2^2^{P \cup Q}
+
+        print("Adding predicates to predicate abstraction:")
+        print("state preds: [" + ", ".join(list(map(str, new_state_predicates))) + "]")
+        print("trans preds: [" + ", ".join(list(map(str, new_transition_predicates))) + "]")
+
+
+        print("Tagging abstract transitions with predicates..")
+        start = time.time()
+        for p in new_state_predicates + new_transition_predicates:
+            self.transition_state_tags, self.transition_unaffected_tags, self.transition_constant_tags  = \
+                self.tag_transitions_with_state_preds(self.transition_state_tags,
+                                                      self.transition_unaffected_tags,
+                                                      self.transition_constant_tags,
+                                                      p)
+            # self.con_tags, con_pred_invars = self.tag_transitions(self.con_tags, p)
+
+        end = time.time()
+        print(end - start)
+
+        start = time.time()
+
         program = self.program
         init_st = program.initial_state
         init_conf = conjunct_typed_valuation_set(program.valuation)
         env_transitions = set()
         con_transitions = set()
-        current_states = set()
 
-        orig_env_transitions, orig_con_transitions = program.complete_transitions()
+        self.state_predicates += new_state_predicates
+        self.transition_predicates += new_transition_predicates
 
-        symbol_table = self.program.symbol_table
+        rename_pred = lambda p: pred_name_dict[p] if p in pred_name_dict.keys() else p
 
-        symbol_table_with_prev_vars = symbol_table | {(str(key) + "_prev"): value for key, value in
-                                                      symbol_table.items()}
-
-        self.state_predicates += state_predicatess
-        self.transition_predicates += transition_predicatess
-
-        # TODO we are not doing this incrementally...
-        predicates = self.state_predicates + self.transition_predicates
-
-        env_to_program_transitions = {}
-        con_to_program_transitions = {}
-
-        program_env_to_abs_transitions = {}
-        program_con_to_abs_transitions = {}
-
-        # initial transitions rule
-        # TODO this should only be computed once, if predicate set updated it can be done incrementally
-        for t in orig_env_transitions:
-            vars_in_cond = t.condition.variablesin()
-            env_vars_in_cond = [e for e in vars_in_cond if e in program.env_events]
-            env_powerset = powerset_complete(env_vars_in_cond)
-            program_env_to_abs_transitions[t] = {}
-            for E in env_powerset:
-                if t.src == program.initial_state:
-                    events = conjunct_formula_set(E)
-                    state = conjunct(init_conf, events)
-                    guarded = conjunct(state, t.condition)
-                    smt = And(*guarded.to_smt(symbol_table))
-                    if smt_checker.check(smt):
-                        complete_action = program.complete_action_set(t.action)
-                        relabelled_actions = [BiOp(b.left, "=", add_prev_suffix(program, b.right)) for b in
-                                              complete_action]
-                        action_formula = conjunct_formula_set(relabelled_actions)
-                        next_valuation = conjunct(action_formula, add_prev_suffix(program, init_conf))
-                        next_preds = {p for p in predicates + [neg(p) for p in predicates] if
-                                      smt_checker.check(
-                                          And(*conjunct(p, next_valuation).to_smt(symbol_table_with_prev_vars)))}
-                        next_state = AbstractState(t.tgt, frozenset(next_preds))
-                        current_states.add(next_state)
-
-                        new_output = set(t.output)
-                        new_output |= {neg(o) for o in program.out_events if o not in t.output}
-                        new_output = list(new_output)
-
-                        abs_t = Transition(init_st, events, [], new_output, next_state)
-
-                        safe_update_list_vals(env_to_program_transitions, abs_t, [t])
-                        program_env_to_abs_transitions[t].update({E: abs_t})
-                        env_transitions.add(abs_t)
-
-        con_turn_flag = True
-
-        done_states_env = set()
-        done_states_con = set()
-
-        while len(current_states) != 0:
-            next_states = set()
-
-            if con_turn_flag:
-                transition_set = orig_con_transitions
-                events = program.con_events
+        init_preds = set()
+        for p in self.state_predicates + self.transition_predicates:
+            if smt_checker.check(And(*(conjunct(init_conf, p).to_smt(self.program.symbol_table)))):
+                init_preds |= {p}
             else:
-                transition_set = orig_env_transitions
-                events = program.env_events
+                init_preds |= {neg(p)}
 
-            new_transitions = set()
+        init_transitions = []
+        for t in self.init_program_trans:
+            t_formula = transition_formula(t)
+            abstract_guard = self.abstract_guard_env[t]
+            abstract_guard_disjuncts = self.abstract_guard_env_disjuncts[t]
+            effects = []
 
-            for abs_st in current_states:
-                q, P = abs_st.unpack()
-                context_P = conjunct_formula_set(P)
-                context_P_without_prevs = conjunct_formula_set(
-                    [p for p in P if [] == [v for v in p.variablesin() if v.name.endswith("_prev")]])
-                q_transitions = {t for t in transition_set if str(t.src) == str(q)}
-                for t in q_transitions:
-                    vars_in_cond = t.condition.variablesin()
-                    env_vars_in_cond = [e for e in vars_in_cond if e in events]
-                    prev_condition = add_prev_suffix(program, t.condition)
-                    complete_action = program.complete_action_set(t.action)
-
-                    env_powerset = powerset_complete(env_vars_in_cond)
-
-                    if con_turn_flag:
-                        program_con_to_abs_transitions[t] = {}
-                    else:
-                        program_env_to_abs_transitions[t] = {}
-                    for Evs in env_powerset:
-                        # TODO precompute mapping from states to transitions
-                        context_Evs = conjunct_formula_set(Evs)
-                        context = conjunct(context_P, context_Evs)
-                        guard_in_context = And(*conjunct(t.condition, context).to_smt(symbol_table_with_prev_vars))
-                        if smt_checker.check(guard_in_context):
-                            f = self.getFromFCache(con_turn_flag, t, Evs)
-                            if f is None:
-                                prev_action = [BiOp(act.left, "=", add_prev_suffix(program, act.right)) for act in
-                                               complete_action]
-                                f = conjunct_formula_set(
-                                    list(prev_action) +
-                                    [prev_condition, add_prev_suffix(program, context_P_without_prevs), context_Evs])
-                                self.f_cache[(con_turn_flag, t, Evs)] = f
-
-                            next_Ps = self.meaning_within(f, predicates, symbol_table_with_prev_vars)
-                            self.cache[f] = next_Ps
-                            trans_from_here = set()
-                            for next_P in next_Ps:
-                                next_state = AbstractState(t.tgt, next_P)
-                                new_output = set(t.output)
-                                new_output |= {neg(o) for o in program.out_events if o not in t.output}
-                                new_output = list(new_output)
-
-                                abs_t = Transition(abs_st, context_Evs, [], new_output, next_state)
-                                trans_from_here.add(abs_t)
-
-                                new_transitions.add(abs_t)
-
-                                if con_turn_flag:
-                                    safe_update_list_vals(con_to_program_transitions, abs_t, [t])
-                                else:
-                                    safe_update_list_vals(env_to_program_transitions, abs_t, [t])
-
-                                if con_turn_flag and next_state not in done_states_env:
-                                    next_states.add(next_state)
-                                elif not con_turn_flag and next_state not in done_states_con:
-                                    next_states.add(next_state)
-
-                            if con_turn_flag:
-                                program_con_to_abs_transitions[t][Evs] = trans_from_here
-                            else:
-                                program_env_to_abs_transitions[t][Evs] = trans_from_here
-
-            if con_turn_flag:
-                done_states_con.update(current_states)
-                con_transitions.update(new_transitions)
+            if t_formula in self.transition_constant_tags.keys():
+                constants = self.transition_constant_tags[t_formula]
+                effects += [pred_name_dict[p] for p in constants]
             else:
-                done_states_env.update(current_states)
-                env_transitions.update(new_transitions)
+                constants = {}
 
-            current_states = next_states
+            if t_formula in self.transition_unaffected_tags.keys():
+                invars = self.transition_unaffected_tags[t_formula]
+                effects += [pred_name_dict[p] for p in invars if p in init_preds]
+                effects += [neg(pred_name_dict[p]) for p in invars if neg(p) in init_preds]
+            else:
+                invars = {}
 
-            con_turn_flag = not con_turn_flag
+            init_pred_state = frozenset(p for p in init_preds if p not in invars | constants and neg(p).simplify() not in constants)
 
-        states = {s for t in (env_transitions | con_transitions) for s in
-                  {t.src, t.tgt}}  # done_states_env | done_states_con
+            if t_formula in self.transition_state_tags.keys():
+                for disjunct in abstract_guard_disjuncts:
+                    predicate_effect = self.transition_state_tags[t_formula]
+                    init_pred_state_with_disjunct = frozenset(init_pred_state | {disjunct})
+                    if init_pred_state_with_disjunct not in predicate_effect.keys():
+                        raise Exception("")
+                    init_predicate_effect = disjunct_formula_set(conjunct_formula_set([rename_pred(p) for p in ps])
+                                                                 for ps in predicate_effect[init_pred_state_with_disjunct])
 
-        # For debugging
-        for t in env_transitions:
-            good = False
-            for x in con_transitions:
-                if t.tgt == x.src:
-                    good = True
-                    break
-            if not good:
-                raise Exception("Predicate abstraction has state, " + str(t.tgt) + ", without output transitions.\n"
-                                                                                   "" + "\n".join(
-                    map(str, orig_env_transitions + orig_con_transitions)))
+                    effects += [(init_predicate_effect)]
+            init_transitions += [conjunct_formula_set(effects + [Variable(t.tgt), abstract_guard] + t.output)]
 
-        for t in con_transitions:
-            good = False
-            for x in env_transitions:
-                if t.tgt == x.src:
-                    good = True
-                    break
-            if not good:
-                raise Exception("Predicate abstraction has state, " + str(t.tgt) + ", without output transitions.")
+        init_transition_ltl = disjunct_formula_set([conjunct(phi, X(phi)) for phi in init_transitions])
 
-        self.env_to_program_transitions = env_to_program_transitions
-        self.con_to_program_transitions = con_to_program_transitions
+        transition_ltl = []
+        for env_trans in self.abstract_guard_env.keys():
+            abstract_guard_disjuncts = self.abstract_guard_env_disjuncts[env_trans]
 
-        self.state_to_env_transitions = {s: [t for t in env_transitions if t.src == s] for s in states}
-        self.state_to_con_transitions = {s: [t for t in con_transitions if t.src == s] for s in states}
+            if env_trans in self.init_program_trans: continue
+            now = conjunct_formula_set([env, Variable(env_trans.src), self.abstract_guard_env[env_trans]])
+            t_formula = transition_formula(env_trans)
 
-        self.abstraction = Program("pred_abst_" + program.name, states | {init_st}, init_st, [],
-                                   env_transitions, con_transitions, program.env_events,
-                                   program.con_events, program.out_events, False)
+            effects = []
+            if t_formula in self.transition_constant_tags.keys():
+                effects += [X(pred_name_dict[p]) for p in self.transition_constant_tags[t_formula]]
+
+            if t_formula in self.transition_unaffected_tags.keys():
+                effects += [iff(pred_name_dict[p], X(pred_name_dict[p])) for p in self.transition_unaffected_tags[t_formula]]
+
+            if t_formula in self.transition_state_tags.keys():
+                predicate_effect = self.transition_state_tags[t_formula]
+                inv_effects = {}
+                for k, v in predicate_effect.items():
+                    new_v = disjunct_formula_set([conjunct_formula_set([rename_pred(p) for p in ps]) for ps in v])
+                    inv_effects[new_v] = inv_effects.get(new_v, []) + [k]
+
+                effects += [implies(disjunct_formula_set([conjunct_formula_set([rename_pred(p) for p in pred_state]) for pred_state in pred_states]),
+                                    X(next_pred_states))
+                                                             for next_pred_states, pred_states in inv_effects.items()]
+
+                # effects += [implies(conjunct_formula_set([pred_name_dict[p] for p in pred_state]),
+                #                     X(disjunct_formula_set([conjunct_formula_set([pred_name_dict[p] for p in ps]) for ps in next_pred_states])))
+                #                                              for pred_state, next_pred_states in predicate_effect.items()]
+
+            effect_formula = conjunct_formula_set([X(o) for o in env_trans.output] + effects)
+
+            next = conjunct(effect_formula, X(conjunct_formula_set([Variable(env_trans.tgt)])))
+            transition_ltl += [conjunct(now, next)]
+
+        for con_trans in self.abstract_guard_con.keys():
+            now = conjunct_formula_set([con, Variable(con_trans.src), self.abstract_guard_con[con_trans]])
+
+            t_formula = transition_formula(con_trans)
+
+            effects = []
+            if t_formula in self.transition_constant_tags.keys():
+                effects += [X(pred_name_dict[p]) for p in self.transition_constant_tags[t_formula]]
+
+            if t_formula in self.transition_unaffected_tags.keys():
+                effects += [iff(pred_name_dict[p], X(pred_name_dict[p])) for p in self.transition_unaffected_tags[t_formula]]
+
+            if t_formula in self.transition_state_tags.keys():
+                predicate_effect = self.transition_state_tags[t_formula]
+                inv_effects = {}
+                for k, v in predicate_effect.items():
+                    new_v = disjunct_formula_set([conjunct_formula_set([rename_pred(p) for p in ps]) for ps in v])
+                    inv_effects[new_v] = inv_effects.get(new_v, []) + [k]
+
+                effects += [implies(disjunct_formula_set([conjunct_formula_set([rename_pred(p) for p in pred_state]) for pred_state in pred_states]),
+                                    X(next_pred_states))
+                                                             for next_pred_states, pred_states in inv_effects.items()]
+
+                # effects += [implies(conjunct_formula_set([pred_name_dict[p] for p in pred_state]),
+                #                     X(disjunct_formula_set([conjunct_formula_set([pred_name_dict[p] for p in ps]) for ps in next_pred_states])))
+                #                                              for pred_state, next_pred_states in predicate_effect.items()]
+
+            effects += [X(neg(o)) for o in self.program.out_events]
+            effect_formula = conjunct_formula_set(effects)
+
+            next = conjunct(effect_formula, X(conjunct_formula_set([Variable(con_trans.tgt)])))
+            transition_ltl += [conjunct(now, next)]
+
+        ltl = conjunct(init_transition_ltl, X(G(disjunct_formula_set(transition_ltl))))
+
+        print(ltl)
+        return init_transition_ltl, X(G(disjunct_formula_set(transition_ltl)))
+
+    def allowed_in_abstraction(self, path: [Transition]):
+        if len(path) == 0:
+            return True
+
+        abstract_trans: [[Transition]] = []
+        # assuming env-con alternation in path
+        current_abstract_states = {self.abstraction.initial_state}
+        current_t_index = 0
+
+        env_turn = True
+
+        while True:
+            current_t = path[current_t_index]
+            if env_turn:
+                tentative_abstract_ts = self.abstract_guard_env[current_t]
+            else:
+                tentative_abstract_ts = self.abstract_guard_con[current_t]
+            abstract_ts = [t for t in tentative_abstract_ts if t.src in current_abstract_states]
+            if len(abstract_ts) == 0:
+                return False, abstract_trans
+            else:
+                current_abstract_states = {t.tgt for t in abstract_ts}
+                abstract_trans += [abstract_ts]
+                current_t_index += 1
+                if current_t_index == len(path):
+                    return True, abstract_trans
+                else:
+                    env_turn = not env_turn
+
+    def allowed_in_abstraction_with_new_pred(self, path : [Transition], new_predicate):
+        if len(path) == 0:
+            return True
+
+        abstract_trans : [[Transition]] = []
+        # assuming env-con alternation in path
+        current_abstract_states = {self.abstraction.initial_state}
+        current_t_index = 0
+
+        env_turn = True
+
+        while True:
+            current_t = path[current_t_index]
+            if env_turn:
+                tentative_abstract_ts = self.env_program_transitions_to_abstract[current_t]
+            else:
+                tentative_abstract_ts = self.con_program_transitions_to_abstract[current_t]
+            abstract_ts = [t for t in tentative_abstract_ts if t.src in current_abstract_states]
+            if len(abstract_ts) == 0:
+                return False, abstract_trans
+            else:
+                current_abstract_states = {t.tgt for t in abstract_ts}
+                abstract_trans += [abstract_ts]
+                current_t_index += 1
+                if current_t_index == len(path):
+                    return True, abstract_trans
+                else:
+                    env_turn = not env_turn
 
     def make_explicit_terminating_loop(self, entry_condition, loop_body: [Transition], exit_transs: [Transition],
                                        exit_predicate):
@@ -840,47 +1510,26 @@ class PredicateAbstraction:
 
         return loop_seq_vars
 
-    def simplified_transitions_abstraction(self):
-        new_env_transitions, env_to_program_transitions = merge_transitions(self.abstraction.env_transitions,
-                                                                            self.program.symbol_table,
-                                                                            self.env_to_program_transitions)
-        new_con_transitions, con_to_program_transitions = merge_transitions(self.abstraction.con_transitions,
-                                                                            self.program.symbol_table,
-                                                                            self.con_to_program_transitions)
-
-        return Program("pred_abst_" + self.abstraction.name, self.abstraction.states, self.abstraction.initial_state, [],
-                                   new_env_transitions, new_con_transitions, self.abstraction.env_events,
-                                   self.abstraction.con_events, self.abstraction.out_events, False)
-
-    def abstraction_to_ltl(self, simplified=False):
+    def abstraction_to_ltl(self, symbol_table, simplified=True):
         predicates = self.state_predicates + self.transition_predicates
 
-        # simplify
-        if simplified:
-            new_env_transitions, env_to_program_transitions = merge_transitions(self.abstraction.env_transitions,
-                                                                                     self.program.symbol_table,
-                                                                                     self.env_to_program_transitions)
-            new_con_transitions, con_to_program_transitions = merge_transitions(self.abstraction.con_transitions,
-                                                                                     self.program.symbol_table,
-                                                                                     self.con_to_program_transitions)
-        else:
-            new_env_transitions = self.abstraction.env_transitions
-            env_to_program_transitions = self.env_to_program_transitions
-            new_con_transitions = self.abstraction.con_transitions
-            con_to_program_transitions = self.con_to_program_transitions
+        new_env_transitions = self.abstraction.env_transitions
+        # env_to_program_transitions = self.env_to_program_transitions
+        new_con_transitions = self.abstraction.con_transitions
+        # con_to_program_transitions = self.con_to_program_transitions
 
         ltl_to_program_transitions = {}
 
         init_transitions = [t for t in new_env_transitions if t.src == self.abstraction.initial_state]
         init_cond_formula_sets = []
-        ltl_to_program_transitions["init"] = {}
+        # ltl_to_program_transitions["init"] = {}
         for t in init_transitions:
-            cond = conjunct(conjunct_formula_set([Variable(t.tgt.state), t.condition] + t.output),
+            cond = conjunct(conjunct_formula_set([Variable(t.tgt), t.condition] + t.output),
                             conjunct_formula_set(
                                 sorted(label_preds(t.tgt.predicates, predicates), key=lambda x: str(x)))
                             )
             init_cond_formula_sets.append(cond)
-            safe_update_list_vals(ltl_to_program_transitions["init"], cond, env_to_program_transitions[t])
+            # safe_update_list_vals(ltl_to_program_transitions["init"], cond, env_to_program_transitions[t])
 
         init_cond_formula = disjunct_formula_set(init_cond_formula_sets)
 
@@ -949,23 +1598,38 @@ class PredicateAbstraction:
                     next_here = conjunct(conjunct_formula_set([Variable(et.tgt.state), et.condition] + et.output),
                                          conjunct_formula_set(sorted(bookeeping_tran_preds, key=lambda x: str(x)))
                                          )
-                    now_next += [X(next_here)]
+                    # try:
+                    #     next_here_cnf = func_timeout(3, cnf, [next_here_cnf, symbol_table])
+                    #     if len(str(next_here_cnf)) < len(str(next_here)):
+                    #         next_here = next_here_cnf
+                    # except:
+                    #     pass
 
-                    try:
-                        if now not in ltl_to_program_transitions.keys():
-                            ltl_to_program_transitions[now] = {}
-                        safe_update_list_vals(ltl_to_program_transitions[now], (cond, next_here),
-                                    [(con_to_program_transitions[ct],
-                                      env_to_program_transitions[et])])
-                    except Exception as e:
-                        print(str(e))
-                        raise e
+                    now_next += [(next_here)]
+
+                    # try:
+                    #     if now not in ltl_to_program_transitions.keys():
+                    #         ltl_to_program_transitions[now] = {}
+                    #      safe_update_list_vals(ltl_to_program_transitions[now], (cond, next_here),
+                    #                  [(con_to_program_transitions[ct],
+                    #                    env_to_program_transitions[et])])
+                    # except Exception as e:
+                    #     print(str(e))
+                    #     raise e
                 # If cond (which is the about the current state) is just True (i.e., it s negation is unsat)
                 # then just ignore it
                 if isinstance(cond, Value) and cond.is_true():
-                    next += [disjunct_formula_set(sorted(set(now_next), key=lambda x: str(x)))]
+                    next += [X(disjunct_formula_set(sorted(set(now_next), key=lambda x: str(x))))]
                 else:
-                    next += [conjunct(cond, disjunct_formula_set(sorted(set(now_next), key=lambda x: str(x))))]
+                    next_disjuncts = disjunct_formula_set(sorted(set(now_next), key=lambda x: str(x)))
+                    try:
+                        next_disjuncts_cnf = func_timeout(3, cnf, [next_disjuncts, symbol_table])
+                        if len(str(next_disjuncts_cnf)) < len(str(next_disjuncts)):
+                            next_disjuncts = next_disjuncts_cnf
+                    except:
+                        pass
+
+                    next += [conjunct(cond, X(next_disjuncts))]
 
             next = sorted(set(next), key=lambda x: str(x))
 
@@ -974,8 +1638,36 @@ class PredicateAbstraction:
         # TODO this set is only needed when we have transition predicates
         transition_cond = sorted(set(con_env_transitions), key=lambda x: str(x))
 
-        return [init_cond, at_least_and_at_most_one_state] + transition_cond, ltl_to_program_transitions
+        return [init_cond, at_least_and_at_most_one_state] + transition_cond#, ltl_to_program_transitions
 
+    def merge_transitions(self, partitions, transitions: [Transition], symbol_table, to_program_transitions):
+        new_transitions = []
+        # new_to_program_transitions = {}
+
+        # partition the transitions into classes where in each class each transition has the same outputs and source and end state
+        # partitions = dict()
+        for key in partitions.keys():
+            trans_here = partitions[key]
+            conditions = disjunct_formula_set(sorted([t.condition for t in trans_here], key=lambda x: str(x)))
+            conditions_simplified = simplify_formula_without_math(conditions, symbol_table)
+            # conditions_smt = conditions.to_smt(symbol_table)
+            # # If negation is unsat
+            # if not smt_checker.check(Not(And(*conditions_smt))):
+            #     conditions_simplified_fnode = TRUE()
+            # else:
+            #     conditions_simplified_fnode = conditions_smt[0].simplify()
+            ## simplify when doing disjunct, after lex ordering
+            ## also, may consider when enumerating possible event sets starting with missing some evetns and seeing how many transitions they match, if only then can stop adding to it
+            try:
+                new_tran = Transition(trans_here[0].src, conditions_simplified, [],
+                                      # string_to_prop(str(conditions_simplified_fnode)), [],
+                                      trans_here[0].output,
+                                      trans_here[0].tgt)
+                new_transitions.append(new_tran)
+
+            except Exception as e:
+                raise e
+        return new_transitions
 
 def meaning_within_incremental(f: Formula, previous_preds: [[Formula]], new_preds: [Formula], symbol_table):
     Ps = previous_preds
@@ -1027,107 +1719,6 @@ def powerset(S: set):
     return sorted(list(map(set, subsets)), key=lambda x: len(x))
 
 
-def merge_transitions(transitions: [Transition], symbol_table, to_program_transitions):
-    new_transitions = []
-    new_to_program_transitions = {}
-
-    # partition the transitions into classes where in each class each transition has the same outputs and source and end state
-    partitions = dict()
-    for transition in transitions:
-        key = str(transition.src) + str(conjunct_formula_set(sorted(transition.output, key=lambda x: str(x)))) + str(
-            transition.tgt)
-        if key in partitions.keys():
-            partitions[key].append(transition)
-        else:
-            partitions[key] = [transition]
-    for key in partitions.keys():
-        trans_here = partitions[key]
-        conditions = disjunct_formula_set(sorted([t.condition for t in trans_here], key=lambda x: str(x)))
-        conditions_smt = conditions.to_smt(symbol_table)
-        # If negation is unsat
-        if not smt_checker.check(Not(And(*conditions_smt))):
-            conditions_simplified_fnode = TRUE()
-        else:
-            conditions_simplified_fnode = conditions_smt[0].simplify()
-        ## simplify when doing disjunct, after lex ordering
-        ## also, may consider when enumerating possible event sets starting with missing some evetns and seeing how many transitions they match, if only then can stop adding to it
-        try:
-            new_tran = Transition(trans_here[0].src, string_to_prop(str(conditions_simplified_fnode)), [],
-                                  trans_here[0].output,
-                                  trans_here[0].tgt)
-            new_transitions.append(new_tran)
-
-            safe_update_list_vals(new_to_program_transitions, new_tran,
-                        set(t for tt in trans_here for t in to_program_transitions[tt]))
-        except Exception as e:
-            raise e
-    return new_transitions, new_to_program_transitions
-
-
-# Use this for testing
-# TODO update, this is probably not in sync with abstraction_to_ltl
-def abstraction_to_ltl_with_turns(pred_abstraction: Program):
-    if True:
-        raise Exception("abstraction_to_ltl_with_turns: This method needs to be updated; do not use.")
-    init_transitions = [t for t in pred_abstraction.env_transitions if t.src == pred_abstraction.initial_state]
-    init_cond = disjunct_formula_set(
-        [conjunct_formula_set({Variable(pred_abstraction.initial_state),
-                               t.condition}  # the target state of transition, and the environment proposition guard
-                              | {UniOp("X", out) for out in t.output}
-                              | {UniOp("X", p) for p in t.tgt[1]}  # the predicate set associate with target state
-                              | {UniOp("X", Variable(t.tgt[0]))})  # the monitor props associated with transition
-         for t in init_transitions]).to_nuxmv()
-
-    # wrapping states in Variable object
-    states = [Variable(s[0]) for s in pred_abstraction.states if s != pred_abstraction.initial_state] \
-             + [Variable(pred_abstraction.initial_state)]
-
-    at_least_one_state = UniOp("G", disjunct_formula_set([q for q in states])).to_nuxmv()
-
-    at_most_one_state = UniOp("G", conjunct_formula_set([BiOp(q, "=>", conjunct_formula_set([neg(r) for r in
-                                                                                             states
-                                                                                             if
-                                                                                             r != q]))
-                                                         for q in states])).to_nuxmv()
-
-    # the non initial transitions
-    not_init_env_transitions = [t for t in pred_abstraction.env_transitions if t.src != pred_abstraction.initial_state]
-
-    not_init_con_transitions = [t for t in pred_abstraction.con_transitions if t.src != pred_abstraction.initial_state]
-
-    # if it's the controller's turn, then the monitor observes what the controller did, and moves in the next step
-    con_transitions = conjunct(BiOp(Variable("turn"), "=", Variable("con")),
-                               disjunct_formula_set([conjunct_formula_set(ct.src[1]  # are these predicates true
-                                                                          | {Variable(ct.src[0]),  # am i in this state
-                                                                             ct.condition,  # did the controller do this
-                                                                             UniOp("X",
-                                                                                   # then i move in the next state like thi
-                                                                                   conjunct_formula_set(
-                                                                                       {Variable(ct.tgt[0])}
-                                                                                       | ct.tgt[1]))})
-                                                     for ct in not_init_con_transitions]))
-
-    # if it's the environment's turn, then the monitor observes what the environment did, and moves in the next step
-    env_transitions = conjunct(BiOp(Variable("turn"), "=", Variable("env")),
-                               disjunct_formula_set(
-                                   [conjunct_formula_set(et.src[1]
-                                                         | {Variable(et.src[0]),
-                                                            et.condition,
-                                                            UniOp("X",
-                                                                  conjunct_formula_set({Variable(et.tgt[0])}
-                                                                                       | et.tgt[1]))}
-                                                         | {UniOp("X", out) for out in et.output})
-                                    for et in not_init_env_transitions]))
-
-    predicates = [p for s in pred_abstraction.states for p in s[1] if s is not pred_abstraction.initial_state]
-
-    mon_transition = conjunct(BiOp(Variable("turn"), "=", Variable("mon")),
-                              conjunct_formula_set({BiOp(s, "<->", UniOp("X", s)) for s in states}
-                                                   | {BiOp(p, "<->", UniOp("X", p)) for p in predicates}))
-
-    transition_cond = UniOp("G", disjunct_formula_set([con_transitions, env_transitions, mon_transition])).to_nuxmv()
-
-    return conjunct_formula_set([init_cond, at_least_one_state, at_most_one_state, transition_cond])
 
 
 def tran_and_state_preds_after_con_env_step(env_trans: Transition):

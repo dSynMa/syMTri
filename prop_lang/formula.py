@@ -38,6 +38,10 @@ class Formula(ABC):
         pass
 
     @abstractmethod
+    def to_strix(self):
+        pass
+
+    @abstractmethod
     def to_smt(self, symbol_table: Any) -> (FNode, FNode):
         pass
 
