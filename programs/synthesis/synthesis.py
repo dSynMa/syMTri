@@ -250,7 +250,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         contradictory, there_is_mismatch, out = there_is_mismatch_between_program_and_strategy(system, real, False,
                                                                                                ltl_assumptions,
                                                                                                ltl_guarantees, mismatch_condition)
-
+        if contradictory:
+            raise Exception("Something wrong, model deadlocks.")
         if not there_is_mismatch or contradictory:
             system = create_nuxmv_model_for_compatibility_checking(program, mealy, program_out_and_states_vars, pred_list,
                                                                    not program.deterministic, not program.deterministic,
@@ -261,6 +262,9 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                                                                                    ltl_assumptions,
                                                                                                    ltl_guarantees)
         ## end checking for mismatch
+
+        if contradictory:
+            raise Exception("Something wrong, model deadlocks.")
 
         ## deal with if there is nothing wrong
         if not there_is_mismatch or contradictory:
