@@ -2,7 +2,6 @@ from itertools import chain
 from typing import Tuple
 
 from Config import env, con
-from click._compat import raw_input
 from pysmt.shortcuts import And
 from programs.analysis.smt_checker import SMTChecker
 
@@ -377,7 +376,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 new_rankings = []
                 while not finished:
                     try:
-                        text = raw_input("Any suggestions of ranking functions?")
+                        text = input("Any suggestions of ranking functions?")
                         new_rankings = list(map(string_to_math_expression, text.split(",")))
                         finished = True
                     except Exception as e:
@@ -430,7 +429,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                             finished = False
                             while not finished:
                                 try:
-                                    text = raw_input("Press enter to use suggested ranking function, "
+                                    text = input("Press enter to use suggested ranking function, "
                                                      "otherwise suggest one ranking function to use instead, with a list of invars after (all separated with ',').")
                                     if text.strip(" ") == "":
                                         finished = true
@@ -524,7 +523,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 finished = False
                 while not finished:
                     try:
-                        text = raw_input("Any suggestions of state predicates?")
+                        text = input("Any suggestions of state predicates?")
                         if len(text.strip(" ")) == 0:
                             finished = True
                         else:
@@ -596,7 +595,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 finished = False
                 while not finished:
                     try:
-                        text = raw_input("Press enter to use suggested state predicates, otherwise write the state predicates to proceed with in a comma-separated list.")
+                        text = input("Press enter to use suggested state predicates, otherwise write the state predicates to proceed with in a comma-separated list.")
                         if text.strip(" ") == "":
                             finished = True
                         else:
