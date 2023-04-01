@@ -91,10 +91,12 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
     predicate_abstraction = PredicateAbstraction(program)
     init_abs, trans_abs = predicate_abstraction.initialise()
-
+    init = True
     while True:
-        state_predicates = [p for p in state_predicates if not (isinstance(p, UniOp) and p.op == "!")]
-        state_predicates += [p.right for p in state_predicates if isinstance(p, UniOp) and p.op == "!"]
+        new_state_predicates = [p for p in state_predicates if not (isinstance(p, UniOp) and p.op == "!")]
+        new_state_predicates += [p.right for p in state_predicates if isinstance(p, UniOp) and p.op == "!"]
+
+        state_predicates = new_state_predicates
 
         symbol_table = predicate_abstraction.program.symbol_table
 
@@ -117,8 +119,10 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     predicate_abstraction.add_predicates([], [t], True)
             else:
                 init_abs, trans_abs = predicate_abstraction.add_predicates(new_state_preds, new_trans_preds, pred_name_dict_with_negs, True)
+        elif not init:
+            raise Exception("No new predicates.")
         else:
-            pass
+            init = False
             # abstraction = predicate_abstraction.add_predicates([true()], [], True)
 
         # predicate_abstraction.compute_with_predicates(state_predicates, transition_predicates, True)
