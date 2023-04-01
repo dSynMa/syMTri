@@ -27,6 +27,20 @@ from prop_lang.variable import Variable
 smt_checker = SMTChecker()
 
 queue = Queue()
+timeout = -1
+
+def run_with_timeout(f, arg, timeout):
+    if timeout == -1:
+        return f(arg)
+    else:
+        p1 = Process(target=dnfguard, name=f.__name__, args=arg)
+        p1.start()
+        p1.join(timeout=10)
+        if p1.exitcode is None:
+            p1.terminate()
+            return None
+        else:
+            return queue.get()
 
 def dnfguard(d_and_guard):
     dnfed = dnf(d_and_guard, simplify=False)
@@ -117,18 +131,22 @@ class PredicateAbstraction:
                     new_pos_Ps = []
                     new_neg_Ps = []
                     for Ps in Pss:
+                        # if p was true before, is p possible next?
                         if try_pos and sat(conjunct(conjunct_formula_set(nextPs_with_p),
                                        conjunct(formula_pos, conjunct_formula_set([add_prev_suffix(P) for P in Ps]))), self.program.symbol_table):
                             new_pos_Ps += [Ps + [predicate]]
 
+                        # if p was false before, is p possible next?
                         if try_neg and sat(conjunct(conjunct_formula_set(nextPs_with_p),
                                         conjunct(formula_neg, conjunct_formula_set([add_prev_suffix(P) for P in Ps]))), self.program.symbol_table):
                             new_pos_Ps += [Ps + [neg(predicate)]]
 
+                        # if p was true before, is not p possible next?
                         if try_pos and sat(conjunct(conjunct_formula_set(nextPs_with_neg_p),
                                        conjunct(formula_pos, conjunct_formula_set([add_prev_suffix(P) for P in Ps]))), self.program.symbol_table):
-                            new_neg_Ps += [Ps + [predicate]]
+                            new_neg_Ps += [Ps + [(predicate)]]
 
+                        # if p was false before, is not p possible next?
                         if try_neg and sat(conjunct(conjunct_formula_set(nextPs_with_neg_p),
                                         conjunct(formula_neg, conjunct_formula_set([add_prev_suffix(P) for P in Ps]))), self.program.symbol_table):
                             new_neg_Ps += [Ps + [neg(predicate)]]
@@ -238,13 +256,11 @@ class PredicateAbstraction:
         guard_with_only_events = guard_with_only_events.replace(BiOp(Variable("program_choice"), ":=", Value("TRUE")))
         # TODO need to timeout and give up on this dnfing sometimes too
         # dnf_guard_with_only_events = dnf(guard_with_only_events, simplify=False)
-        p1 = Process(target=dnfguard, name='Process', args=(guard_with_only_events,))
-        p1.start()
-        p1.join(timeout=1)
-        if p1.exitcode is None:
+        val = run_with_timeout(dnfguard, guard_with_only_events, timeout)
+
+        if val is None:
             print("Giving up on dnfing, and using explicit method.")
             use_set_method = True
-            p1.terminate()
             vars_in_cond = guard.variablesin()
             events_in_cond = [e for e in vars_in_cond if e in events]
             powerset = powerset_complete(events_in_cond)
@@ -253,8 +269,7 @@ class PredicateAbstraction:
                                          smt_checker.check(And(*conjunct_formula_set(E | {guard}).to_smt(self.program.symbol_table)))]
 
         else:
-            dnf_guard_with_only_events = queue.get()
-            p1.terminate()
+            dnf_guard_with_only_events = val
 
             if Variable("program_choice") in dnf_guard_with_only_events.variablesin():
                 print()
@@ -335,17 +350,14 @@ class PredicateAbstraction:
                         use_set_method = True
                         break
 
-                    p1 = Process(target=dnfguard, name='Process', args=(d_and_guard,))
-                    p1.start()
-                    p1.join(timeout=1)
-                    if p1.exitcode is None:
+                    val = run_with_timeout(dnfguard, d_and_guard, timeout)
+
+                    if val is None:
                         print("Giving up on dnfing, and using explicit method.")
                         use_set_method = True
-                        p1.terminate()
                         break
                     else:
-                        dnf_d_and_guard = queue.get()
-                        p1.terminate()
+                        dnf_d_and_guard = val
 
                 new_d = d
                 if isinstance(dnf_d_and_guard, BiOp) and dnf_d_and_guard.op[0] == "|":
