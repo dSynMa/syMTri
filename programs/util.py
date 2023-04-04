@@ -460,10 +460,10 @@ def reduce_up_to_iff(old_preds, new_preds, symbol_table):
     keep_these = set()
     remove_these = set()
 
-    for p in new_preds:
-        if p and neg(p) not in keep_these and p and neg(p) not in remove_these and \
+    for p in set(new_preds):
+        if p and neg(p) not in remove_these and \
                 not has_equiv_pred(p, set(old_preds) | keep_these, symbol_table) and \
-                not has_equiv_pred(neg(p), set(old_preds) | keep_these, symbol_table):
+                not (is_tautology(p, symbol_table, smt_checker) or is_tautology(neg(p), symbol_table, smt_checker)):
             keep_these.add(p)
         else:
             remove_these.add(p)
