@@ -473,23 +473,16 @@ def reduce_up_to_iff(old_preds, new_preds, symbol_table):
 
 
 def has_equiv_pred(p, preds, symbol_table):
+    if p in preds or neg(p) in preds:
+        return True
+
     for pp in preds:
-        if p is pp:
+        #technically should check if it can be expressed using a set of the existing predicates, but can be expensive
+        if is_tautology(iff(p, pp), symbol_table, smt_checker) or \
+                is_tautology(iff(neg(p), pp), symbol_table, smt_checker):
             return True
-        else:
-            #technically should check if it can be expressed using a set of the existing predicates
-            if is_tautology(iff(p, pp), symbol_table, smt_checker) or \
-                    is_tautology(iff(neg(p), pp), symbol_table, smt_checker):
-                return True
-            else:
-                return False
-            # if not smt_checker.check(And(*p_smt)) or not smt_checker.check(Not(And(*p_smt))):
-            #     # if p or !p is unsat (i.e., p or !p is False), then no need to add it
-            #     return True
-            # elif not (smt_checker.check(And(Not(And(*p_smt)), And(*pp_smt))) or
-            #           smt_checker.check(And(Not(And(*pp_smt)), And(*p_smt)))):
-            #     return True
-    # return False
+
+    return False
 
 
 def project_ce_state_onto_ev(state: dict, events):
