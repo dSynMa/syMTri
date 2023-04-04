@@ -1,7 +1,7 @@
 import re
 
-from pysmt.shortcuts import And
-from sympy.logic.boolalg import to_dnf, simplify_logic
+from pysmt.shortcuts import And, serialize, simplify
+from sympy.logic.boolalg import to_dnf, simplify_logic, to_cnf, is_dnf
 from sympy.parsing.sympy_parser import parse_expr
 
 from parsing.string_to_prop_logic import string_to_prop
@@ -227,17 +227,75 @@ def only_dis_or_con_junctions(f: Formula):
 dnf_cache = {}
 
 
-def dnf(f: Formula, symbol_table: dict={}):
+def simplify_formula_with_math(formula, symbol_table):
+    simple_f_without_math, dic = formula.replace_math_exprs(symbol_table)
+    return string_to_prop(serialize(simplify(And(*formula.to_smt(symbol_table | dic))))).replace(
+        [BiOp(Variable(key), ":=", value) for key, value in dic.items()])
+
+
+def simplify_formula_without_math(formula, symbol_table=None):
+    if symbol_table == None:
+        symbol_table = {str(v): TypedValuation(str(v), "bool", None) for v in formula.variablesin()}
+
+    return string_to_prop(serialize(simplify(And(*formula.to_smt(symbol_table)))))
+
+
+def cnf(f: Formula, symbol_table: dict = None):
+    if symbol_table == None:
+        symbol_table = {str(v): TypedValuation(str(v), "bool", None) for v in f.variablesin()}
     try:
         if f in dnf_cache.keys():
             return dnf_cache[f]
-        simple_f = only_dis_or_con_junctions(f).simplify().to_nuxmv()
+        simple_f = only_dis_or_con_junctions(f)
+        simple_f = propagate_negations(simple_f).simplify()
         simple_f_without_math, dic = simple_f.replace_math_exprs(symbol_table)
+        simple_f_without_math = simplify_formula_without_math(simple_f_without_math).to_nuxmv()
         for_sympi = parse_expr(str(simple_f_without_math).replace("!", " ~"), evaluate=True)
         if isinstance(for_sympi, int):
             return f
         # if formula has more than 8 variables it can take a long time, dnf is exponential
-        in_dnf = to_dnf(simplify_logic(for_sympi), simplify=True, force=True)
+        in_cnf = to_cnf(for_sympi, simplify=True, force=True)
+        # print(str(f) + " after cnf becomes " + str(in_cnf).replace("~", "!"))
+        in_dnf_formula = string_to_prop(str(in_cnf).replace("~", "!"))
+        in_dnf_math_back = in_dnf_formula.replace([BiOp(Variable(key), ":=", value) for key, value in dic.items()])
+
+        dnf_cache[f] = in_dnf_math_back
+
+        return in_dnf_math_back
+    except Exception as e:
+        raise Exception("dnf: I do not know how to handle " + str(f) + ", cannot turn it into dnf." + str(e))
+
+
+def dnf(f: Formula, symbol_table: dict=None, simplify=True):
+    if isinstance(f, Value) or isinstance(f, MathExpr):
+        return f
+
+    if symbol_table == None:
+        symbol_table = {str(v): TypedValuation(str(v), "bool", None) for v in f.variablesin()}
+
+    try:
+        if f in dnf_cache.keys():
+            return dnf_cache[f]
+        simple_f = only_dis_or_con_junctions(f)
+        simple_f = propagate_negations(simple_f)
+        if simplify:
+            simple_f = simple_f.simplify()
+        simple_f = simple_f.to_nuxmv()
+        simple_f_without_math, dic = simple_f.replace_math_exprs(symbol_table, 0)
+
+        if isinstance(f, Value):
+            return simple_f
+
+        for_sympi = parse_expr(str(simple_f_without_math).replace("!", " ~"), evaluate=simplify)
+        if isinstance(for_sympi, int):
+            return f
+        if simplify:
+            for_sympi = simplify_logic(for_sympi)
+        # if formula has more than 8 variables it can take a long time, dnf is exponential
+        if is_dnf(for_sympi):
+            in_dnf = for_sympi
+        else:
+            in_dnf = to_dnf(for_sympi, simplify=simplify, force=simplify)
         print(str(f) + " after dnf becomes " + str(in_dnf).replace("~", "!"))
         in_dnf_formula = string_to_prop(str(in_dnf).replace("~", "!"))
         in_dnf_math_back = in_dnf_formula.replace([BiOp(key, ":=", value) for key, value in dic.items()])
@@ -246,6 +304,7 @@ def dnf(f: Formula, symbol_table: dict={}):
 
         return in_dnf_math_back
     except:
+        dnf(f, symbol_table, simplify)
         raise Exception("dnf: I do not know how to handle " + str(f) + ", cannot turn it into dnf.")
 
 
