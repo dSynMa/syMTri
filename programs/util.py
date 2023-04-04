@@ -142,6 +142,14 @@ def symbol_table_from_program(program):
         symbol_table[ev.name] = TypedValuation(str(ev), "bool", None)
     for t_val in program.valuation:
         symbol_table[t_val.name] = t_val
+        symbol_table[t_val.name + "_prev"] = t_val
+    return symbol_table
+
+
+def symbol_table_from_typed_valuation(tv):
+    symbol_table = dict()
+    for t_val in tv:
+        symbol_table[t_val.name] = t_val
     return symbol_table
 
 
