@@ -596,6 +596,7 @@ def concretize_transitions(program, looping_program, indices_and_state_list, add
         if incompatible_state["compatible_state_predicates"] == "FALSE":
             #pred mismatch
             incompatibility_formula += preds_in_state(incompatible_state, state_pred_label_to_formula)
+            incompatibility_formula += [neg(concretized[-1][0].condition)]
             env_pred_state = (incompatibility_formula, incompatible_state)
 
         return concretized, env_pred_state
