@@ -17,7 +17,7 @@ from prop_lang.formula import Formula
 from prop_lang.mathexpr import MathExpr
 from prop_lang.uniop import UniOp
 from prop_lang.util import conjunct_formula_set, conjunct, neg, append_to_variable_name, dnf, disjunct_formula_set, \
-    true, sat, is_tautology, iff, negate, propagate_negations
+    true, sat, is_tautology, iff, propagate_negations, type_constraints, cnf
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
@@ -740,14 +740,11 @@ def guarded_action_transitions_to_normal_transitions(guarded_transition, valuati
                 raise Exception("Otherwise transitions cannot have guarded actions")
         return [guarded_transition]
 
-
     unguarded_acts = []
     guarded_acts = {act: set() for (act, _) in guarded_transition.action}
     for (act, guard) in guarded_transition.action:
-        if guard == true():
-            unguarded_acts.append(act)
-        else:
-            guarded_acts[act] |= {guard}
+        new_guard = conjunct(guard, type_constraints(act.left, symbol_table))
+        guarded_acts[act].add(new_guard)
 
     guarded_acts = {act: g_set for act, g_set in guarded_acts.items() if len(g_set) > 0}
 
