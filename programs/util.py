@@ -553,32 +553,37 @@ def concretize_transitions(program, looping_program, indices_and_state_list, add
         if int(i) != -1:
             concretized += [(looping_to_normal(transitions[int(i)]), st)]
         else:
-            stutter_trans = stutter_transition(program, [q for q in program.states if st[str(q)] == "TRUE"][0], st["turn"] == "env")
+            stutter_trans = stutter_transition(program, [q for q in program.states if st[str(q)] == "TRUE"][0],
+                                               st["turn"] == "env")
             if stutter_trans == None:
                 raise Exception("stuttering transition not found")
             else:
                 concretized += [(stutter_trans, st)]
 
-
     # two options, either we stopped because of a predicate mismatch, or a transition mismatch
     incompatibility_formula = []
     if incompatible_state["compatible_states"] == "FALSE" or incompatible_state["compatible_outputs"] == "FALSE":
         if program.deterministic:
-            return concretized[:-1], ([neg(concretized[-1][0].condition)], concretized[-1][1])
+            return concretized[:-1], ([neg(concretized[-1][0].condition)], concretized[-1][1]), concretized[-1]
         else:
             # if program is not deterministic, we need to identify the transitions the counterstrategy wanted to take rather than the one the program actually took
             state_before_mismatch = concretized[-2][1]
             src_state = concretized[-2][0].tgt
             tgt_state_env_wanted = [p for p in program.states if incompatible_state["mon_" + str(p)] == "TRUE"][0]
             outputs_env_wanted = [p for p in program.out_events if incompatible_state["mon_" + str(p)] == "TRUE"]
+            # outputs_env_wanted += [neg(p) for p in program.out_events if incompatible_state["mon_" + str(p)] == "FALSE"]
             if incompatible_state["turn"] == "mon_env":
-                candidate_transitions = [t for t in program.env_transitions if t.src == src_state and t.tgt == tgt_state_env_wanted and set(t.output) == set(outputs_env_wanted)]
+                candidate_transitions = [t for t in program.env_transitions if
+                                         t.src == src_state and t.tgt == tgt_state_env_wanted and set(t.output) == set(
+                                             outputs_env_wanted)]
                 if tgt_state_env_wanted == src_state:
                     stutter = stutter_transition(program, src_state, True)
                     if stutter is not None:
                         candidate_transitions.append(stutter)
             elif incompatible_state["turn"] == "mon_con":
-                candidate_transitions = [t for t in program.con_transitions if t.src == src_state and t.tgt == tgt_state_env_wanted and set(t.output) == set(outputs_env_wanted)]
+                candidate_transitions = [t for t in program.con_transitions if
+                                         t.src == src_state and t.tgt == tgt_state_env_wanted and set(t.output) == set(
+                                             outputs_env_wanted)]
                 if tgt_state_env_wanted == src_state:
                     stutter = stutter_transition(program, src_state, False)
                     if stutter is not None:
@@ -586,21 +591,31 @@ def concretize_transitions(program, looping_program, indices_and_state_list, add
             else:
                 raise Exception("Mismatches should only occur at mon_env or mon_con turns")
 
-            compatible_with_abstract_state = [state_pred_label_to_formula[p] for p in state_pred_label_to_formula.keys() if isinstance(p, Variable) and state_before_mismatch[str(p)] == "TRUE"]
-            compatible_with_abstract_state += [neg(state_pred_label_to_formula[p]) for p in state_pred_label_to_formula.keys() if isinstance(p, Variable) and state_before_mismatch[str(p)] == "FALSE"]
+            compatible_with_abstract_state = [state_pred_label_to_formula[p] for p in state_pred_label_to_formula.keys()
+                                              if isinstance(p, Variable) and state_before_mismatch[str(p)] == "TRUE"]
+            compatible_with_abstract_state += [neg(state_pred_label_to_formula[p]) for p in
+                                               state_pred_label_to_formula.keys() if
+                                               isinstance(p, Variable) and state_before_mismatch[str(p)] == "FALSE"]
 
             abstract_state = conjunct_formula_set(compatible_with_abstract_state)
-            env_desired_transitions = [t for t in candidate_transitions if smt_checker.check(And(*abstract_state.to_smt(program.symbol_table), *t.condition.to_smt(program.symbol_table)))]
-            return concretized[:-1], ([disjunct_formula_set([propagate_negations(t.condition) for t in env_desired_transitions] + [negate(concretized[-1][0].condition)])], concretized[-1][1])
+            env_desired_transitions = [t for t in candidate_transitions
+                                       if smt_checker.check(And(*abstract_state.to_smt(program.symbol_table),
+                                                                *t.condition.to_smt(program.symbol_table)))]
+            if len(env_desired_transitions) == 0:
+                raise Exception("Couldn't identify transition environment desired to take.")
+            formula = disjunct_formula_set([t.condition for t in env_desired_transitions] + [
+                propagate_negations(neg(cnf(concretized[-1][0].condition, program.symbol_table)))])
+            return concretized[:-1], ([formula], concretized[-1][1]), concretized[-1]
     else:
         env_pred_state = None
-        if incompatible_state["compatible_state_predicates"] == "FALSE":
-            #pred mismatch
+        if incompatible_state["compatible_state_predicates"] == "FALSE" or incompatible_state[
+            "compatible_tran_predicates"] == "FALSE":
+            # pred mismatch
             incompatibility_formula += preds_in_state(incompatible_state, state_pred_label_to_formula)
             incompatibility_formula += [neg(concretized[-1][0].condition)]
             env_pred_state = (incompatibility_formula, incompatible_state)
 
-        return concretized, env_pred_state
+        return concretized, env_pred_state, concretized[-1]
 
 
 def preds_in_state(ce_state: dict, state_pred_label_to_formula):
@@ -733,7 +748,7 @@ def resolve_next_references(transition, valuation):
 
 
 
-def guarded_action_transitions_to_normal_transitions(guarded_transition, valuation, env_events, con_events, outputs):
+def guarded_action_transitions_to_normal_transitions(guarded_transition, valuation, env_events, con_events, outputs, symbol_table):
     if str(guarded_transition.condition) == "otherwise":
         # check that no guarded actions
         for (act, guard) in guarded_transition.action:
