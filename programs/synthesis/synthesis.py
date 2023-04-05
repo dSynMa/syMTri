@@ -186,7 +186,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         else:
             mismatch_condition = None
 
-        system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, not program.deterministic, not program.deterministic, predicate_mismatch=False, prefer_lassos=prefer_lasso_counterexamples)
+        system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, not program.deterministic, not program.deterministic, predicate_mismatch=True, prefer_lassos=prefer_lasso_counterexamples)
         print(system)
         contradictory, there_is_mismatch, out = there_is_mismatch_between_program_and_strategy(system, real, False,
                                                                                                ltl_assumptions,
