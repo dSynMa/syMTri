@@ -569,7 +569,7 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
     else:
          # then discover which variables are related to the variables updated in the loop
          # TODO may also need to look at the guards of the transitions in the loop
-        updated_in_loop_vars = [str(act.left) for t, _ in counterexample_loop for act in t.action]
+        updated_in_loop_vars = [str(act.left) for t, _ in counterexample_loop for act in t.action if act.left != act.right]
 
         relevant_vars = [str(v) for f in disjuncts_in_exit_pred for v in f.variablesin() if any(v for v in f.variablesin() if str(v) in updated_in_loop_vars)]
         irrelevant_vars = [v for v in symbol_table.keys() if v not in relevant_vars]
@@ -613,7 +613,7 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
         if not isinstance(exit_predicate_grounded, Value) or\
              is_tautology(exit_predicate_grounded, symbol_table, smt_checker):
             # for each variable in ranking function, check if they are related in the exit condition, or transitively so
-            updated_in_loop_vars = [str(act.left) for t in loop_before_exit for act in t.action]
+            updated_in_loop_vars = [str(act.left) for t in loop_before_exit for act in t.action if act.left != act.right]
 
             vars_in_ranking = ranking.variablesin()# + [Variable(v) for v in updated_in_loop_vars]
 
