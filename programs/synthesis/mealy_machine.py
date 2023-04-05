@@ -61,8 +61,9 @@ class MealyMachine:
             if (env_cond, new_intermed) not in self.env_transitions[new_src]:
                 self.env_transitions[new_src].add((env_cond, new_intermed))
 
-            if (con_cond, new_tgt) not in self.con_transitions[new_intermed]:
-                self.con_transitions[new_intermed] |= {(con_cond, new_tgt)}
+            for cond in con_conds:
+                if (cond, new_tgt) not in self.con_transitions[new_intermed]:
+                    self.con_transitions[new_intermed] |= {(cond, new_tgt)}
 
             self.states.add(new_intermed)
             self.counter = self.counter - 1
