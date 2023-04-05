@@ -467,7 +467,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                          [st for (_, st) in agreed_on_transitions + [disagreed_on_state[1]]]}
 
             new_all_preds = {x.simplify() for x in new_preds | {p for p in state_predicates if p not in old_state_predicates}}
-            new_all_preds = reduce_up_to_iff(state_predicates,
+            new_all_preds = reduce_up_to_iff(set(state_predicates),
                                              list(new_all_preds),
                                              symbol_table
                                              | {str(v): TypedValuation(str(v),
@@ -478,7 +478,10 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                                 if str(v).endswith(
                                                      "prev")})  # TODO symbol_table needs to be updated with prevs
 
-            if len(new_all_preds) == len(state_predicates):
+            if len(new_all_preds) < len(set(state_predicates)):
+                raise Exception("There are somehow less state predicates than previously.")
+
+            if len(new_all_preds) == len(set(state_predicates)):
                 # check_for_nondeterminism_last_step(program_actually_took[1], predicate_abstraction.program, True)
                 print(
                     "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
