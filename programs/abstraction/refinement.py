@@ -1,6 +1,5 @@
 import re
 
-from click._compat import raw_input
 from pysmt.fnode import FNode
 from pysmt.shortcuts import And
 
