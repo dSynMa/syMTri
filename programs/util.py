@@ -43,10 +43,10 @@ def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmv
     text += "VAR\n" + "\t" + ";\n\t".join(vars) + ";\n"
     text += "DEFINE\n" + "\t" + ";\n\t".join(program_model.define + strategy_model.define) + ";\n"
 
-    safety_predicate_truth = [BiOp(label_pred(p, pred_list), '=', p)
+    safety_predicate_truth = [BiOp(label_pred(p, pred_list), '->', p)
                                     for p in pred_list if not any([v for v in p.variablesin() if "_prev" in str(v)])] # this excludes transition predicates from checking since the ones the environment sets may also contain those of the previous controller transition
 
-    tran_predicate_truth = [BiOp(label_pred(p, pred_list), '=', p)
+    tran_predicate_truth = [BiOp(label_pred(p, pred_list), '->', p)
                                     for p in pred_list if any([v for v in p.variablesin() if "_prev" in str(v)])] # this excludes transition predicates from checking since the ones the environment sets may also contain those of the previous controller transition
 
     mon_output_equality = [BiOp(o, '=', Variable("mon_" + o.name))
