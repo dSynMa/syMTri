@@ -585,17 +585,18 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
 
     sufficient_entry_condition = None
 
-    conditions = [true(), entry_predicate_grounded.simplify(), entry_valuation_grounded]
+    conditions = [(true(), True), (entry_predicate_grounded.simplify(), True), (entry_valuation_grounded, False)]
 
     ranking = None
-    for cond in conditions:
+    for (cond, add_natural_conditions) in conditions:
         for exit_pred in disjuncts_in_exit_pred_grounded:
             try:
                 ranking, invars = liveness_refinement(symbol_table,
                                                       program,
                                                       cond,
                                                       loop_before_exit,
-                                                      exit_pred)
+                                                      exit_pred,
+                                                      add_natural_conditions)
                 if ranking is None:
                     continue
                 sufficient_entry_condition = keep_bool_preds(entry_predicate, symbol_table)
@@ -652,16 +653,20 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
                 loop_before_exit = ground_transitions(program, counterexample_loop, irrelevant_vars + bool_vars + all_extra_vars,
                                                       symbol_table)
 
-                conditions = [true(), entry_predicate_grounded.simplify(), entry_valuation_grounded]
+                conditions = [(true(), True),
+                              (entry_predicate_grounded.simplify(), True),
+                              (entry_valuation_grounded, False)]
 
-                for cond in conditions:
+                ranking = None
+                for (cond, add_natural_conditions) in conditions:
                     for exit_pred in disjuncts_in_exit_pred_grounded:
                         try:
                             ranking, invars = liveness_refinement(symbol_table,
                                                                   program,
                                                                   cond,
                                                                   loop_before_exit,
-                                                                  exit_pred)
+                                                                  exit_pred,
+                                                                  add_natural_conditions)
                             if ranking is None:
                                 continue
                             sufficient_entry_condition = keep_bool_preds(entry_predicate, symbol_table)
