@@ -270,7 +270,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         ## Compute mismatch trace
         ce, transition_indices_and_state, incompatible_state = parse_nuxmv_ce_output_finite(
             len(program.env_transitions) + len(program.con_transitions), out)
-        transitions_without_stutter_program_took, env_desired_abstract_state = \
+        transitions_without_stutter_program_took, env_desired_abstract_state, _ = \
             concretize_transitions(program, program, transition_indices_and_state, False, predicate_abstraction.abstraction, state_pred_label_to_formula, incompatible_state)
 
         # if pred_state is not None:
