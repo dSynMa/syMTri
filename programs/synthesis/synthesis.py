@@ -29,7 +29,7 @@ from prop_lang.variable import Variable
 
 smt_checker = SMTChecker()
 
-def synthesize(program: Program, ltl_text: str, tlsf_path: str, docker: bool, project_on_abstraction=True) -> Tuple[bool, Program]:
+def synthesize(program: Program, ltl_text: str, tlsf_path: str, docker: bool, project_on_abstraction=False) -> Tuple[bool, Program]:
     # if not program.deterministic:
     #     raise Exception("We do not handle non-deterministic programs yet.")
 
@@ -161,15 +161,15 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             print("Realizable")
             if project_on_abstraction:
                 print(mm.to_dot(pred_list))
-                return True, mm.project_controller_on_program((
-                    "strategy" if real else "counterstrategy"),
-                    program, predicate_abstraction,
-                    symbol_table | symbol_table_preds)
+                return True, mm #mm.project_controller_on_program((
+                    # "strategy" if real else "counterstrategy"),
+                    # program, predicate_abstraction,
+                    # symbol_table | symbol_table_preds)
             else:
                 # mm = mm.fill_in_predicates_at_controller_states_label_tran_preds_appropriately(predicate_abstraction, program)
-                return True, mm.to_dot(pred_list)
+                return True, mm #mm.to_dot(pred_list)
 
-        print(mm.to_dot(pred_list))
+        # print(mm.to_dot(pred_list))
         mm = mm.fill_in_predicates_at_controller_states_label_tran_preds_appropriately(predicate_abstraction, program)
         print(mm.to_dot(pred_list))
 
