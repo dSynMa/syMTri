@@ -163,10 +163,10 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
         return Cs
 
 
-def liveness_refinement(symbol_table, program, entry_condition, unfolded_loop: [Transition], exit_predicate_grounded):
+def liveness_refinement(symbol_table, program, entry_condition, unfolded_loop: [Transition], exit_predicate_grounded, add_natural_conditions=True):
     try:
         c_code = loop_to_c(symbol_table, program, entry_condition, unfolded_loop,
-                           exit_predicate_grounded)
+                           exit_predicate_grounded, add_natural_conditions)
         print(c_code)
         ranker = Ranker()
         success, ranking_function, invars = ranker.check(c_code)
@@ -204,7 +204,7 @@ def liveness_refinement(symbol_table, program, entry_condition, unfolded_loop: [
 
 
 def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_before_exit: [Transition],
-              exit_cond: Formula):
+              exit_cond: Formula, add_natural_conditions=True):
     # params
     params = list(set(symbol_table[str(v)].type + " " + str(v)
                       for v in {v.name for v in program.valuation} | set(entry_condition.variablesin())
@@ -225,17 +225,20 @@ def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_bef
     natural_conditions = [v.split(" ")[1] + " >= 0 " for v in params if
                           not v.endswith("_prev") and symbol_table[v.split(" ")[1]].type in ["natural",
                                                                                              "nat"]]
-    init = ["if(!(" + " && ".join(natural_conditions) + ")) return;" if len(natural_conditions) > 0 else ""]
-
+    if add_natural_conditions:
+        init = ["if(!(" + " && ".join(natural_conditions) + ")) return;" if len(natural_conditions) > 0 else ""]
+    else:
+        init = []
     choices = []
 
     for t in loop_before_exit:
         safety = str(type_constraints(t.condition, symbol_table)).replace(" = ", " == ").replace(" & ",
-                                                                                                    " && ").replace(
+                                                                                                 " && ").replace(
             " | ", " || ")
-        cond_simpl = str(t.condition.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ", " || ")
+        cond_simpl = str(t.condition.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ",
+                                                                                                       " || ")
         acts = "\n\t\t".join([str(act.left) + " = " + str(act.right) + ";" for act in t.action if
-                              not is_boolean(act.left, program.valuation)])
+                              not is_boolean(act.left, program.valuation) if act.left != act.right])
 
         if isinstance(string_to_prop(cond_simpl).simplify(), Value):
             if string_to_prop(cond_simpl).simplify().is_false():
@@ -243,11 +246,12 @@ def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_bef
             elif string_to_prop(cond_simpl).simplify().is_true():
                 choices += ["\t" + acts]
         else:
-            choices += ["\tif(" + cond_simpl + ") {" + acts + "}\n\t\t else break;"]
+            # choices += ["\tif(" + cond_simpl + ") {" + acts + "}\n\t\t else break;"]
+            choices += ["\t" + acts + ""]
         if safety != "true":
             if "..." in safety:
                 raise Exception("Error: The loop contains a transition with a condition that is not a formula.")
-            choices += ["\tif(!(" + safety + ")) break;"]
+            # choices += ["\tif(!(" + safety + ")) break;"]
 
     exit_cond_simplified = str(exit_cond.simplify()) \
         .replace(" = ", " == ") \
@@ -269,11 +273,13 @@ def loop_to_c(symbol_table, program: Program, entry_condition: Formula, loop_bef
                 + "\n\t".join(choices) \
                 + "\n\t} while(true);\n"
 
-    loop_code = "\n\tif(" + str(entry_condition.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(" | ",
-                                                                                                                  " || ") \
+    loop_code = "\n\tif(" + str(entry_condition.simplify()).replace(" = ", " == ").replace(" & ", " && ").replace(
+        " | ",
+        " || ") \
                 + "){" + loop_code + "\n\t}"
 
-    c_code = "#include<stdbool.h>\n\nvoid main(" + param_list + "){\n\t" + "\n\t".join(init).strip() + loop_code + "\n}"
+    c_code = "#include<stdbool.h>\n\nvoid main(" + param_list + "){\n\t" + "\n\t".join(
+        init).strip() + loop_code + "\n}"
     c_code = c_code.replace("TRUE", "true")
     c_code = c_code.replace("True", "true")
     c_code = c_code.replace("FALSE", "false")
