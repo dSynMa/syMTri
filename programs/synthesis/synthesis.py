@@ -276,7 +276,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         # if pred_state is not None:
         agreed_on_transitions = transitions_without_stutter_program_took
         # removing transition predicates for now
-        disagreed_on_state = ([p for p in env_desired_abstract_state[0] if not any(v for v in p.variablesin() if "_prev" in str(v))], env_desired_abstract_state[1])
+        disagreed_on_state = ([p for p in env_desired_abstract_state[0]], env_desired_abstract_state[1])
 
         write_counterexample_state(program, agreed_on_transitions, disagreed_on_state)
         # else:
