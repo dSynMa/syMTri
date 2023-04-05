@@ -555,7 +555,7 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
 
     exit_predicate_grounded = ground_predicate_on_vars(program, exit_condition,
                                                             exit_prestate, bool_vars, symbol_table).simplify()
-    dnf_exit_pred = dnf(exit_predicate_grounded, symbol_table)
+    dnf_exit_pred = dnf(exit_predicate_grounded, symbol_table, simplify=True)
     disjuncts_in_exit_pred = [dnf_exit_pred] if not isinstance(dnf_exit_pred, BiOp) or not dnf_exit_pred.op.startswith(
         "|") else dnf_exit_pred.sub_formulas_up_to_associativity()
 
