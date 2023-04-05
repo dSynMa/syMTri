@@ -133,7 +133,8 @@ class MealyMachine:
                 guard = "turn = mon_env & " + str(src)
                 if guard not in guards_acts.keys():
                     guards_acts[guard] = list()
-                act = "next(" + str(con_behaviour.replace(new_mon_events).to_nuxmv()) + " & " + str(con_tgt) + ")"
+                act = "next(" + str(con_behaviour.replace(new_mon_events).to_nuxmv()) + " & " + str(con_tgt) + \
+                      " & " + " & ".join(["!" + st for st in self.states if st != con_tgt]) + ")"
                 guards_acts[guard].append(act)
                 if (con_tgt not in self.env_transitions.keys()) or len(self.env_transitions.get(con_tgt)) == 0:
                     raise Exception("Nothing to do in counter-strategy from state " + str(con_tgt))
@@ -144,8 +145,9 @@ class MealyMachine:
                 if guard not in guards_acts.keys():
                     guards_acts[guard] = list()
 
-                act = conjunct_formula_set([UniOp("next", env_beh.replace(new_mon_events)),
-                                            UniOp("next", Variable(env_tgt))])
+                act = "next(" + str(env_beh.replace(new_mon_events).to_nuxmv()) + " & " + str(env_tgt) + \
+                      " & " + " & ".join(["!" + st for st in self.states if st != env_tgt]) + ")"
+
                 guards_acts[guard].append(act)
 
         define = []
