@@ -408,8 +408,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                   "(" + ", ".join(
                                 [str(p) for p in new_transition_predicates]) + ") are a subset of "
                                                                                "previous predicates.")
-                            # print("I will try safety refinement instead.")
-                            # use_liveness = False
+                            print("I will try safety refinement instead.")
+                            use_liveness = False
 
                             # if use_explicit_loops_abstraction:
                             #     print("I will try to make the loop and its exit explicit instead.")
