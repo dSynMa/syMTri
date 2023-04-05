@@ -70,13 +70,13 @@ def synthesize(program: Program, ltl_text: str, tlsf_path: str, docker: bool, pr
 def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable],
                             out_acts: [Variable], docker: str, project_on_abstraction=False, debug=False) -> \
         Tuple[bool, MealyMachine]:
-    eager = True
+    eager = False
     keep_only_bool_interpolants = False
     use_explicit_loops_abstraction = False
     no_analysis_just_user_input = False
     choose_predicates = False
-    conservative_with_state_predicates = True
-    prefer_lasso_counterexamples = True
+    conservative_with_state_predicates = False
+    prefer_lasso_counterexamples = False
 
     old_state_predicates = set()
     state_predicates = []
