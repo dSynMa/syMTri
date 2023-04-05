@@ -6,7 +6,8 @@ from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
-from programs.util import guarded_action_transitions_to_normal_transitions, resolve_next_references
+from programs.util import guarded_action_transitions_to_normal_transitions, resolve_next_references, \
+    symbol_table_from_typed_valuation
 from prop_lang.biop import BiOp
 from prop_lang.mathexpr import MathExpr
 from prop_lang.util import true, sat, conjunct
@@ -37,8 +38,9 @@ def program_parser():
     con_transitions = yield con_transitions_parser
     yield spaces() >> string("}") >> spaces()
 
-    new_env_transitions = [resolve_next_references(tt, initial_vals) for t in env_transitions for tt in guarded_action_transitions_to_normal_transitions(t, initial_vals, env, con, mon)]
-    new_con_transitions = [resolve_next_references(tt, initial_vals) for t in con_transitions for tt in guarded_action_transitions_to_normal_transitions(t, initial_vals, env, con, mon)]
+    symbol_table = symbol_table_from_typed_valuation(initial_vals)
+    new_env_transitions = [resolve_next_references(tt, initial_vals) for t in env_transitions for tt in guarded_action_transitions_to_normal_transitions(t, initial_vals, env, con, mon, symbol_table)]
+    new_con_transitions = [resolve_next_references(tt, initial_vals) for t in con_transitions for tt in guarded_action_transitions_to_normal_transitions(t, initial_vals, env, con, mon, symbol_table)]
 
     program = Program(program_name, states, initial_state, initial_vals, new_env_transitions, new_con_transitions, env, con,
                       mon)
