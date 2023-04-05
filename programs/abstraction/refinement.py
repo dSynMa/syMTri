@@ -15,7 +15,7 @@ from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean, dnf, infinite_type, type_constraints, propagate_negations
+from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean, dnf, infinite_type, type_constraints
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
@@ -128,7 +128,7 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
     if use_dnf:
         new_Bs = []
         for b in Bs:
-            after_dnf = dnf(propagate_negations(b), symbol_table)
+            after_dnf = dnf(b, symbol_table)
             if isinstance(after_dnf, BiOp) and after_dnf.op[0] == "|":
                 new_Bs += after_dnf.sub_formulas_up_to_associativity()
             else:
