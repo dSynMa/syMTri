@@ -345,10 +345,10 @@ def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, disagreed_o
                 var_differences += [False]
 
         if True in var_differences:
-            index_of_first_loop_entry = var_differences.index(True)
-            # index_of_last_loop_entry = len(var_differences) - 1 - var_differences[::-1].index(True)
-            first_index = new_i_to_old_i[previous_visits[index_of_first_loop_entry]]
-
+            # index_of_first_loop_entry = var_differences.index(True)
+            # first_index = new_i_to_old_i[previous_visits[index_of_first_loop_entry]]
+            index_of_last_loop_entry = len(var_differences) - 1 - var_differences[::-1].index(True)
+            first_index = new_i_to_old_i[previous_visits[index_of_last_loop_entry]]
             return True, first_index
         else:
             return False, None
