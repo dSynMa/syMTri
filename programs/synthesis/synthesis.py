@@ -77,9 +77,17 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
     choose_predicates = False
     conservative_with_state_predicates = False
     prefer_lasso_counterexamples = False
+    # TODO when this is set to false the approach is not assured to end in fewer cases,
+    #      when we have a predicate mismatch we also need some information about the transition being taken by the program
+    #      since some information about why the environment chose the wrong predicates is hidden there
+    add_all_boolean_vars = True
 
     old_state_predicates = set()
-    state_predicates = []
+
+    if add_all_boolean_vars:
+        state_predicates = [Variable(b.name) for b in program.valuation if b.type.lower().startswith("bool")]
+    else:
+        state_predicates = []
     rankings = []
     old_transition_predicates = set()
     transition_predicates = []
@@ -87,7 +95,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
     transition_fairness = []
     predicate_abstraction = PredicateAbstraction(program)
-    predicate_abstraction.compute_with_predicates([], [], True)
+    predicate_abstraction.compute_with_predicates(state_predicates, transition_predicates, True)
 
     while True:
         symbol_table = predicate_abstraction.program.symbol_table

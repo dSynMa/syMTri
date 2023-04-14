@@ -583,8 +583,7 @@ def concretize_transitions(program, looping_program, indices_and_state_list, add
                         candidate_transitions.append(stutter)
             elif incompatible_state["turn"] == "mon_con":
                 candidate_transitions = [t for t in program.con_transitions if
-                                         t.src == src_state and t.tgt == tgt_state_env_wanted and set(t.output) == set(
-                                             outputs_env_wanted)]
+                                         t.src == src_state and t.tgt == tgt_state_env_wanted]
                 if tgt_state_env_wanted == src_state:
                     stutter = stutter_transition(program, src_state, False)
                     if stutter is not None:
@@ -613,7 +612,8 @@ def concretize_transitions(program, looping_program, indices_and_state_list, add
             "compatible_tran_predicates"] == "FALSE":
             # pred mismatch
             incompatibility_formula += preds_in_state(incompatible_state, state_pred_label_to_formula)
-            incompatibility_formula += [neg(concretized[-1][0].condition)]
+            #TODO we wanted to take the wrong transition, but the condition at state concretized[-1][1], not at incompatible_state
+            # incompatibility_formula += [neg(concretized[-1][0].condition)]
             env_pred_state = (incompatibility_formula, incompatible_state)
 
         return concretized, env_pred_state, concretized[-1]
