@@ -134,7 +134,8 @@ class MealyMachine:
                 if guard not in guards_acts.keys():
                     guards_acts[guard] = list()
                 act = "next(" + str(con_behaviour.replace(new_mon_events).to_nuxmv()) + " & " + str(con_tgt) + \
-                      " & " + " & ".join(["!" + st for st in self.states if st != con_tgt]) + ")"
+                      " & " + " & ".join(["!" + st for st in self.states if st != con_tgt] +
+                                         ["!" + str(o) for o in mon_out_events]) + ")"
                 guards_acts[guard].append(act)
                 if (con_tgt not in self.env_transitions.keys()) or len(self.env_transitions.get(con_tgt)) == 0:
                     raise Exception("Nothing to do in counter-strategy from state " + str(con_tgt))
