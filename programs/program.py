@@ -12,7 +12,7 @@ from programs.util import stutter_transition, symbol_table_from_program, is_dete
 from prop_lang.biop import BiOp
 from prop_lang.uniop import UniOp
 from prop_lang.util import disjunct_formula_set, mutually_exclusive_rules, neg, true, \
-    sat, type_constraints_acts
+    sat, type_constraints_acts, conjunct_formula_set, implies
 from prop_lang.variable import Variable
 
 
@@ -171,7 +171,12 @@ class Program:
 
         return dot
 
-    def to_nuXmv_with_turns(self, include_mismatches_due_to_nondeterminism=False, prefer_compatibility=False):
+    def to_nuXmv_with_turns(self,
+                            include_mismatches_due_to_nondeterminism=False,
+                            prefer_compatibility=False,
+                            pred_definitions: dict={}):
+
+        real_acts = []
         guards = []
         acts = []
         for env_transition in self.env_transitions:
@@ -187,6 +192,7 @@ class Program:
                              if event not in env_transition.output])
             guards.append(guard)
             acts.append(act)
+            real_acts.append((env_transition.action, env_transition.output, env_transition.tgt))
 
         for con_transition in self.con_transitions:
             guard = "turn = con & " + con_transition.src + " & " \
@@ -200,6 +206,8 @@ class Program:
                              for event in self.out_events])
             guards.append(guard)
             acts.append(act)
+            real_acts.append((con_transition.action, con_transition.output, con_transition.tgt))
+        real_acts.append(([], [], None)) # for the stutter transition
 
         define = []
         guard_and_act = []
@@ -234,10 +242,21 @@ class Program:
         if not prefer_compatibility:
             transitions = guard_and_act
         else:
-            guard_act_and_compatible = ["(" + ga + " & (act_" + str(i) + " -> next(compatible)))" for i, ga in
-                                        enumerate(guard_and_act)]
-            guard_and_not_compatible = ["(guard_" + str(i) + " & (act_" + str(i) + " -> next(compatible)))" for i in
-                                        range(len(guards))]
+            guard_act_and_compatible = []
+            guard_and_not_compatible = []
+            for i, ga in enumerate(guard_and_act):
+                (action, outputs, tgt) = real_acts[i]
+                action = [a.to_nuxmv() for a in action]
+                compatible_next = conjunct_formula_set([implies(pred,
+                                                            defn.replace(action
+                                                                         + [BiOp(Variable(str(v) + "_prev"), ":=", v)
+                                                                                 for v in defn.variablesin()]))
+                                                        for pred, defn in pred_definitions.items()])
+                compatible_next = str(compatible_next) + " & " + " & ".join(["mon_" + str(o) for o in outputs if isinstance(o, Variable)] +\
+                                                                            ["!mon_" + str(o) for o in self.out_events if o not in outputs] + \
+                                                                            (["mon_" + str(tgt)] if tgt is not None else []))
+                guard_act_and_compatible.append("(" + ga + " & act_" + str(i) + " & (" + str(compatible_next) + "))")
+                guard_and_not_compatible.append("(guard_" + str(i) + " & " + str(compatible_next) + ")")
 
             transitions = ["(" + " | ".join(guard_act_and_compatible) + ")"] + [
                 "(!(" + " | ".join(guard_and_not_compatible) + ") & (" + " | ".join(guard_and_act) + "))"]
