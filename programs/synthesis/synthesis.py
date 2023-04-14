@@ -201,11 +201,17 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                                                                                ltl_guarantees, mismatch_condition)
 
         if not there_is_mismatch or contradictory:
-            system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, not program.deterministic, not program.deterministic, predicate_mismatch=True)
+            system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, not program.deterministic, not program.deterministic, predicate_mismatch=False)
             contradictory, there_is_mismatch, out = there_is_mismatch_between_program_and_strategy(system, real, False,
                                                                                                    ltl_assumptions,
                                                                                                    ltl_guarantees)
         ## end checking for mismatch
+
+        if contradictory:
+            raise Exception("I have no idea what's gone wrong. Strix thinks the previous mealy machine is a " +
+                            (
+                                "controller" if real else "counterstrategy") + ", but nuxmv thinks it is non consistent with the program.\n"
+                                                                               "This may be a problem with nuXmv, e.g., it does not seem to play well with integer division.")
 
         ## deal with if there is nothing wrong
         if not there_is_mismatch or contradictory:
@@ -213,10 +219,10 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             # print("No mismatch found between " + (
             #     "strategy" if real else "counterstrategy") + " and program when excluding traces for which the program has a non-deterministic choice.")
             # print("Trying for when the program has a non-deterministic choice..")
-            # system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, True, True, False)
-            # contradictory, there_is_mismatch, out = there_is_mismatch_between_program_and_strategy(system, real, False,
-            #                                                                                        ltl_assumptions,
-            #                                                                                        ltl_guarantees)
+            system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, not program.deterministic, not program.deterministic, predicate_mismatch=False)
+            contradictory, there_is_mismatch, out = there_is_mismatch_between_program_and_strategy(system, real, False,
+                                                                                                   ltl_assumptions,
+                                                                                                   ltl_guarantees)
 
             if contradictory:
                 raise Exception("I have no idea what's gone wrong. Strix thinks the previous mealy machine is a " +
