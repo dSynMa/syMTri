@@ -623,8 +623,10 @@ def concretize_transitions(program, looping_program, indices_and_state_list, add
                 concretized += [(stutter_trans, st)]
 
     # two options, either we stopped because of a predicate mismatch, or a transition mismatch
+    # TODO, we need to consider that there is both a state or output, and a predicate mismatch
     incompatibility_formula = []
-    if incompatible_state["compatible_states"] == "FALSE" or incompatible_state["compatible_outputs"] == "FALSE":
+    if incompatible_state["compatible_states"] == "FALSE" or \
+            incompatible_state["compatible_outputs"] == "FALSE":
         if program.deterministic:
             return concretized[:-1], ([neg(concretized[-1][0].condition)], concretized[-1][1]), concretized[-1]
         else:
@@ -658,13 +660,11 @@ def concretize_transitions(program, looping_program, indices_and_state_list, add
                                                                 *t.condition.to_smt(program.symbol_table)))]
             formula = disjunct_formula_set([t.condition for t in env_desired_transitions] + [propagate_negations(neg(cnf(concretized[-1][0].condition, program.symbol_table)))])
             return concretized[:-1], ([formula], concretized[-1][1]), concretized[-1]
-    else:
-        env_pred_state = None
-        if incompatible_state["compatible_state_predicates"] == "FALSE" or incompatible_state["compatible_tran_predicates"] == "FALSE":
-            #pred mismatch
-            incompatibility_formula += preds_in_state(incompatible_state, state_pred_label_to_formula)
-            env_pred_state = (incompatibility_formula, incompatible_state)
-
+    if incompatible_state["compatible_state_predicates"] == "FALSE" or incompatible_state[
+        "compatible_tran_predicates"] == "FALSE":
+        # pred mismatch
+        preds_in_incompatible_state = preds_in_state(incompatible_state, state_pred_label_to_formula)
+        env_pred_state = (preds_in_incompatible_state, incompatible_state)
         return concretized, env_pred_state, concretized[-1]
 
 
