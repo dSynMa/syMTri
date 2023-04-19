@@ -56,10 +56,14 @@ def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmv
                                     for s in program.states]
 
     mon_conds = "" if not controller_transition_explicit else " | turn = mon_con"
-    compatible_output = "\tcompatible_outputs := " + "((turn == mon_env) -> (" + str(conjunct_formula_set(mon_output_equality)) + "))" + ";\n"
-    compatible_states = "\tcompatible_states := " + "((turn == mon_env" + mon_conds + ") -> (" + str(conjunct_formula_set(mon_state_equality)) + "))" + ";\n"
-    compatible_state_predicates = "\tcompatible_state_predicates := " + "((turn == mon_env" + mon_conds + ") -> (" + str(conjunct_formula_set(safety_predicate_truth)) + "))" + ";\n"
-    compatible_tran_predicates = "\tcompatible_tran_predicates := " + "((turn == mon_env" + mon_conds + ") -> (" + str(conjunct_formula_set(tran_predicate_truth)) + "))" + ";\n"
+    compatible_output_meaning = "((turn == mon_env) -> (" + str(conjunct_formula_set(mon_output_equality)) + "))"
+    compatible_output = "\tcompatible_outputs := " + compatible_output_meaning + ";\n"
+    compatible_states_meaning = "((turn == mon_env" + mon_conds + ") -> (" + str(conjunct_formula_set(mon_state_equality)) + "))"
+    compatible_states = "\tcompatible_states := " + compatible_states_meaning + ";\n"
+    compatible_state_predicates_meaning = "((turn == mon_env" + mon_conds + ") -> (" + str(conjunct_formula_set(safety_predicate_truth)) + "))"
+    compatible_state_predicates = "\tcompatible_state_predicates := " + compatible_state_predicates_meaning + ";\n"
+    compatible_tran_predicates_meaning = "((turn == mon_env" + mon_conds + ") -> (" + str(conjunct_formula_set(tran_predicate_truth)) + "))"
+    compatible_tran_predicates = "\tcompatible_tran_predicates := " + compatible_tran_predicates_meaning + ";\n"
     compatible = "\tcompatible := " + ("compatible_state_predicates & compatible_tran_predicates & " if predicate_mismatch else "") + "compatible_outputs & compatible_states" + ";\n"
 
     text += compatible_output + compatible_states + compatible + compatible_state_predicates + compatible_tran_predicates
