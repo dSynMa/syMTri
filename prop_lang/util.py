@@ -1,8 +1,10 @@
 import re
 
-from pysmt.rewritings import disjunctive_partition
-from pysmt.shortcuts import And, simplify, serialize
-from sympy.logic.boolalg import to_dnf, simplify_logic, to_cnf
+import sympy
+from pysmt.fnode import FNode
+from pysmt.shortcuts import And, simplify, serialize, Or
+from sympy import Basic
+from sympy.logic.boolalg import to_dnf, simplify_logic, to_cnf, Implies, Equivalent
 from sympy.parsing.sympy_parser import parse_expr
 
 import Config
@@ -248,21 +250,61 @@ def only_dis_or_con_junctions(f: Formula):
 
 dnf_cache = {}
 
+def fnode_to_formula(fnode: FNode):
+    if fnode.is_true():
+        return true()
+    elif fnode.is_false():
+        return false()
+    elif fnode.is_and():
+        return conjunct_formula_set({fnode_to_formula(arg) for arg in fnode.args()})
+    elif fnode.is_or():
+        return disjunct_formula_set({fnode_to_formula(arg) for arg in fnode.args()})
+    elif fnode.is_not():
+        return neg(fnode_to_formula(fnode.arg(0)))
+    elif fnode.is_implies():
+        return implies(fnode_to_formula(fnode.arg(0)), fnode_to_formula(fnode.arg(1)))
+    elif fnode.is_iff():
+        return iff(fnode_to_formula(fnode.arg(0)), fnode_to_formula(fnode.arg(1)))
+    elif fnode.is_symbol():
+        return Variable(fnode.symbol_name())
+    else:
+        return string_to_prop(serialize(fnode))
+
+def sympi_to_formula(basic: Basic):
+    if isinstance(basic, sympy.logic.boolalg.Not):
+        return neg(sympi_to_formula(basic.args[0]))
+    elif isinstance(basic, sympy.logic.boolalg.And):
+        return conjunct_formula_set({sympi_to_formula(arg) for arg in list(basic.args)})
+    elif isinstance(basic, sympy.logic.boolalg.Or):
+        return disjunct_formula_set({sympi_to_formula(arg) for arg in list(basic.args)})
+    elif isinstance(basic, sympy.logic.boolalg.Implies):
+        return implies(sympi_to_formula(basic.args[0]), sympi_to_formula(basic.args[1]))
+    elif isinstance(basic, sympy.logic.boolalg.Equivalent):
+        return iff(sympi_to_formula(basic.args[0]), sympi_to_formula(basic.args[1]))
+    else:
+        return string_to_prop(str(basic))
+
 
 def simplify_formula_with_math(formula, symbol_table):
-    simple_f_without_math, dic = formula.replace_math_exprs(symbol_table)
-    return string_to_prop(serialize(simplify(And(*formula.to_smt(symbol_table | dic))))).replace(
-        [BiOp(Variable(key), ":=", value) for key, value in dic.items()])
+    simplified = simplify(And(*formula.to_smt(symbol_table)))
+    to_formula = fnode_to_formula(simplified)
+    return to_formula
 
 
 def simplify_formula_without_math(formula, symbol_table=None):
     if symbol_table == None:
         symbol_table = {str(v): TypedValuation(str(v), "bool", None) for v in formula.variablesin()}
 
-    return string_to_prop(serialize(simplify(And(*formula.to_smt(symbol_table)))))
+    simplified = simplify(And(*formula.to_smt(symbol_table)))
+    to_formula = fnode_to_formula(simplified)
+    return to_formula
+
 
 
 def dnf(f: Formula, symbol_table: dict = None, simplify=True):
+    if isinstance(f, Value) or isinstance(f, MathExpr):
+        return f
+
     if symbol_table == None:
         symbol_table = {str(v): TypedValuation(str(v), "bool", None) for v in f.variablesin()}
     try:
@@ -270,23 +312,32 @@ def dnf(f: Formula, symbol_table: dict = None, simplify=True):
             return dnf_cache[f]
         simple_f = only_dis_or_con_junctions(f)
         simple_f = propagate_negations(simple_f)
-        if simplify:
-            simple_f = simple_f.simplify()
         simple_f_without_math, dic = simple_f.replace_math_exprs(symbol_table)
         if simplify:
             simple_f_without_math = simplify_formula_without_math(simple_f_without_math)
-        for_sympi = parse_expr(str(simple_f_without_math.to_nuxmv()).replace("!", " ~"), evaluate=True)
-        if isinstance(for_sympi, int):
-            return f
-        # if formula has more than 8 variables it can take a long time, dnf is exponential
-        if not is_dnf(for_sympi):
-            in_dnf = to_dnf(for_sympi, simplify=simplify, force=True)
-            in_dnf_formula = string_to_prop(str(in_dnf).replace("~", "!"))
-        else:
-            in_dnf_formula = simple_f_without_math
-        # print(str(f) + " after dnf becomes " + str(in_dnf).replace("~", "!"))
-        in_dnf_math_back = in_dnf_formula.replace([BiOp(Variable(key), ":=", value) for key, value in dic.items()])
 
+        if isinstance(simple_f_without_math, BiOp) and simple_f_without_math.op[0] == "|":
+            disjuncts = simple_f_without_math.sub_formulas_up_to_associativity()
+        else:
+            disjuncts = [simple_f_without_math]
+
+        new_disjuncts = []
+        for disjunct in disjuncts:
+            for_sympi = parse_expr(str(disjunct.to_nuxmv()).replace("!", " ~"), evaluate=True)
+            if isinstance(for_sympi, int):
+                return simple_f
+            # if formula has more than 8 variables it can take a long time, dnf is exponential
+            if not is_dnf(for_sympi):
+                in_dnf = to_dnf(for_sympi, simplify=simplify, force=True)
+                new_disjunct = sympi_to_formula(in_dnf)
+            else:
+                new_disjunct = simple_f_without_math
+            # print(str(f) + " after dnf becomes " + str(in_dnf).replace("~", "!"))
+            new_disjunct = new_disjunct.replace([BiOp(Variable(key), ":=", value) for key, value in dic.items()])
+
+            new_disjuncts.append(new_disjunct)
+
+        in_dnf_math_back = disjunct_formula_set(new_disjuncts)
         dnf_cache[f] = in_dnf_math_back
 
         return in_dnf_math_back
@@ -310,7 +361,10 @@ def cnf(f: Formula, symbol_table: dict = None):
         # if formula has more than 8 variables it can take a long time, dnf is exponential
         in_cnf = to_cnf(for_sympi, simplify=True, force=True)
         # print(str(f) + " after cnf becomes " + str(in_cnf).replace("~", "!"))
-        in_dnf_formula = string_to_prop(str(in_cnf).replace("~", "!"))
+        try:
+            in_dnf_formula = sympi_to_formula(in_cnf)
+        except Exception as e:
+            raise e
         in_dnf_math_back = in_dnf_formula.replace([BiOp(Variable(key), ":=", value) for key, value in dic.items()])
 
         dnf_cache[f] = in_dnf_math_back
