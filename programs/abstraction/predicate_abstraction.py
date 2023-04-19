@@ -3,7 +3,7 @@ from itertools import chain, combinations
 from multiprocessing import Process, Queue
 
 from func_timeout import func_timeout
-from pysmt.shortcuts import And, Not, TRUE
+from pysmt.shortcuts import And
 from joblib import Parallel, delayed
 
 from Config import env, con
@@ -12,8 +12,7 @@ from programs.program import Program
 from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
 from programs.util import label_preds, add_prev_suffix, stutter_transitions, \
-    stutter_transition, symbol_table_from_program, safe_update_set_vals, safe_update_list_vals, transition_formula, \
-    reduce_up_to_iff, label_pred, stringify_pred, stringify_formula
+    stutter_transition, symbol_table_from_program, transition_formula, stringify_pred, stringify_formula
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.mathexpr import MathExpr
@@ -21,7 +20,7 @@ from prop_lang.uniop import UniOp
 from prop_lang.util import conjunct, neg, conjunct_formula_set, conjunct_typed_valuation_set, disjunct_formula_set, \
     implies, G, X, true, false, disjunct, simplify_formula_without_math, cnf, iff, is_tautology, sat, \
     keep_only_vars, dnf, partially_evaluate, is_dnf, abstract_out_conjunctions_of_atoms, depth_of_formula, \
-    abstract_out_disjunctions_of_atoms, atomic_predicates, F, type_constraints, U, W
+    abstract_out_disjunctions_of_atoms, atomic_predicates, F, type_constraints, W, simplify_formula_with_math, negate
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
