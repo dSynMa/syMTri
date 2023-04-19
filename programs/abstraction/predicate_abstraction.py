@@ -651,7 +651,97 @@ class PredicateAbstraction:
         print(ltl)
         return init_transition_ltl, X(G(disjunct_formula_set(transition_ltl)))
 
-    def add_predicates(self, new_state_predicates: [Formula], new_transition_predicates: [Formula], pred_name_dict : dict, simplified: bool):
+
+    def compute_abstract_effect_with_p(self, t : Transition, Es, old_effects, predicate):
+        is_tran_pred = lambda q: any(v for v in q.variablesin() if str(v).endswith("_prev"))
+
+        action = t.action
+        # TODO, if no vars modified, then only need need to abstract guards in terms of predicates, then they maintain same value
+
+        vars_modified_in_action_without_identity = [a.left for a in action if not a.left == a.right]
+        vars_used_in_action_without_identity = [v for a in action if not a.left == a.right for v in a.right.variablesin()]
+
+        t_formula = transition_formula(t)
+
+        invars = []
+        constants = []
+        new_effects = {x:y for x,y in old_effects.items()}
+        # if the predicate is a state predicate and is not mentioned in both the guard and action
+        if not is_tran_pred(predicate) and not any(v for v in predicate.variablesin() if v in t.condition.variablesin()
+                                                         or v in vars_modified_in_action_without_identity +
+                                                                vars_used_in_action_without_identity):
+            invars = [predicate]
+        # if the predicate is a transition predicate and is not mentioned in the action
+        elif is_tran_pred(predicate) and not any(v for v in predicate.variablesin() if v in vars_modified_in_action_without_identity):
+            constants = [neg(predicate)]
+        # elif is_contradictory(conjunct_formula_set([t_formula, (predicate)]), self.program.symbol_table):
+        #     constants = [neg(predicate)]
+        # elif is_contradictory(conjunct_formula_set([t_formula, neg(predicate)]), self.program.symbol_table):
+        #     constants = [(predicate)]
+        # elif is_contradictory(conjunct_formula_set([t_formula, add_prev_suffix(predicate), neg(predicate)]), self.program.symbol_table) and\
+        #         is_contradictory(conjunct_formula_set([t_formula, add_prev_suffix(neg(predicate)), (predicate)]), self.program.symbol_table):
+        #     # TODO This is a bit too much, still need to consider whether predicate is needed to abstract guard
+        #     invars = [(predicate)]
+        else:
+            action_formula = conjunct_formula_set([BiOp(a.left, "=", add_prev_suffix(a.right)) for a in action])
+            prev_predicate = add_prev_suffix(predicate)
+            for (guard_disjunct, E) in Es:
+                # E_formula = add_prev_suffix(conjunct_formula_set(E))
+                new_formula = conjunct(action_formula, add_prev_suffix(guard_disjunct))
+                formula_pos = conjunct(new_formula, prev_predicate)
+                if sat(formula_pos, self.program.symbol_table):
+                    try_pos = True
+                else:
+                    try_pos = False
+
+                formula_neg = conjunct(new_formula, neg(prev_predicate))
+                if sat(formula_neg, self.program.symbol_table):
+                    try_neg = True
+                else:
+                    try_neg = False
+                newNextPss = {}
+                if E not in old_effects.keys():
+                    print()
+                for (nextPs, Pss) in old_effects[E].items():
+                    nextPs_with_p = frozenset(p for p in nextPs | {predicate})
+                    nextPs_with_neg_p = frozenset(p for p in nextPs | {neg(predicate)})
+                    new_pos_Ps = []
+                    new_neg_Ps = []
+                    for Ps in Pss:
+                        # if p was true before, is p possible next?
+                        if try_pos and sat(conjunct(conjunct_formula_set(nextPs_with_p),
+                                       conjunct(formula_pos, conjunct_formula_set([add_prev_suffix(P) for P in Ps]))), self.program.symbol_table):
+                            new_pos_Ps += [Ps + [predicate]]
+
+                        # if p was false before, is p possible next?
+                        if try_neg and sat(conjunct(conjunct_formula_set(nextPs_with_p),
+                                        conjunct(formula_neg, conjunct_formula_set([add_prev_suffix(P) for P in Ps]))), self.program.symbol_table):
+                            new_pos_Ps += [Ps + [neg(predicate)]]
+
+                        # if p was true before, is not p possible next?
+                        if try_pos and sat(conjunct(conjunct_formula_set(nextPs_with_neg_p),
+                                       conjunct(formula_pos, conjunct_formula_set([add_prev_suffix(P) for P in Ps]))), self.program.symbol_table):
+                            new_neg_Ps += [Ps + [(predicate)]]
+
+                        # if p was false before, is not p possible next?
+                        if try_neg and sat(conjunct(conjunct_formula_set(nextPs_with_neg_p),
+                                        conjunct(formula_neg, conjunct_formula_set([add_prev_suffix(P) for P in Ps]))), self.program.symbol_table):
+                            new_neg_Ps += [Ps + [neg(predicate)]]
+                    if len(new_pos_Ps) == 0 and len(new_neg_Ps) == 0:
+                        print()
+                    if len(new_pos_Ps) > 0:
+                        newNextPss[nextPs_with_p] = new_pos_Ps
+                    if len(new_neg_Ps) > 0:
+                        newNextPss[nextPs_with_neg_p] = new_neg_Ps
+
+                if len(newNextPss) > 0:
+                    new_effects[E] = newNextPss
+                else:
+                    new_effects.pop(E)
+                    Es.remove((guard_disjunct, E))
+        return t, t_formula, invars, constants, Es, new_effects
+
+    def add_predicates(self, new_state_predicates: [Formula], new_transition_predicates: [Formula], pred_name_dict : dict, simplified: bool, parallelise=True):
         if len(new_state_predicates) + len(new_transition_predicates) == 0:
             return
 
