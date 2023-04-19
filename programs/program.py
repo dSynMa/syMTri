@@ -294,11 +294,6 @@ class Program:
         invar += [str(disjunct_formula_set([Variable(s) for s in self.states]))]
         invar += [str(val.name) + " >= 0" for val in self.valuation if (val.type == "nat" or val.type == "natural")]
 
-        if include_mismatches_due_to_nondeterminism is not None and not include_mismatches_due_to_nondeterminism:
-            for i in range(len(guards)):
-                all_others_neg = ["!guard_" + str(j) for j in range(len(guards)) if j != i]
-                invar += ["guard_" + str(i) + " -> (" + " & ".join(all_others_neg) + ")"]
-
         return NuXmvModel(self.name, vars, define, init, invar, trans)
 
     def complete_transitions(self):
