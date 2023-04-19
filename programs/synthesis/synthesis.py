@@ -528,13 +528,15 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
                 print("Found state predicates: " + ", ".join([str(p) for p in new_preds]))
                 if len(new_preds) == 0:
-                    e = Exception("No state predicates identified.")
                     print("No state predicates identified.")
                     print("I will try using the values of variables instead..")
                     vars_mentioned_in_preds = {v for p in new_preds for v in p.variablesin()}
                     new_preds |= {BiOp(v, "=", Value(state[str(v)])) for v in vars_mentioned_in_preds for state
                                          in
-                                         [st for (_, st) in agreed_on_transitions + [disagreed_on_state[1]]]}
+                                         [st for (_, st) in agreed_on_transitions + [disagreed_on_state]] if state[str(v)] in ["TRUE", "FALSE"]}
+                    new_preds |= {MathExpr(BiOp(v, "=", Value(state[str(v)]))) for v in vars_mentioned_in_preds for state
+                                         in
+                                         [st for (_, st) in agreed_on_transitions + [disagreed_on_state]] if state[str(v)] not in ["TRUE", "FALSE"]}
 
             new_all_preds = {x.simplify() for x in new_preds | {p for p in state_predicates if p not in old_state_predicates}}
             new_all_preds = reduce_up_to_iff(state_predicates,
@@ -556,10 +558,16 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 )
                 print("I will try using the values of variables instead..")
                 vars_mentioned_in_preds = {v for p in new_preds for v in p.variablesin()}
-                new_all_preds = {BiOp(v, "=", Value(state[str(v)]))
-                                     for v in vars_mentioned_in_preds
-                                     for state in [st for (_, st) in agreed_on_transitions + [disagreed_on_state]]}
-                new_all_preds |= {p for p in state_predicates if p not in old_state_predicates} #ranking invars may have been added
+                new_preds |= {BiOp(v, "=", Value(state[str(v)])) for v in vars_mentioned_in_preds for state
+                              in
+                              [st for (_, st) in agreed_on_transitions + [disagreed_on_state]] if
+                              state[str(v)] in ["TRUE", "FALSE"]}
+                new_preds |= {MathExpr(BiOp(v, "=", Value(state[str(v)]))) for v in vars_mentioned_in_preds for state
+                              in
+                              [st for (_, st) in agreed_on_transitions + [disagreed_on_state]] if
+                              state[str(v)] not in ["TRUE", "FALSE"]}
+                new_all_preds = {x.simplify() for x in
+                                 new_preds | {p for p in state_predicates if p not in old_state_predicates}}
                 new_all_preds = reduce_up_to_iff(state_predicates,
                                                  list(new_all_preds),
                                                  symbol_table
