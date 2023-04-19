@@ -1,4 +1,5 @@
 import re
+from multiprocessing import Queue, Process
 
 import sympy
 from pysmt.fnode import FNode
@@ -370,6 +371,18 @@ def dnf(f: Formula, symbol_table: dict = None, simplify=True):
         return in_dnf_math_back
     except Exception as e:
         raise Exception("dnf: I do not know how to handle " + str(f) + ", cannot turn it into dnf." + str(e))
+
+
+def dnf_with_timeout(f: Formula, symbol_table: dict = None, simplify=True, timeout=2):
+    if isinstance(f, Value) or isinstance(f, MathExpr):
+        return f
+
+    if symbol_table == None:
+        symbol_table = {str(v): TypedValuation(str(v), "bool", None) for v in f.variablesin()}
+
+    ret = run_with_timeout(dnf, [f, symbol_table, simplify], timeout=timeout)
+
+    return ret
 
 
 def cnf(f: Formula, symbol_table: dict = None):
@@ -758,3 +771,26 @@ def atomic_predicates(formula):
             return atomic_predicates(formula.left) | atomic_predicates(formula.right)
         else:
             raise Exception("atoms: not implemented for " + str(formula))
+
+
+queue = Queue()
+
+
+def run_with_timeout(f, args, timeout=-1):
+    if timeout == -1:
+        return f(args)
+    else:
+        params = tuple([f] + [tuple(args)])
+        p1 = Process(target=evaluate_and_queue, name=f.__name__, args=params)
+        p1.start()
+        p1.join(timeout=timeout)
+        if p1.exitcode is None:
+            p1.terminate()
+            return None
+        else:
+            return queue.get()
+
+
+def evaluate_and_queue(function, args):
+    result = function(*args)
+    queue.put(result)
