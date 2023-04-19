@@ -283,7 +283,8 @@ class Program:
         init = [self.initial_state]
         init += [str(val.name) + " = " + str(val.value.to_nuxmv()) for val in self.valuation]
         init += ["!" + str(event) for event in self.out_events]
-        trans = ["\n\t|\t".join(transitions)]
+        trans = ["(turn = env | turn = con) -> (" + "\n\t|\t".join(transitions) + ")"]
+        trans += ["!(turn = env | turn = con) -> (" + acts[-1] + ")"] #stutter if not prog turn
         update_prevs = "(turn = env | turn == con)" + " & " + " & ".join(["next(" + str(var.name) + "_prev) = " + str(var.name) for var in self.valuation])
         maintain_prevs = "!(turn = env | turn == con)" + " & " + " & ".join(["next(" + str(var.name) + "_prev) = " + str(var.name)  + "_prev" for var in self.valuation])
         prev_logic = "((" + update_prevs + ") | (" + maintain_prevs + "))"
