@@ -391,7 +391,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     # TODO this isn't the real exit trans, it's a good approximation for now, but it may be a just
                     #  an explicit or implicit stutter transition
                     mismatch_desired_state = conjunct_formula_set([p for p in disagreed_on_state[0]])
-                    exit_condition = mismatch_desired_state #neg(mismatch_desired_state) if loop_in_cs else mismatch_desired_state
+                    exit_condition = neg(mismatch_desired_state) #neg(mismatch_desired_state) if loop_in_cs else mismatch_desired_state
                     ranking, invars, sufficient_entry_condition, exit_predicate = \
                         liveness_step(program, loop, symbol_table | symbol_table_prevs,
                                         entry_valuation, entry_predicate,
