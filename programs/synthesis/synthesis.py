@@ -315,16 +315,10 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                    predicate_abstraction.abstraction, state_pred_label_to_formula,
                                    incompatible_state)
 
-        # if env_desired_abstract_state is None:
-        #     transitions_without_stutter_program_took, env_desired_abstract_state = \
-        #         concretize_transitions(program, program, transition_indices_and_state, False,
-        #                                predicate_abstraction.abstraction, state_pred_label_to_formula,
-        #                                incompatible_state)
-
-        # if pred_state is not None:
         agreed_on_transitions = transitions_without_stutter_program_took
         # removing transition predicates for now
-        disagreed_on_state = ([p for p in env_desired_abstract_state[0] if not any(v for v in p.variablesin() if "_prev" in str(v))], env_desired_abstract_state[1])
+        disagreed_on_state = ([p for p in env_desired_abstract_state[0] if not any(v for v in p.variablesin() if "_prev" in str(v))],
+                              env_desired_abstract_state[1])
 
         write_counterexample_state(program, agreed_on_transitions, disagreed_on_state)
         # _, abstract_trans = predicate_abstraction.allowed_in_abstraction([t[0] for t in transitions_without_stutter_program_took])
