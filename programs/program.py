@@ -82,6 +82,20 @@ class Program:
                 self.con_transitions.append(concrete_trans)
             self.con_transitions.remove(otherwise_trans)
 
+        # replace any variables that are never modified by their initial value
+        unmodified_vars = []
+        for var in self.valuation:
+            modified = any(t for t in self.env_transitions + self.con_transitions if any(a for a in t.action if str(a.left) == var.name and a.left != a.right))
+            if modified:
+                continue
+            else:
+                unmodified_vars.append(var)
+
+        for var in unmodified_vars:
+            for t in self.env_transitions + self.con_transitions:
+                t.condition = t.condition.replace(BiOp(Variable(var.name), ":=", Value(var.value)))
+                t.action = [a for a in t.action if str(a.left) != var.name]
+
         self.env_transitions = [self.add_type_constraints_to_guards(t) for t in self.env_transitions]
         self.con_transitions = [self.add_type_constraints_to_guards(t) for t in self.con_transitions]
 
