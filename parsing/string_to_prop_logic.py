@@ -115,8 +115,13 @@ def tuple_to_formula(node, hoa_flag) -> Formula:
             v2 = ((node[2]))
             if v0 == None or v2 == None:
                 print("None")
-            if re.match("(\+|\-|\*|\/|<|>|<=|>=|==)", node[1]):
+            if re.match("(\+|\-|\*|\/|<|>|<=|>=)", node[1]):
                 return MathExpr(BiOp((node[0]), node[1], (node[2])))
+            elif re.match("(=+|!=*)", node[1]):
+                if isinstance(node[0], MathExpr) or isinstance(node[2], MathExpr) or re.match("[0-9]+", str(node[0])) or re.match("[0-9]+", str(node[2])):
+                    return MathExpr(BiOp((node[0]), node[1], (node[2])))
+                else:
+                    return BiOp((node[0]), node[1], (node[2]))
             else:
                 return BiOp((node[0]), node[1], (node[2]))
     else:
