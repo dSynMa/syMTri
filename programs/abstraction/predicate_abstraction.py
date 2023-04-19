@@ -28,27 +28,6 @@ from prop_lang.variable import Variable
 
 smt_checker = SMTChecker()
 
-queue = Queue()
-timeout = -1
-
-def run_with_timeout(f, arg, timeout):
-    if timeout == -1:
-        return f(arg)
-    else:
-        p1 = Process(target=dnfguard, name=f.__name__, args=arg)
-        p1.start()
-        p1.join(timeout=10)
-        if p1.exitcode is None:
-            p1.terminate()
-            return None
-        else:
-            return queue.get()
-
-def dnfguard(d_and_guard):
-    dnfed = dnf(d_and_guard, simplify=False)
-    print(str(dnfed))
-    queue.put(dnfed)
-
 
 class PredicateAbstraction:
     def __init__(self, program: Program):
