@@ -825,7 +825,8 @@ class PredicateAbstraction:
             effect_formula = conjunct(conjunct(pred_effect_formula, invar_preds_formula), output_formula)
 
             next = conjunct(effect_formula, X(conjunct_formula_set([Variable(env_trans.tgt)])))
-            transition_ltl += [conjunct(now, next)]
+            trans = conjunct(now, next)
+            transition_ltl.append(trans)
 
         for con_trans in self.abstract_guard_con.keys():
             t_formula = transition_formula(con_trans)
@@ -858,7 +859,8 @@ class PredicateAbstraction:
             effect_formula = conjunct(conjunct(pred_effect_formula, invar_preds_formula), output_formula)
 
             next = conjunct(effect_formula, X(conjunct_formula_set([Variable(con_trans.tgt)])))
-            transition_ltl += [conjunct(now, next)]
+            trans = conjunct(now, next)
+            transition_ltl += [trans]
 
         ltl = conjunct(init_transition_ltl, X(G(disjunct_formula_set(transition_ltl))))
 

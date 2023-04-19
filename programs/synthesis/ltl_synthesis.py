@@ -7,7 +7,6 @@ from programs.program import Program
 from programs.synthesis.mealy_machine import MealyMachine
 from programs.util import synthesis_problem_to_TLSF_script
 from prop_lang.formula import Formula
-from prop_lang.util import conjunct, conjunct_formula_set, implies
 from prop_lang.variable import Variable
 import logging
 logger = logging.getLogger(__name__)

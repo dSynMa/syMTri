@@ -2,7 +2,6 @@ import re
 
 from pysmt.fnode import FNode
 from pysmt.shortcuts import And, Not, serialize
-# from pysmt.rewritings import cnf
 
 from parsing.string_to_prop_logic import string_to_prop, string_to_math_expression
 from programs.analysis.ranker import Ranker
@@ -212,7 +211,6 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
     for B in Bs:
         projected_condition = B.replace(ith_vars(len(concurring_transitions)))
         if any(v for v in projected_condition.variablesin() if "_prev" in str(v)):
-            print()
             projected_condition = projected_condition.replace(
                 [BiOp(Variable(str(v)), ":=", Variable(str(v).split("_prev")[0] + "_" + str(i - 1))) for v in
                  projected_condition.variablesin() if "_prev" in str(v)])

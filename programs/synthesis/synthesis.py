@@ -200,10 +200,10 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         guarantees = ([expand_LTL_to_env_con_steps(ltl_guarantees, pure_env_in_acts)] + \
                      [G(implies(con, (conjunct_formula_set([iff(p, X(p)) for p in out_acts]))))])
 
-        controller_rankings = conjunct_formula_set([g for _, _, _, G in rankings.values() for g in G])
-
-        if len([g for _, _, _, G in rankings.values() for g in G]) > 0:
-            print()
+        # controller_rankings = conjunct_formula_set([g for _, _, _, G in rankings.values() for g in G])
+        #
+        # if len([g for _, _, _, G in rankings.values() for g in G]) > 0:
+        #     print()
 
         # env is making controller_rankings FALSE
         # formula = conjunct(controller_rankings,
