@@ -413,13 +413,7 @@ class MealyMachine:
              pred_acts]).to_nuxmv()) + "))"
 
         trans = ["(" + identity + " &\n\t\t(!(turn = env | turn = con) -> (" + ")\n\t|\t(".join(transitions) + ")))"]
-        invar = mutually_exclusive_rules(self.states)
-        invar += mutually_exclusive_rules(["mon_" + s for s in mon_states])
-        invar += [str(disjunct_formula_set([Variable(str(s)) for s in self.states]))]
-        # j = 0
-        # while j < len(trans_pred_acts):
-        #     invar += [str(neg(conjunct(trans_pred_acts[j], trans_pred_acts[j + 1])))]
-        #     j += 2
+        invar = []
 
         return NuXmvModel(self.name, set(vars), define, init, invar, trans)
 
