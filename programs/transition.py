@@ -2,7 +2,7 @@ from sympy import to_dnf
 
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
-from prop_lang.util import true, conjunct, dnf, conjunct_formula_set
+from prop_lang.util import true, conjunct, dnf, neg
 from prop_lang.variable import Variable
 
 
@@ -42,3 +42,9 @@ class Transition:
 
     def dnf_condition(self, symbol_table):
         return Transition(self.src, dnf(self.condition, symbol_table), self.action, self.output, self.tgt)
+
+    def complete_outputs(self, all_outputs):
+        for o in all_outputs:
+            if o not in self.output:
+                self.output.append(neg(o))
+        return self
