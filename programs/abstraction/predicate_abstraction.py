@@ -422,101 +422,96 @@ class PredicateAbstraction:
             else:
                 new_abstract_effect[t] = {}
                 t_f = transition_formula(t)
-                prev_trans = [t for t in self.abstract_guard_con.keys() if t.tgt == t.src]
+                prev_trans = [tt for tt in self.abstract_guard_con.keys() if tt.tgt == t.src]
 
                 prev_pred_states = set()
                 for tt in prev_trans:
+                    tt_f = transition_formula(tt)
                     tt_prev_pred_state = set()
                     for _, effects in self.abstract_effect[tt].items():
-                        tt_f = transition_formula(tt)
                         effects_tt_prev_pred_states = [Ps for Ps in effects.keys()]
                         if len(self.abstract_effect_constant[tt_f]) > 0:
-                            effects_tt_prev_pred_states = [Ps | {c} for c in self.abstract_effect_constant[tt_f] for Ps in effects_tt_prev_pred_states]
+                            effects_tt_prev_pred_states = [Ps | {c for c in self.abstract_effect_constant[tt_f]} for Ps in effects_tt_prev_pred_states]
                         if len(self.abstract_effect_invars[tt_f]) > 0:
-                            effects_tt_prev_pred_states = [Ps | {p} for p in self.abstract_effect_invars[tt_f] for Ps in effects_tt_prev_pred_states]
-                            effects_tt_prev_pred_states += [Ps | {neg(p)} for p in self.abstract_effect_invars[tt_f] for Ps in effects_tt_prev_pred_states if p not in Ps]
+                            invar_powersets = powerset_complete(self.abstract_effect_invars[tt_f])
+                            effects_tt_prev_pred_states = [Ps | P for P in invar_powersets for Ps in effects_tt_prev_pred_states]
                         tt_prev_pred_state |= set(effects_tt_prev_pred_states)
                     prev_pred_states |= tt_prev_pred_state
 
                 current_pred_states = [Ps for _, effects in self.abstract_effect[t].items() for Pss in effects.values() for Ps in Pss]
                 if len(self.abstract_effect_constant[t_f]) > 0:
-                    current_pred_states = [Ps + [c] for c in self.abstract_effect_constant[t_f] for Ps in current_pred_states]
+                    invar_powersets = powerset_complete(self.abstract_effect_constant[t_f])
+                    current_pred_states = [Ps + list(P) for P in invar_powersets for Ps in current_pred_states]
                 if len(self.abstract_effect_invars[t_f]) > 0:
-                    current_pred_states = [Ps + [p] for p in self.abstract_effect_invars[t_f] for Ps in current_pred_states]
-                    current_pred_states += [Ps + [neg(p)] for p in self.abstract_effect_invars[t_f] for Ps in current_pred_states]
+                    invar_powersets = powerset_complete(self.abstract_effect_invars[t_f])
+                    current_pred_states = [Ps + list(P) for P in invar_powersets for Ps in current_pred_states]
 
                 pruned_current_pred_states = [Ps for Ps in current_pred_states if set(Ps) in prev_pred_states]
                 pruned_current_pred_states = [[p for p in Ps
-                                               if p not in self.abstract_effect_constant[t_f] and neg(p).simplify()
-                                               not in self.abstract_effect_invars[t_f]] for Ps in pruned_current_pred_states]
+                                               if p not in self.abstract_effect_constant[t_f] and
+                                               p not in self.abstract_effect_invars[t_f] and
+                                               negate(p) not in self.abstract_effect_constant[t_f] and
+                                               negate(p) not in self.abstract_effect_invars[t_f]]
+                                              for Ps in pruned_current_pred_states]
 
                 for E, effects in self.abstract_effect[t].items():
                     new_abstract_effect[t][E] = {}
                     for nextPs in effects.keys():
                         newPss = [Ps for Ps in effects[nextPs] if Ps in pruned_current_pred_states]
-                        if len(newPss) < len(effects[nextPs]):
-                            print()
                         if len(newPss) > 0:
                             new_abstract_effect[t][E][nextPs] = newPss
-                        else:
-                            new_abstract_effect[t][E][nextPs] = [[]]
                     if len(new_abstract_effect[t][E]) == 0:
                         del new_abstract_effect[t][E]
 
         for t in self.abstract_guard_con.keys():
             new_abstract_effect[t] = {}
             t_f = transition_formula(t)
-            prev_trans = [t for t in self.abstract_guard_env.keys() if t.tgt == t.src]
+            prev_trans = [tt for tt in self.abstract_guard_env.keys() if tt.tgt == t.src]
 
             prev_pred_states = set()
             for tt in prev_trans:
+                tt_f = transition_formula(tt)
                 tt_prev_pred_state = set()
                 for _, effects in self.abstract_effect[tt].items():
-                    tt_f = transition_formula(tt)
                     effects_tt_prev_pred_states = [Ps for Ps in effects.keys()]
                     if len(self.abstract_effect_constant[tt_f]) > 0:
-                        effects_tt_prev_pred_states = [Ps | {c} for c in self.abstract_effect_constant[tt_f] for Ps
+                        effects_tt_prev_pred_states = [Ps | {c for c in self.abstract_effect_constant[tt_f]} for Ps
                                                        in effects_tt_prev_pred_states]
                     if len(self.abstract_effect_invars[tt_f]) > 0:
-                        effects_tt_prev_pred_states = [Ps | {p} for p in self.abstract_effect_invars[tt_f] for Ps in
+                        invar_powersets = powerset_complete(self.abstract_effect_invars[tt_f])
+                        effects_tt_prev_pred_states = [Ps | P for P in invar_powersets for Ps in
                                                        effects_tt_prev_pred_states]
-                        effects_tt_prev_pred_states += [Ps | {neg(p)} for p in self.abstract_effect_invars[tt_f] for
-                                                        Ps in effects_tt_prev_pred_states if p not in Ps]
                     tt_prev_pred_state |= set(effects_tt_prev_pred_states)
                 prev_pred_states |= tt_prev_pred_state
 
             current_pred_states = [Ps for _, effects in self.abstract_effect[t].items() for Pss in effects.values()
                                    for Ps in Pss]
             if len(self.abstract_effect_constant[t_f]) > 0:
-                current_pred_states = [Ps + [c] for c in self.abstract_effect_constant[t_f] for Ps in
-                                       current_pred_states]
+                invar_powersets = powerset_complete(self.abstract_effect_constant[t_f])
+                current_pred_states = [Ps + list(P) for P in invar_powersets for Ps in current_pred_states]
             if len(self.abstract_effect_invars[t_f]) > 0:
-                current_pred_states = [Ps + [p] for p in self.abstract_effect_invars[t_f] for Ps in
-                                       current_pred_states]
-                current_pred_states += [Ps + [neg(p)] for p in self.abstract_effect_invars[t_f] for Ps in
-                                        current_pred_states]
+                invar_powersets = powerset_complete(self.abstract_effect_invars[t_f])
+                current_pred_states = [Ps + list(P) for P in invar_powersets for Ps in current_pred_states]
 
             pruned_current_pred_states = [Ps for Ps in current_pred_states if set(Ps) in prev_pred_states]
             pruned_current_pred_states = [[p for p in Ps
-                                           if p not in self.abstract_effect_constant[t_f] and neg(p).simplify()
-                                           not in self.abstract_effect_invars[t_f]] for Ps in
+                                           if p not in self.abstract_effect_constant[t_f] and
+                                           p not in self.abstract_effect_invars[t_f] and
+                                           negate(p) not in self.abstract_effect_constant[t_f] and
+                                           negate(p) not in self.abstract_effect_invars[t_f]]
+                                          for Ps in
                                           pruned_current_pred_states]
 
             for E, effects in self.abstract_effect[t].items():
                 new_abstract_effect[t][E] = {}
                 for nextPs in effects.keys():
                     newPss = [Ps for Ps in effects[nextPs] if Ps in pruned_current_pred_states]
-                    if len(newPss) < len(effects[nextPs]):
-                        print()
                     if len(newPss) > 0:
                         new_abstract_effect[t][E][nextPs] = newPss
-                    else:
-                        new_abstract_effect[t][E][nextPs] = [[]]
                 if len(new_abstract_effect[t][E]) == 0:
                     del new_abstract_effect[t][E]
 
         self.abstract_effect = new_abstract_effect
-                # need to deal with invars and constants
 
     def loop_abstraction(self,
                          entry_condition,
