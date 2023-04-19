@@ -174,7 +174,7 @@ class PredicateAbstraction:
         guard_with_only_events = guard_with_only_events.replace(BiOp(Variable("program_choice"), ":=", Value("TRUE")))
         # TODO need to timeout and give up on this dnfing sometimes too
         # dnf_guard_with_only_events = dnf(guard_with_only_events, simplify=False)
-        val = run_with_timeout(dnfguard, guard_with_only_events, timeout)
+        val = dnf(guard_with_only_events)
 
         if val is None:
             print("Giving up on dnfing, and using explicit method.")
@@ -267,8 +267,7 @@ class PredicateAbstraction:
                         print("Giving up on dnfing, and using explicit method.")
                         use_set_method = True
                         break
-
-                    val = run_with_timeout(dnfguard, d_and_guard, timeout)
+                    val = dnf(d_and_guard)
 
                     if val is None:
                         print("Giving up on dnfing, and using explicit method.")
@@ -296,21 +295,9 @@ class PredicateAbstraction:
             print(str(guard) + " -> " + str(dnfed))
             return int_disjuncts, dnfed
         else:
-            # vars_in_cond = guard.variablesin()
-            # events_in_cond = [e for e in vars_in_cond if e in events]
-            # powerset = powerset_complete(events_in_cond)
-
             satisfying_behaviour = int_disjuncts_only_events
             dnfed = disjunct_formula_set([conjunct_formula_set(d) for d in int_disjuncts_only_events])
             print(str(guard) + " -> " + str(dnfed))
-
-            # [E for E in powerset if
-            #                             smt_checker.check(And(*conjunct_formula_set(E | {guard}).to_smt(self.program.symbol_table)))]
-
-            # if len(powerset) == len(satisfying_behaviour):
-            #     satisfying_behaviour_formula = true()
-            # else:
-            #     satisfying_behaviour_formula = disjunct_formula_set([conjunct_formula_set(E) for E in satisfying_behaviour])
 
             return [(conjunct(guard, conjunct_formula_set(E)), E) for E in satisfying_behaviour], dnfed
 
