@@ -70,4 +70,6 @@ class Value(Atom):
             return Int(int(self.name)), TRUE()
 
     def replace_math_exprs(self, symbol_table, cnt=0):
+        if not self.is_true() and not self.is_false():
+            raise Exception("Dangling numerical value: " + str(self))
         return self, {}
