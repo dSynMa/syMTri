@@ -1,5 +1,6 @@
 from itertools import chain
 from typing import Tuple
+from joblib import Parallel
 
 from Config import env, con
 from pysmt.shortcuts import And
@@ -15,7 +16,7 @@ from programs.synthesis.ltl_synthesis import syfco_ltl, syfco_ltl_in, syfco_ltl_
 from programs.synthesis.mealy_machine import MealyMachine
 from programs.transition import Transition
 from programs.typed_valuation import TypedValuation
-from programs.util import create_nuxmv_model_for_compatibility_checking, \
+from programs.util import create_nuxmv_model_for_compatibility_checking, stringify_formula,\
     there_is_mismatch_between_program_and_strategy, \
     parse_nuxmv_ce_output_finite, reduce_up_to_iff, \
     add_prev_suffix, label_pred, \
@@ -24,8 +25,8 @@ from programs.util import create_nuxmv_model_for_compatibility_checking, \
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.mathexpr import MathExpr
-from prop_lang.util import neg, G, F, implies, conjunct, disjunct, true, conjunct_formula_set, dnf, is_tautology, \
-    related_to, iff, X, expand_LTL_to_env_con_steps, UniOp
+from prop_lang.util import neg, negate, G, F, implies, conjunct, disjunct, true, conjunct_formula_set, dnf, is_tautology, \
+    related_to, iff, X, expand_LTL_to_env_con_steps, UniOp, propagate_negations, simplify_formula_with_math
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
@@ -644,6 +645,23 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
 
     exit_predicate_grounded = ground_predicate_on_vars(program, exit_condition,
                                                             exit_prestate, bool_vars, symbol_table).simplify()
+    try:
+        dnf_exit_pred = Parallel(n_jobs=2, timeout=2)(dnf(exit_predicate_grounded, symbol_table))
+    except:
+        dnf_exit_pred = None
+
+    conditions = [(true(), True), (entry_predicate_grounded.simplify(), True), (entry_valuation_grounded, False)]
+
+    disjuncts_in_exit_pred_grounded = dnf_exit_pred if dnf_exit_pred != None \
+                                            else [simplify_formula_with_math(exit_predicate_grounded, symbol_table)]
+    ret = compute_ranking(conditions,
+                          disjuncts_in_exit_pred_grounded,
+                          symbol_table, program, [t for t, _ in counterexample_loop])
+    if ret is not None:
+        ranking, invars, sufficient_entry_condition = ret
+        return ranking, invars, sufficient_entry_condition, exit_predicate_grounded
+
+    # TODO if timeout do state-based termination encoding
     dnf_exit_pred = dnf(exit_predicate_grounded, symbol_table)
     disjuncts_in_exit_pred = [dnf_exit_pred] if not isinstance(dnf_exit_pred, BiOp) or not dnf_exit_pred.op.startswith(
         "|") else dnf_exit_pred.sub_formulas_up_to_associativity()
@@ -676,29 +694,12 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
 
     conditions = [(true(), True), (entry_predicate_grounded.simplify(), True), (entry_valuation_grounded, False)]
 
-    ranking = None
-    for (cond, add_natural_conditions) in conditions:
-        for exit_pred in disjuncts_in_exit_pred_grounded:
-            try:
-                ranking, invars = liveness_refinement(symbol_table,
-                                                      program,
-                                                      cond,
-                                                      loop_before_exit,
-                                                      exit_pred,
-                                                      add_natural_conditions)
-                if ranking is None:
-                    continue
-                sufficient_entry_condition = keep_bool_preds(entry_predicate, symbol_table)
-                break
-            except:
-                continue
+    ret = compute_ranking(conditions, disjuncts_in_exit_pred_grounded, symbol_table, program, loop_before_exit)
 
-        if ranking is None:
-            continue
-
-        break
-
-    if ranking is not None:
+    if ret is None:
+        return None, None, None, None
+    else:
+        ranking, invars, sufficient_entry_condition = ret
         # analyse ranking function for suitability and re-try
         if not isinstance(exit_predicate_grounded, Value) or\
              is_tautology(exit_predicate_grounded, symbol_table, smt_checker):
@@ -746,27 +747,9 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
                               (entry_predicate_grounded.simplify(), True),
                               (entry_valuation_grounded, False)]
 
-                ranking = None
-                for (cond, add_natural_conditions) in conditions:
-                    for exit_pred in disjuncts_in_exit_pred_grounded:
-                        try:
-                            ranking, invars = liveness_refinement(symbol_table,
-                                                                  program,
-                                                                  cond,
-                                                                  loop_before_exit,
-                                                                  exit_pred,
-                                                                  add_natural_conditions)
-                            if ranking is None:
-                                continue
-                            sufficient_entry_condition = keep_bool_preds(entry_predicate, symbol_table)
-                            break
-                        except:
-                            continue
-
-                    if ranking is None:
-                        continue
-                    sufficient_entry_condition = keep_bool_preds(entry_predicate, symbol_table)
-                    break
+                ranking, invars, sufficient_entry_condition = compute_ranking(conditions,
+                                                                              disjuncts_in_exit_pred_grounded,
+                                                                              symbol_table, program, loop_before_exit)
 
         if not smt_checker.check(And(*neg(exit_predicate_grounded).to_smt(symbol_table))):
             for grounded_t in loop_before_exit:
@@ -834,5 +817,26 @@ def write_counterexample_state(program,
 
     print(", ".join([str(p) for p in disagreed_on_state[0]]))
 
-    print("Program however has state:")
-    print(", ".join([v + " = " + k for v,k in disagreed_on_state[1].items()]))
+
+def compute_ranking(entry_conditions, exit_preds, symbol_table, program, loop):
+    ranking = None
+    for (cond, add_natural_conditions) in entry_conditions:
+        for exit_pred in exit_preds:
+            try:
+                ranking, invars = liveness_refinement(symbol_table,
+                                                      program,
+                                                      cond,
+                                                      loop,
+                                                      exit_pred,
+                                                      add_natural_conditions)
+                if ranking is None:
+                    continue
+                sufficient_entry_condition = cond#keep_bool_preds(entry_predicate, symbol_table)
+                break
+            except:
+                continue
+
+        if ranking is None:
+            continue
+        else:
+            return ranking, invars, sufficient_entry_condition
