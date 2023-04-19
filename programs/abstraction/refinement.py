@@ -416,45 +416,45 @@ def use_liveness_refinement_state(env_con_ce: [dict], last_cs_state, disagreed_o
         if env_turn:
             env_turn = False
             if env_con_ce[i]["turn"] == "env":
-                ce_with_stutter_states.append(env_con_ce[i])
+                ce_with_stutter_states.append((i, env_con_ce[i]))
                 new_i_to_old_i[i] = old_i
             else:
                 env_copy = env_con_ce[max(0, i - 1)]
                 env_copy["turn"] = "env"
-                ce_with_stutter_states.append(env_con_ce[max(0, i - 1)])
+                ce_with_stutter_states.append((i + 1, env_con_ce[max(0, i - 1)]))
                 new_i_to_old_i[old_i] = max(0, i - 1)
         else:
             env_turn = True
             if env_con_ce[i]["turn"] == "con":
-                ce_with_stutter_states.append(env_con_ce[i])
+                ce_with_stutter_states.append((i, env_con_ce[i]))
                 new_i_to_old_i[i] = old_i
             else:
                 con_copy = env_con_ce[max(0, i - 1)]
                 con_copy["turn"] = "con"
-                ce_with_stutter_states.append(env_con_ce[max(0, i - 1)])
+                ce_with_stutter_states.append((i + 1, env_con_ce[max(0, i - 1)]))
                 new_i_to_old_i[old_i] = max(0, i - 1)
         i += 1
         old_i += 1
 
     # ce_with_stutter_states.append(env_con_ce[-1])
-    ce_with_stutter_states.append(disagreed_on_state_dict)
+    ce_with_stutter_states.append((len(env_con_ce), disagreed_on_state_dict))
     # if disagreed_on_state_dict["turn"] == "con":
     #     disagreed_on_state_dict_env = disagreed_on_state_dict
     #     disagreed_on_state_dict_env["turn"] = "env"
     #     ce_with_stutter_states.append(disagreed_on_state_dict_env)
 
-    previous_visits = [i for i, dict in enumerate(ce_with_stutter_states) for key, value in dict.items()
+    previous_visits = [i for i, dict in (ce_with_stutter_states) for key, value in dict.items()
                        if key == last_cs_state and value == "TRUE"]
     if len(previous_visits) - 1 > 0: # ignoring last visit
         var_differences = []
 
         for i, visit in enumerate(previous_visits[:-1]):
-            corresponding_ce_state = [ce_with_stutter_states[i] for i in range(visit, previous_visits[i + 1] + 1)]
+            corresponding_ce_state = [ce_with_stutter_states[i][1] for i in range(visit, previous_visits[i + 1] + 1)]
 
             any_var_differences = [get_differently_value_vars(corresponding_ce_state[i], corresponding_ce_state[i + 1])
                                for i in range(0, len(corresponding_ce_state) - 1)]
             any_var_differences = [[re.sub("_[0-9]+$", "", v) for v in vs] for vs in any_var_differences]
-            any_var_differences = [[v for v in vs if v in symbol_table.keys()] for vs in any_var_differences]
+            any_var_differences = [[v for v in vs if v in symbol_table.keys() and not str(v).endswith("_prev")] for vs in any_var_differences]
             any_var_differences = [[] != [v for v in vs if
                                       not re.match("(bool(boolean)?)", symbol_table[v].type)] for vs in
                                       # the below only identifies loops when there are changes in infinite-domain variables in the loop
