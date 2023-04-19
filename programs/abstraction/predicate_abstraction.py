@@ -1708,7 +1708,11 @@ def meaning_within_incremental_one_step(f: Formula, previous_preds: [[Formula]],
     return Ps
 
 
-def powerset_complete(S: set):
+def powerset_complete(SS: set):
+    if not isinstance(SS, set):
+        S = set(SS)
+    else:
+        S = SS
     positive_subsets = chain.from_iterable(combinations(S, r) for r in range(len(S) + 1))
     complete_subsets = list()
     for ps in positive_subsets:
