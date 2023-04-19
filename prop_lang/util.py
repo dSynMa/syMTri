@@ -300,6 +300,33 @@ def simplify_formula_without_math(formula, symbol_table=None):
     return to_formula
 
 
+def simplify_ltl_formula(formula, symbol_table=None):
+    ltl_to_prop = ltl_to_propositional(formula)
+    if symbol_table == None:
+        symbol_table = {str(v): TypedValuation(str(v), "bool", None) for v in ltl_to_prop.variablesin()}
+
+    simplified = string_to_prop(serialize(simplify(And(*ltl_to_prop.to_smt(symbol_table)))))
+
+    simplified_ltl = simplified.replace([BiOp(Variable(str(v)), ":=", X(Variable(str(v).split("_next")[0])))
+                                         for v in simplified.variablesin() if str(v).endswith("_next")])
+    return simplified_ltl
+
+
+def ltl_to_propositional(formula):
+    if isinstance(formula, Value) or isinstance(formula, Variable):
+        return formula
+    elif isinstance(formula, BiOp):
+        return BiOp(ltl_to_propositional(formula.left), formula.op, ltl_to_propositional(formula.right))
+    elif isinstance(formula, UniOp):
+        if formula.op == "X":
+            vars = formula.right.variablesin()
+            to_next = [BiOp(v, ":=", Variable(str(v) + "_next")) for v in vars]
+            return ltl_to_propositional(formula.right.replace(to_next))
+        else:
+            return UniOp(formula.op, ltl_to_propositional(formula.right))
+    else:
+        raise Exception("ltl_to_propositional: I do not know how to handle " + str(formula))
+
 
 def dnf(f: Formula, symbol_table: dict = None, simplify=True):
     if isinstance(f, Value) or isinstance(f, MathExpr):
