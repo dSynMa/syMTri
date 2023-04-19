@@ -156,7 +156,7 @@ class Program:
         self.con_transitions = [t.dnf_condition(self.symbol_table) for t in self.con_transitions]
 
     def add_type_constraints_to_guards(self, transition: Transition):
-        return transition.add_condition(type_constraints_acts(transition.action, self.symbol_table).to_nuxmv())
+        return transition.add_condition(type_constraints_acts(transition, self.symbol_table).to_nuxmv())
 
     def to_dot(self):
         dot = Digraph(name=self.name,
