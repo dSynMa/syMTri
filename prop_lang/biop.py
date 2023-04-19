@@ -203,5 +203,5 @@ class BiOp(Formula):
     def is_mathexpr(self, symbol_table):
         return isinstance(self.left, Value) and self.left.is_math_value() \
                 or isinstance(self.right, Value) and self.right.is_math_value() \
-                or isinstance(self.left, Variable) and not symbol_table[self.left].type.lower().startswith("bool") \
-                or isinstance(self.right, Variable) and not symbol_table[self.right].type.lower().startswith("bool")
+                or isinstance(self.left, Variable) and not symbol_table[str(self.left)].type.lower().startswith("bool") \
+                or isinstance(self.right, Variable) and not symbol_table[str(self.right)].type.lower().startswith("bool")
