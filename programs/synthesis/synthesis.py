@@ -429,37 +429,47 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
                         # mismatch_predicate_state = [Variable(p) for p in disagreed_on_state[1].keys() if p.startswith("_pred") and disagreed_on_state[1][p] == "TRUE"]
                         # mismatch_predicate_state += [neg(Variable(p)) for p in disagreed_on_state[1].keys() if p.startswith("_pred") and disagreed_on_state[1][p] == "FALSE"]
-                        new_env_variables, new_con_variables, new_transition_predicates, new_state_predicates, new_assumptions, new_guarantees =\
-                            predicate_abstraction.loop_abstraction(sufficient_entry_condition,
-                                                                   counterexample_loop,
-                                                                   mismatch_desired_state,
-                                                                   ranking,
-                                                                   conjunct_formula_set(invars),
-                                                                   disagreed_on_state[1],
-                                                                   program_taken_transition)
+                        # new_env_variables, new_con_variables, new_transition_predicates, new_state_predicates, new_assumptions, new_guarantees =\
+                        #     predicate_abstraction.loop_abstraction(sufficient_entry_condition,
+                        #                                            counterexample_loop,
+                        #                                            mismatch_desired_state,
+                        #                                            ranking,
+                        #                                            conjunct_formula_set(invars),
+                        #                                            disagreed_on_state[1],
+                        #                                            program_taken_transition)
+                        new_env_variables = []
+                        new_con_variables = []
+                        new_state_predicates = [] # this will be used for any needed state info about the loop
 
-                        # new_transition_predicates = [BiOp(add_prev_suffix(ranking), ">", ranking),
-                        #                               # conjunct(invar_formula, BiOp(add_prev_suffix(ranking), "<", ranking))
-                        #                               BiOp(add_prev_suffix(ranking), "<", ranking)
-                        #                               ]
+                        invar_formula = propagate_negations(conjunct_formula_set(invars))
+                        new_transition_predicates = [MathExpr(conjunct(invar_formula, BiOp(add_prev_suffix(ranking), ">", ranking))),
+                                                      # conjunct(invar_formula, BiOp(add_prev_suffix(ranking), "<", ranking))
+                                                      MathExpr(disjunct(negate(invar_formula), BiOp(add_prev_suffix(ranking), "<", ranking)))
+                                                      ]
+                        new_assumptions = [implies(G(F(stringify_formula(new_transition_predicates[0]))),
+                                                   G(F(stringify_formula(new_transition_predicates[1]))))]
+                        new_guarantees = []
 
                         new_all_trans_preds = {x.simplify() for x in new_transition_predicates} | {x for x in transition_predicates}
                         new_all_trans_preds = reduce_up_to_iff(transition_predicates, list(new_all_trans_preds),
                                                                symbol_table | symbol_table_prevs)
 
+                        ranking_data = (new_env_variables, new_con_variables, new_assumptions, new_guarantees)
+
                         if len(new_state_predicates) != 0:
                             # ranking_invars[ranking] = []
-                            rankings[ranking] = (new_env_variables, new_con_variables, new_assumptions, new_guarantees)
-                            state_predicates += invars + new_state_predicates
+                            rankings[ranking] = ranking_data
+                            state_predicates += new_state_predicates
+                            # state_predicates += invars + new_state_predicates
                             transition_predicates += new_transition_predicates
                             pass
                         elif not len(new_all_trans_preds) == len(transition_predicates)\
-                                or (ranking in ranking_invars.keys() and set(ranking_invars[ranking]) != set(invars)):
+                              or ranking in rankings.keys() and ranking_data != rankings[ranking]:
                             # important to add this, since later on assumptions depend on position of predicates in list
                             # ranking_invars[ranking] = invars
-                            rankings[ranking] = (new_env_variables, new_con_variables, new_assumptions, new_guarantees)
-                            state_predicates += invars
-                            transition_predicates += new_transition_predicates
+                                rankings[ranking] = ranking_data
+                                # state_predicates += invars
+                                transition_predicates += new_transition_predicates
                         else:
                             print("The new transition predicates "
                                   "(" + ", ".join(
