@@ -308,16 +308,16 @@ class Program:
             [s for t in self.env_transitions for s in [t.tgt, t.src]] + [s for t in self.con_transitions for s in
                                                                          [t.tgt, t.src]])
         for s in reachable_states:
-            env_from_s = [t for t in self.env_transitions if t.src == s]
+            env_from_s = [t.complete_outputs(self.out_events) for t in self.env_transitions if t.src == s]
             env_stutter_from_s = stutter_transition(self, s, True)
             if env_stutter_from_s != None:
-                env_from_s += [env_stutter_from_s]
+                env_from_s += [env_stutter_from_s.complete_outputs(self.out_events)]
             complete_env += env_from_s
 
-            con_from_s = [t for t in self.con_transitions if t.src == s]
+            con_from_s = [t.complete_outputs(self.out_events) for t in self.con_transitions if t.src == s]
             con_stutter_from_s = stutter_transition(self, s, False)
             if con_stutter_from_s != None:
-                con_from_s += [con_stutter_from_s]
+                con_from_s += [con_stutter_from_s.complete_outputs(self.out_events)]
             complete_con += con_from_s
 
         return complete_env, complete_con
