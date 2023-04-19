@@ -1,3 +1,5 @@
+import re
+
 from pysmt.fnode import FNode
 from pysmt.shortcuts import Int, TRUE, FALSE
 
@@ -73,3 +75,6 @@ class Value(Atom):
         if not self.is_true() and not self.is_false():
             raise Exception("Dangling numerical value: " + str(self))
         return self, {}
+
+    def is_math_value(self):
+        return re.match("[0-9]+", self.name)
