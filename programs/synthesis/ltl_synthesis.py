@@ -9,7 +9,8 @@ from programs.util import synthesis_problem_to_TLSF_script
 from prop_lang.formula import Formula
 from prop_lang.util import conjunct, conjunct_formula_set, implies
 from prop_lang.variable import Variable
-
+import logging
+logger = logging.getLogger(__name__)
 
 def ltl_synthesis(outside_guarantees : [Formula], assumptions: [Formula], guarantees: [Formula], in_act: [Variable], program_out : [Variable], program_preds : [Variable], out_act: [Variable],
                   strix_tlsf_command: str) -> Tuple[
@@ -35,7 +36,7 @@ def ltl_synthesis(outside_guarantees : [Formula], assumptions: [Formula], guaran
                                                    out_acts_lowered,
                                                    ass_tlsf,
                                                    guarantees_tlsf)
-    print(tlsf_script)
+    logger.info(tlsf_script)
     try:
         with NamedTemporaryFile('w', suffix='.tlsf', delete=False) as tmp:
             tmp.write(tlsf_script)
