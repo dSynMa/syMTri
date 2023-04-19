@@ -252,7 +252,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                                                                                ltl_guarantees, mismatch_condition)
         if contradictory:
             raise Exception("Something wrong, model deadlocks.")
-        if not there_is_mismatch or contradictory:
+        if not there_is_mismatch:
             system = create_nuxmv_model_for_compatibility_checking(program, mealy, program_out_and_states_vars, pred_list,
                                                                    not program.deterministic, not program.deterministic,
                                                                    predicate_mismatch=True,
@@ -267,71 +267,43 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             raise Exception("Something wrong, model deadlocks.")
 
         ## deal with if there is nothing wrong
-        if not there_is_mismatch or contradictory:
-            # TODO do this only when program has non-determinism
-            # print("No mismatch found between " + (
-            #     "strategy" if real else "counterstrategy") + " and program when excluding traces for which the program has a non-deterministic choice.")
-            # print("Trying for when the program has a non-deterministic choice..")
-            # system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, True, True, False)
-            # contradictory, there_is_mismatch, out = there_is_mismatch_between_program_and_strategy(system, real, False,
-            #                                                                                        ltl_assumptions,
-            #                                                                                        ltl_guarantees)
+        if not there_is_mismatch:
+                print("No mismatch found.")
 
-            if contradictory:
-                raise Exception("I have no idea what's gone wrong. Strix thinks the previous mealy machine is a " +
-                                (
-                                    "controller" if real else "counterstrategy") + ", but nuxmv thinks it is non consistent with the program.\n"
-                                                                                   "This may be a problem with nuXmv, e.g., it does not seem to play well with integer division.")
+                ## Finished
+                if project_on_abstraction:
+                    print("Computing projection of " + (
+                "strategy" if real else "counterstrategy") + " onto predicate abstraction..")
+                    controller_projected_on_program = mm.project_controller_on_program((
+                                                                                "strategy" if real else "counterstrategy"),
+                                                                                       program, predicate_abstraction,
+                                                                                       symbol_table | symbol_table_preds)
 
-            if not there_is_mismatch:
-                # print("No mismatch found between " + (
-                #     "strategy" if real else "counterstrategy") + " and program even when including traces for which the program has a non-deterministic choice.")
+                    for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
+                        ok = False
+                        for tt in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
+                            if t.tgt == tt.src:
+                                ok = True
+                                break
 
-                # print("Looking for mismatches in predicates.")
-                # # TODO check that we are dealing well with how transition predicates are bookmarkerd now, could get false predicate mismatches
-                # system = create_nuxmv_model_for_compatibility_checking(program, mealy, mon_events, pred_list, True,
-                #                                                        True, predicate_mismatch=True)
-                # contradictory, there_is_mismatch, out = there_is_mismatch_between_program_and_strategy(system, real,
-                #                                                                                        False,
-                #                                                                                        ltl_assumptions,
-                #                                                                                        ltl_guarantees)
-                if not there_is_mismatch:
-                    print("No mismatch found.")
+                        if not ok:
+                            print(controller_projected_on_program.to_dot())
 
-                    ## Finished
-                    if project_on_abstraction:
-                        print("Computing projection of " + (
-                    "strategy" if real else "counterstrategy") + " onto predicate abstraction..")
-                        controller_projected_on_program = mm.project_controller_on_program((
-                                                                                    "strategy" if real else "counterstrategy"),
-                                                                                           program, predicate_abstraction,
-                                                                                           symbol_table | symbol_table_preds)
+                            raise Exception(
+                                "Warning: Model checking says counterstrategy is fine, but something has gone wrong with projection "
+                                "onto the predicate abstraction, and I have no idea why. "
+                                "The " + (
+                                    "controller" if real else "counterstrategy") + " has no outgoing transition from this program state: "
+                                + ", ".join([str(p) for p in list(t.tgt)]))
+                    result = controller_projected_on_program.to_dot()
+                else:
+                    result = mm.to_dot(pred_list)
 
-                        for t in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
-                            ok = False
-                            for tt in controller_projected_on_program.con_transitions + controller_projected_on_program.env_transitions:
-                                if t.tgt == tt.src:
-                                    ok = True
-                                    break
-
-                            if not ok:
-                                print(controller_projected_on_program.to_dot())
-
-                                raise Exception(
-                                    "Warning: Model checking says counterstrategy is fine, but something has gone wrong with projection "
-                                    "onto the predicate abstraction, and I have no idea why. "
-                                    "The " + (
-                                        "controller" if real else "counterstrategy") + " has no outgoing transition from this program state: "
-                                    + ", ".join([str(p) for p in list(t.tgt)]))
-                        result = controller_projected_on_program.to_dot()
-                    else:
-                        result = mm.to_dot(pred_list)
-
-                    if real:
-                        return True, result
-                    else:
-                        # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
-                        return False, result
+                if real:
+                    return True, result
+                else:
+                    # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
+                    return False, result
 
         print(out)
         ## Compute mismatch trace
