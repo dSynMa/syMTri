@@ -192,9 +192,16 @@ class BiOp(Formula):
             return op(left_expr, right_expr), And(left_invar, right_invar)
 
     def replace_math_exprs(self, symbol_table, cnt=0):
-        new_left, dic_left = self.left.replace_math_exprs(symbol_table, cnt)
-        new_right, dic_right = self.right.replace_math_exprs(symbol_table, cnt + len(dic_left))
-        if len(dic_left) == 0 and len(dic_right) == 0:
-            if self.op == "=" or self.op == "==" or self.op == "!=" or self.op == "<=" or self.op == ">=" or self.op == "<" or self.op == ">":
+        if self.is_mathexpr(symbol_table):
                 return Variable("math_" + str(cnt)), {("math_" + str(cnt)): self}
-        return BiOp(new_left, self.op, new_right), dic_left | dic_right
+        else:
+            new_left, dic_left = self.left.replace_math_exprs(symbol_table, cnt)
+            new_right, dic_right = self.right.replace_math_exprs(symbol_table, cnt + len(dic_left))
+
+            return BiOp(new_left, self.op, new_right), dic_left | dic_right
+
+    def is_mathexpr(self, symbol_table):
+        return isinstance(self.left, Value) and self.left.is_math_value() \
+                or isinstance(self.right, Value) and self.right.is_math_value() \
+                or isinstance(self.left, Variable) and not symbol_table[self.left].type.lower().startswith("bool") \
+                or isinstance(self.right, Variable) and not symbol_table[self.right].type.lower().startswith("bool")
