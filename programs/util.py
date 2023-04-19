@@ -249,7 +249,7 @@ def prog_transition_indices_and_state_from_ce(transition_no, prefix):
     if incompatibility_detetected_at_turn != "env" or incompatibility_detetected_at_turn != "con":
         return program_transitions_and_state, prefix[-1]
     else:
-        return program_transitions_and_state, None
+        raise Exception("Incompatibility detected at turn " + incompatibility_detetected_at_turn)
 
 
 def get_ce_from_nuxmv_output(out: str):
