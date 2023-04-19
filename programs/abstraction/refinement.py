@@ -567,7 +567,7 @@ def use_liveness_refinement(program,
 
 
         if [] == [t for t, _ in ce_prog_loop_tran_concretised if [] != [a for a in t.action if a.left != a.right and infinite_type(a.left, program.valuation)]]:
-            return False, None, None, None, None, None, None
+            return False, None, None, None, None, None
 
         entry_valuation = conjunct_formula_set([BiOp(Variable(key), "=", Value(value))
                                                     for tv in program.valuation
