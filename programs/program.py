@@ -13,7 +13,8 @@ from prop_lang.util import disjunct_formula_set, mutually_exclusive_rules, neg, 
     sat, type_constraints_acts, simplify_formula_with_math
 from prop_lang.value import Value
 from prop_lang.variable import Variable
-
+import logging
+logger = logging.getLogger(__name__)
 
 class Program:
 
@@ -110,10 +111,10 @@ class Program:
 
         self.env_transitions = [t for t in self.env_transitions if t not in unsat_env_trans]
         if len(unsat_env_trans) > 0:
-            print("Removed environment transitions with unsat transitions: " + ",\n".join(map(str, unsat_env_trans)))
+            logger.info("Removed environment transitions with unsat transitions: " + ",\n".join(map(str, unsat_env_trans)))
 
         if len(unsat_env_trans) > 0:
-            print("Removed controller transitions with unsat transitions: " + ",\n".join(map(str, unsat_con_trans)))
+            logger.info("Removed controller transitions with unsat transitions: " + ",\n".join(map(str, unsat_con_trans)))
         self.con_transitions = [t for t in self.con_transitions if t not in unsat_con_trans]
 
         if debug:

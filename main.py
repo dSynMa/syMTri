@@ -7,6 +7,8 @@ from programs.synthesis.synthesis import synthesize
 from programs.util import create_nuxmv_model, is_deterministic
 import time
 
+import logging
+
 def main():
     parser = argparse.ArgumentParser()
     # input monitor
@@ -32,6 +34,13 @@ def main():
 
     program = string_to_program(date_file)
     print(program.to_dot())
+    logging.basicConfig(filename=program.name + ".log",
+                        filemode='a',
+                        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                        datefmt='%H:%M:%S',
+                        level=logging.DEBUG)
+
+    log = logging.getLogger(__name__)
 
     if args.translate is not None:
         if args.translate.lower() == "dot":

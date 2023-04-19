@@ -1,6 +1,8 @@
 import time
 from itertools import chain, combinations
-from multiprocessing import Process, Queue
+import logging
+
+logger = logging.getLogger(__name__)
 
 from func_timeout import func_timeout
 from pysmt.shortcuts import And
@@ -607,7 +609,7 @@ class PredicateAbstraction:
         return new_env_variables, new_con_variables, new_transition_predicates, new_state_predicates, new_assumptions, new_guarantees
 
     def initialise(self, debug=True):
-        print("Initialising predicate abstraction.")
+        logger.info("Initialising predicate abstraction.")
 
         self.abstract_program_transitions()
 
@@ -647,7 +649,7 @@ class PredicateAbstraction:
 
         ltl = conjunct(init_transition_ltl, X(G(disjunct_formula_set(transition_ltl))))
 
-        print(ltl)
+        logger.info(ltl)
         return init_transition_ltl, X(G(disjunct_formula_set(transition_ltl)))
 
 
@@ -744,15 +746,11 @@ class PredicateAbstraction:
         if len(new_state_predicates) + len(new_transition_predicates) == 0:
             return
 
-        # TODO maybe Nir's idea is better
-        # T : 2^{P \cup Q} -> 2^2^{P \cup Q}
+        logger.info("Adding predicates to predicate abstraction:")
+        logger.info("state preds: [" + ", ".join(list(map(str, new_state_predicates))) + "]")
+        logger.info("trans preds: [" + ", ".join(list(map(str, new_transition_predicates))) + "]")
 
-        print("Adding predicates to predicate abstraction:")
-        print("state preds: [" + ", ".join(list(map(str, new_state_predicates))) + "]")
-        print("trans preds: [" + ", ".join(list(map(str, new_transition_predicates))) + "]")
-
-
-        print("Tagging abstract transitions with predicates..")
+        logger.info("Tagging abstract transitions with predicates..")
         start = time.time()
 
         for p in new_state_predicates + new_transition_predicates:
@@ -784,17 +782,12 @@ class PredicateAbstraction:
                 self.abstract_effect[t] = new_effects
 
         end = time.time()
-        print(end - start)
+        logger.info(end - start)
 
         start = time.time()
         self.prune_predicate_sets()
         end = time.time()
-        print(end - start)
-
-        # start = time.time()
-        # self.prune_predicate_sets()
-        # end = time.time()
-        # print(end - start)
+        logger.info(end - start)
 
         self.state_predicates += new_state_predicates
         self.transition_predicates += new_transition_predicates
@@ -890,7 +883,7 @@ class PredicateAbstraction:
 
         ltl = conjunct(init_transition_ltl, X(G(disjunct_formula_set(transition_ltl))))
 
-        print(ltl)
+        logger.info("LTL formula: " + str(ltl))
         return init_transition_ltl, X(G(disjunct_formula_set(transition_ltl)))
 
     def add_predicates_old(self, new_state_predicates: [Formula], new_transition_predicates: [Formula], pred_name_dict : dict, simplified: bool):

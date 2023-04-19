@@ -20,6 +20,8 @@ from prop_lang.util import conjunct_formula_set, conjunct, neg, append_to_variab
     true, sat, is_tautology, iff, negate, propagate_negations, cnf, simplify_formula_with_math
 from prop_lang.value import Value
 from prop_lang.variable import Variable
+import logging
+logger = logging.getLogger(__name__)
 
 smt_checker = SMTChecker()
 
@@ -207,7 +209,7 @@ def check_for_nondeterminism_last_step(state_before_mismatch, program, raise_exc
             else:
                 raise Exception(message) from exception
         else:
-            print("WARNING: " + message)
+            logger.info("WARNING: " + message)
 
 
 def parse_nuxmv_ce_output_finite(transition_no, out: str):
@@ -469,8 +471,8 @@ def there_is_mismatch_between_program_and_strategy(system, controller: bool, liv
         # Sanity check
         result, out = model_checker.check(system, "F FALSE", None, livenesstosafety)
         if result:
-            print("Are you sure the counterstrategy given is complete?")
-            print(system)
+            logger.info("The nuXmv model deadlocks.")
+            logger.info(system)
             return True, None, out
 
     if not controller:
@@ -729,12 +731,12 @@ def is_deterministic(program):
         sat_conds = [cond for cond in conds if smt_checker.check(And(*cond.to_smt(symbol_table)))]
         for cond in conds:
             if cond not in sat_conds:
-                print("WARNING: " + str(cond) + " is not satisfiable, see transitions from state " + str(s))
+                logger.info("WARNING: " + str(cond) + " is not satisfiable, see transitions from state " + str(s))
 
         for i, cond in enumerate(sat_conds):
             for cond2 in sat_conds[i + 1:]:
                 if smt_checker.check(And(*(cond.to_smt(symbol_table) + cond2.to_smt(symbol_table)))):
-                    print("WARNING: " + str(cond) + " and " + str(
+                    logger.info("WARNING: " + str(cond) + " and " + str(
                         cond2) + " are satisfiable together, see environment transitions from state " + str(s))
                     return False
 
@@ -744,11 +746,11 @@ def is_deterministic(program):
         sat_conds = [cond for cond in conds if smt_checker.check(And(*cond.to_smt(symbol_table)))]
         for cond in conds:
             if cond not in sat_conds:
-                print("WARNING: " + str(cond) + " is not satisfiable, see transitions from state " + str(s))
+                logger.info("WARNING: " + str(cond) + " is not satisfiable, see transitions from state " + str(s))
         for i, cond in enumerate(sat_conds):
             for cond2 in sat_conds[i + 1:]:
                 if smt_checker.check(And(*(cond.to_smt(symbol_table) + cond2.to_smt(symbol_table)))):
-                    print("WARNING: " + str(cond) + " and " + str(
+                    logger.info("WARNING: " + str(cond) + " and " + str(
                         cond2) + " are satisfiable together, see controller transitions from state " + str(s))
                     return False
 

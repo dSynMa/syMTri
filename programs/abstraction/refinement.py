@@ -20,6 +20,9 @@ from prop_lang.util import conjunct, conjunct_formula_set, neg, true, is_boolean
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
+import logging
+logger = logging.getLogger(__name__)
+
 smt_checker = SMTChecker()
 
 def safety_refinement(ce: [dict], agreed_on_transitions: [(Transition, dict)],
@@ -94,7 +97,7 @@ def safety_refinement(ce: [dict], agreed_on_transitions: [(Transition, dict)],
         for j in reversed(range(0, len(concurring_transitions) + 1)):
             Css = interpolation(program, concurring_transitions, abstract_transitions, Bs, disagreed_on_state[1], j, symbol_table, use_dnf=use_dnf)
             if Css is None:
-                print("I think that interpolation is being checked against formulas that are not contradictory.")
+                logger.info("I think that interpolation is being checked against formulas that are not contradictory.")
                 break
             # if B is itself inconsistent
             if len(Cs) == 1 and isinstance(list(Cs)[0], Value):
@@ -293,7 +296,7 @@ def liveness_refinement(symbol_table, program, entry_condition, unfolded_loop: [
     try:
         c_code = loop_to_c(symbol_table, program, entry_condition, unfolded_loop,
                            exit_predicate_grounded, add_natural_conditions)
-        print(c_code)
+        logger.info(c_code)
         ranker = Ranker()
         success, ranking_function, invars = ranker.check(c_code)
 

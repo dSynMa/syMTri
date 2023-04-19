@@ -48,11 +48,11 @@ def ltl_synthesis(outside_guarantees : [Formula], assumptions: [Formula], guaran
             output: str = so[1]
 
             if "UNREALIZABLE" in output:
-                print("\nINFO: Strix thinks the current abstract problem is unrealisable! I will check..\n")
+                logger.info("\nINFO: Strix thinks the current abstract problem is unrealisable! I will check..\n")
                 mon = parse_hoa(env_events=in_act, program_out=program_out, program_preds=program_preds, con_events=out_act, output=output)
                 return False, mon
             elif "REALIZABLE" in output:
-                print("\nINFO: Strix thinks the current abstract problem is realisable! I will check..\n")
+                logger.info("\nINFO: Strix thinks the current abstract problem is realisable! I will check..\n")
                 try:
                     mon = parse_hoa(env_events=in_act, program_out=program_out, program_preds=program_preds, con_events=out_act, output=output)
                     return True, mon
@@ -72,11 +72,11 @@ def parse_hoa(env_events, program_out, program_preds, con_events, output) -> Pro
     else:
         counterstrategy = False
 
-    print(output)
+    logger.info(output)
 
-    print("Parsing Strix output..")
+    logger.info("Parsing Strix output..")
     init_st, trans = hoa_to_transitions(output, not counterstrategy)
-    print("Finished parsing Strix output.. Constructing expanded Mealy Machine now..")
+    logger.info("Finished parsing Strix output.. Constructing expanded Mealy Machine now..")
 
     mon = MealyMachine("counterstrategy" if counterstrategy else "controller", "st_" + init_st, env_events + program_out + program_preds, con_events, {}, {})
 

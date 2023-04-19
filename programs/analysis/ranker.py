@@ -4,6 +4,8 @@ from tempfile import NamedTemporaryFile
 
 from parsing.string_to_prop_logic import string_to_prop, string_to_math_expression
 
+import logging
+logger = logging.getLogger(__name__)
 
 class Ranker:
     def check(self, main_function: str):
@@ -22,7 +24,7 @@ class Ranker:
                 if "Verification result: UNKNOWN" in out:
                     return False, main_function, None
                 elif "Verification result: FALSE" in out:
-                    print(out)
+                    logger.info(out)
                     raise Exception("Unexpectedly non-terminating program:\n" + main_function)
                 elif "Verification result: TRUE" in out:
                     try:
@@ -42,7 +44,7 @@ class Ranker:
                             invars.remove('')
 
                         if "-nested ranking function" in ranking_function:
-                            print("Termination proved, but could only find a nested ranking function, "
+                            logger.info("Termination proved, but could only find a nested ranking function, "
                                   "I do not deal with this yet unfortunately for you..: " + str(ranking_function))
                             return True, None, None
 
@@ -50,10 +52,10 @@ class Ranker:
                                                                                               invar in
                                                                              invars]
                     except Exception as err:
-                        print("WARNING: Function terminates, but there is no ranking function, are you sure the loop has at least one iteration?")
+                        logger.info("WARNING: Function terminates, but there is no ranking function, are you sure the loop has at least one iteration?")
                         return True, None, None
                 else:
-                    print(out)
+                    logger.info(out)
                     raise Exception("Unexpected result during termination checking of:\n" + main_function)
             except subprocess.CalledProcessError as err:
                 raise Exception(err.output + "\n\n" + out)

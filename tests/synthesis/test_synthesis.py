@@ -3,6 +3,15 @@ from unittest import TestCase
 
 from parsing.string_to_program_with_action_guards import string_to_program
 from programs.synthesis.synthesis import synthesize
+import logging
+
+logging.basicConfig(filename="test.log",
+                    filemode='a',
+                    format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                    datefmt='%H:%M:%S',
+                    level=logging.DEBUG)
+
+log = logging.getLogger(__name__)
 
 
 class Test(TestCase):

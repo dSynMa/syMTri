@@ -30,6 +30,9 @@ from prop_lang.util import neg, negate, G, F, implies, conjunct, disjunct, true,
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
+import logging
+logger = logging.getLogger(__name__)
+
 smt_checker = SMTChecker()
 
 def synthesize(program: Program, ltl_text: str, tlsf_path: str, docker: bool, project_on_abstraction=False) -> Tuple[bool, Program]:
@@ -73,6 +76,8 @@ def synthesize(program: Program, ltl_text: str, tlsf_path: str, docker: bool, pr
 def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guarantees: Formula, in_acts: [Variable],
                             out_acts: [Variable], docker: str, project_on_abstraction=False, debug=False) -> \
         Tuple[bool, MealyMachine]:
+    logger.info(program)
+
     eager = False
     keep_only_bool_interpolants = False
     use_explicit_loops_abstraction = False
@@ -224,7 +229,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 # mm = mm.fill_in_predicates_at_controller_states_label_tran_preds_appropriately(predicate_abstraction, program)
                 return True, mm.to_dot(pred_list)
 
-        print(mm.to_dot(pred_list))
+        logger.info(mm.to_dot(pred_list))
         # if controller_transition_explicit:
         #     mm = mm.fill_in_predicates_at_controller_states_label_tran_preds_appropriately(predicate_abstraction, program)
         #     print(mm.to_dot(pred_list))
@@ -247,7 +252,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                                                predicate_mismatch=False,
                                                                prefer_lassos=prefer_lasso_counterexamples,
                                                                controller_transition_explicit=controller_transition_explicit)
-        print(system)
+        logger.info(system)
+
         contradictory, there_is_mismatch, out = there_is_mismatch_between_program_and_strategy(system, real, False,
                                                                                                ltl_assumptions,
                                                                                                ltl_guarantees, mismatch_condition)
@@ -269,11 +275,11 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         ## deal with if there is nothing wrong
         if not there_is_mismatch:
-                print("No mismatch found.")
+                logger.info("No mismatch found.")
 
                 ## Finished
                 if project_on_abstraction:
-                    print("Computing projection of " + (
+                    logger.info("Computing projection of " + (
                 "strategy" if real else "counterstrategy") + " onto predicate abstraction..")
                     controller_projected_on_program = mm.project_controller_on_program((
                                                                                 "strategy" if real else "counterstrategy"),
@@ -288,7 +294,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                 break
 
                         if not ok:
-                            print(controller_projected_on_program.to_dot())
+                            logger.info(controller_projected_on_program.to_dot())
 
                             raise Exception(
                                 "Warning: Model checking says counterstrategy is fine, but something has gone wrong with projection "
@@ -306,7 +312,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     # then the problem is unrealisable (i.e., the counterstrategy is a real counterstrategy)
                     return False, result
 
-        print(out)
+        logger.info(out)
         ## Compute mismatch trace
         ce, transition_indices_and_state, incompatible_state = \
             parse_nuxmv_ce_output_finite(len(program.env_transitions) + len(program.con_transitions), out)
@@ -324,7 +330,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         # _, abstract_trans = predicate_abstraction.allowed_in_abstraction([t[0] for t in transitions_without_stutter_program_took])
         # TODO handle this
         abstract_trans = []
-        print("Abstract trans:\n" + "\n--\n".join(["\nor ".join(map(str, ats)) for ats in abstract_trans]))
+        logger.info("Abstract trans:\n" + "\n--\n".join(["\nor ".join(map(str, ats)) for ats in abstract_trans]))
 
         ## end compute mismatch trace
 
@@ -332,7 +338,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         try:
             counterstrategy_states = [key for ce_state in ce for key, v in ce_state.items()
                                       if key.startswith("st_") and (ce_state["turn"] in ["env", "con"]) and "_seen" not in key and v == "TRUE"]
-            print("Counterstrategy states before environment step: " + ", ".join(counterstrategy_states))
+            logger.info("Counterstrategy states before environment step: " + ", ".join(counterstrategy_states))
             last_counterstrategy_state = counterstrategy_states[-1]
             use_liveness, counterexample_loop, entry_valuation, entry_predicate, pred_mismatch, loop_in_cs \
                 = use_liveness_refinement(program, agreed_on_transitions,
@@ -340,8 +346,8 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                           last_counterstrategy_state,
                                           symbol_table | symbol_table_prevs, state_pred_label_to_formula)
         except Exception as e:
-            print("WARNING: " + str(e))
-            print("I will try to use safety instead.")
+            logger.info("WARNING: " + str(e))
+            logger.info("I will try to use safety instead.")
             use_liveness = False
 
         ## do liveness refinement
@@ -399,7 +405,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     #  -DONE if supporting invariant ensures ranking function is bounded below
 
                     if ranking is not None:# and function_is_of_natural_type(ranking, invars, symbol_table):
-                        print("Found ranking function: " + str(ranking))
+                        logger.info("Found ranking function: " + str(ranking))
                         if choose_predicates:
                             finished = False
                             while not finished:
@@ -466,11 +472,11 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                                 # state_predicates += invars
                                 transition_predicates += new_transition_predicates
                         else:
-                            print("The new transition predicates "
+                            logger.info("The new transition predicates "
                                   "(" + ", ".join(
                                 [str(p) for p in new_transition_predicates]) + ") are a subset of "
                                                                                "previous predicates.")
-                            print("Safety refinement should do the trick here instead. I'll do that.")
+                            logger.info("Safety refinement should do the trick here instead. I'll do that.")
                             use_liveness = False
                             # print("I will try safety refinement instead.")
                             # use_liveness = False
@@ -495,7 +501,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                             #     print("I will try safety refinement instead.")
                             #     use_liveness = False
                     else:
-                        print("I will try safety refinement instead.")
+                        logger.info("I will try safety refinement instead.")
                         use_liveness = False
 
                 except Exception as e:
@@ -521,10 +527,10 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                 new_preds = safety_refinement(ce, agreed_on_transitions, ([pred_formula], disagreed_on_state[1]),
                                               abstract_trans, symbol_table | symbol_table_prevs, program, use_dnf=True)
 
-                print("Found state predicates: " + ", ".join([str(p) for p in new_preds]))
+                logger.info("Found state predicates: " + ", ".join([str(p) for p in new_preds]))
                 if len(new_preds) == 0:
-                    print("No state predicates identified.")
-                    print("I will try using the values of variables instead..")
+                    logger.info("No state predicates identified.")
+                    logger.info("I will try using the values of variables instead..")
                     vars_mentioned_in_preds = {v for p in new_preds for v in p.variablesin()}
                     new_preds |= {BiOp(v, "=", Value(state[str(v)])) for v in vars_mentioned_in_preds for state
                                          in
@@ -547,11 +553,11 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
             if len(new_all_preds) == len(state_predicates):
                 # check_for_nondeterminism_last_step(program_actually_took[1], predicate_abstraction.program, True)
-                print(
+                logger.info(
                     "New state predicates (" + ", ".join([str(p) for p in new_preds]) + ") are a subset of "
                                                                                         "previous predicates."
                 )
-                print("I will try using the values of variables instead..")
+                logger.info("I will try using the values of variables instead..")
                 vars_mentioned_in_preds = {v for p in new_preds for v in p.variablesin()}
                 new_preds |= {BiOp(v, "=", Value(state[str(v)])) for v in vars_mentioned_in_preds for state
                               in
@@ -615,7 +621,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
                     ordered_according_to_no_of_vars_used = [ps for ps in ordered_according_to_no_of_vars_used if len(ps) > 0]
                     new_all_preds = state_predicates + (ordered_according_to_no_of_vars_used[0] if len(ordered_according_to_no_of_vars_used) > 0 else [])
 
-            print("Using: " + ", ".join([str(p) for p in new_all_preds if p not in state_predicates]))
+            logger.info("Using: " + ", ".join([str(p) for p in new_all_preds if p not in state_predicates]))
 
             state_predicates = list(new_all_preds)
 
@@ -713,9 +719,9 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
 
             # check if the ranking function relates variables that are related in entry condition
             if [] != [v for v in vars_in_ranking if v not in related_dict[vars_in_ranking[0]]]:
-                print("The ranking function discovered does not relate variables that are related in the exit condition.")
+                logger.info("The ranking function discovered does not relate variables that are related in the exit condition.")
                 all_updated_vars_mentioned_in_ranking = {v for v in vars_in_ranking if str(v) in updated_in_loop_vars}
-                print("Refining the loop code to focus on: " + ", ".join([str(v) for v in all_updated_vars_mentioned_in_ranking]) + "...")
+                logger.info("Refining the loop code to focus on: " + ", ".join([str(v) for v in all_updated_vars_mentioned_in_ranking]) + "...")
                 all_extra_vars = [v for v in vars_in_ranking
                                   if not any(v in related_dict[vv] for vv in all_updated_vars_mentioned_in_ranking)]
 
@@ -760,15 +766,15 @@ def write_counterexample(program,
                          agreed_on_transitions: [(Transition, dict)],
                          # disagreed_on_transitions: ([Transition], dict),
                          program_actually_took: [(Transition, dict)]):
-    print("Mismatch:")
-    print("Agreed on transitions:")
+    logger.info("Mismatch:")
+    logger.info("Agreed on transitions:")
     for trans, state in ([(t, s) for (t, s) in agreed_on_transitions]):
         vs = set(trans.condition.variablesin()
                  + [v for v in list(state.keys()) if str(v).startswith("mon_")]
                  + [v for v in list(state.keys()) if str(v).startswith("pred_")]
                  + [v for v in program.env_events + program.con_events])
 
-        print(("env: " if "env" == state["turn"] else "con: ") + str(trans) + "\nvar values: " + ", ".join([str(v) + "=" + state[str(v)] for v in vs]) + "\n")
+        logger.info(("env: " if "env" == state["turn"] else "con: ") + str(trans) + "\nvar values: " + ", ".join([str(v) + "=" + state[str(v)] for v in vs]) + "\n")
 
     # print("Environment wanted to take one of these:")
 
@@ -783,33 +789,36 @@ def write_counterexample(program,
     # print("with state: " + ", ".join([str(v) + "=" + state[str(v)] for v in vs]))
     #
     # print("Program actually took:")
-    print("Environment did not want to take:")
+    logger.info("Environment did not want to take:")
 
-    print(("env: " if "env" == program_actually_took[1]["turn"] else "con: ") + str(program_actually_took[0]))
+    logger.info(("env: " if "env" == program_actually_took[1]["turn"] else "con: ") + str(program_actually_took[0]))
     vs = []
     vs += set(program_actually_took[0].condition.variablesin()
               + [v for v in list(program_actually_took[1].keys()) if str(v).startswith("mon_")]
               + [v for v in list(program_actually_took[1].keys()) if str(v).startswith("pred_")]
               + [v for v in program.env_events + program.con_events])
-    print("with state: " + ", ".join([str(v) + "=" + program_actually_took[1][str(v)] for v in vs]))
+    logger.info("with state: " + ", ".join([str(v) + "=" + program_actually_took[1][str(v)] for v in vs]))
 
 
 def write_counterexample_state(program,
                          agreed_on_transitions: [(Transition, dict)],
                          disagreed_on_state: ([Formula], dict)):
-    print("Mismatch:")
-    print("Agreed on transitions:")
+    logger.info("Mismatch:")
+    logger.info("Agreed on transitions:")
     for trans, state in ([(t, s) for (t, s) in agreed_on_transitions]):
         vs = set(trans.condition.variablesin()
                  + [v for v in list(state.keys()) if str(v).startswith("mon_")]
                  + [v for v in list(state.keys()) if str(v).startswith("pred_")]
                  + [v for v in program.env_events + program.con_events])
 
-        print(("env: " if "env" == state["turn"] else "con: ") + str(trans) + "\nvar values: " + ", ".join([str(v) + "=" + state[str(v)] for v in vs]) + "\n")
+        logger.info(("env: " if "env" == state["turn"] else "con: ") + str(trans) + "\nvar values: " + ", ".join([str(v) + "=" + state[str(v)] for v in vs]) + "\n")
 
-    print("Environment wanted state to satisfy:")
+    logger.info("Environment wanted state to satisfy:")
 
-    print(", ".join([str(p) for p in disagreed_on_state[0]]))
+    logger.info(", ".join([str(p) for p in disagreed_on_state[0]]))
+
+    logger.info("Program however has state:")
+    logger.info(", ".join([v + " = " + k for v,k in disagreed_on_state[1].items()]))
 
 
 def compute_ranking(entry_conditions, exit_preds, symbol_table, program, loop):
