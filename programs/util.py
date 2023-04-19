@@ -26,7 +26,7 @@ smt_checker = SMTChecker()
 
 def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmvModel, mon_events,
                                                   pred_list, include_mismatches_due_to_nondeterminism=False,
-                                                  colloborate=True, predicate_mismatch=False, prefer_lassos=True, controller_transition_explicit=False):
+                                                  colloborate=False, predicate_mismatch=False, prefer_lassos=True, controller_transition_explicit=False):
     program_model = program.to_nuXmv_with_turns(include_mismatches_due_to_nondeterminism, colloborate)
 
     text = "MODULE main\n"
