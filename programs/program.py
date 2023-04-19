@@ -1,9 +1,7 @@
 from typing import Set
 
 from graphviz import Digraph
-from pysmt.shortcuts import And
 
-from parsing.string_to_prop_logic import string_to_prop
 from programs.analysis.nuxmv_model import NuXmvModel
 from programs.analysis.smt_checker import SMTChecker
 from programs.transition import Transition
@@ -12,7 +10,8 @@ from programs.util import stutter_transition, symbol_table_from_program, is_dete
 from prop_lang.biop import BiOp
 from prop_lang.uniop import UniOp
 from prop_lang.util import disjunct_formula_set, mutually_exclusive_rules, neg, true, \
-    sat, type_constraints_acts
+    sat, type_constraints_acts, simplify_formula_with_math
+from prop_lang.value import Value
 from prop_lang.variable import Variable
 
 
@@ -40,6 +39,9 @@ class Program:
         self.env_transitions = [Transition(t.src, t.condition, self.complete_action_set(t.action), t.output, t.tgt) for t in self.env_transitions]
         self.con_transitions = [Transition(t.src, t.condition, self.complete_action_set(t.action), t.output, t.tgt) for t in self.con_transitions]
 
+        self.env_transitions = [t.with_condition(simplify_formula_with_math(t.condition, self.symbol_table)) for t in self.env_transitions]
+        self.con_transitions = [t.with_condition(simplify_formula_with_math(t.condition, self.symbol_table)) for t in self.con_transitions]
+
         self.state_to_env = {s:[t for t in self.env_transitions if t.src == s] for s in self.states}
         self.state_to_con = {s:[t for t in self.con_transitions if t.src == s] for s in self.states}
 
@@ -53,8 +55,9 @@ class Program:
                                                                   if t.src == otherwise_trans.src
                                                                     and t.condition != otherwise_trans.condition]))
             if sat(condition, self.symbol_table, SMTChecker()):
+                simplified = simplify_formula_with_math(condition, self.symbol_table)
                 concrete_trans = Transition(otherwise_trans.src,
-                                                condition,
+                                                simplified,
                                                 otherwise_trans.action,
                                                 otherwise_trans.output,
                                                 otherwise_trans.tgt)
