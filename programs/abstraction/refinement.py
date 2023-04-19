@@ -86,6 +86,11 @@ def safety_refinement(ce: [dict], agreed_on_transitions: [(Transition, dict)],
                     new_Bs += [after_dnf]
             Bs = new_Bs
 
+        Bs = [b for b in Bs if not (isinstance(b, Value))]
+
+        if len(Bs) == 0:
+            raise Exception("No interpolants found.")
+
         for j in reversed(range(0, len(concurring_transitions) + 1)):
             Css = interpolation(program, concurring_transitions, abstract_transitions, Bs, disagreed_on_state[1], j, symbol_table, use_dnf=use_dnf)
             if Css is None:
