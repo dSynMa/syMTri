@@ -50,8 +50,7 @@ class Program:
             raise Exception("Too many environment otherwise transitions")
         elif len(env_otherwise) == 1:
             otherwise_trans = env_otherwise[0]
-            condition = neg(disjunct_formula_set([t.condition
-                                                                  for t in env_transitions
+            condition = neg(disjunct_formula_set([t.condition for t in env_transitions
                                                                   if t.src == otherwise_trans.src
                                                                     and t.condition != otherwise_trans.condition]))
             if sat(condition, self.symbol_table, SMTChecker()):
@@ -98,7 +97,6 @@ class Program:
 
         self.env_transitions = [self.add_type_constraints_to_guards(t) for t in self.env_transitions]
         self.con_transitions = [self.add_type_constraints_to_guards(t) for t in self.con_transitions]
-
 
         unsat_env_trans = []
         for t in self.env_transitions:
@@ -156,7 +154,6 @@ class Program:
     def dnf_transition_conditions(self):
         self.env_transitions = [t.dnf_condition(self.symbol_table) for t in self.env_transitions]
         self.con_transitions = [t.dnf_condition(self.symbol_table) for t in self.con_transitions]
-
 
     def add_type_constraints_to_guards(self, transition: Transition):
         return transition.add_condition(type_constraints_acts(transition.action, self.symbol_table).to_nuxmv())
