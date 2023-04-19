@@ -453,9 +453,15 @@ def type_constraints(formula, symbol_table):
     return conjunct_formula_set(set({type_constraint(v, symbol_table) for v in formula.variablesin()}))
 
 
-def type_constraints_acts(acts: [BiOp], symbol_table):
-    return conjunct_formula_set(
-        set({type_constraint(act.left, symbol_table).replace([BiOp(act.left, ":=", act.right)]) for act in acts}))
+def type_constraints_acts(transition, symbol_table):
+    acts = transition.action
+    constraints = []
+    for act in acts:
+        if act.right != act.left:
+            constraint = type_constraint(act.left, symbol_table).replace([BiOp(act.left, ":=", act.right)])
+            if sat(conjunct(transition.condition, neg(constraint)), symbol_table):
+                constraints.append(constraint)
+    return conjunct_formula_set(constraints)
 
 
 def type_constraint(variable, symbol_table):
