@@ -1,6 +1,6 @@
 import pysmt
 from pysmt.fnode import FNode
-from pysmt.logics import QF_BOOL
+from pysmt.rewritings import CNFizer
 from pysmt.shortcuts import Solver, Interpolator, get_env, get_unsat_core, UnsatCoreSolver, serialize, And
 
 
@@ -39,6 +39,10 @@ class SMTChecker:
     def binary_interpolant(self, A: FNode, B: FNode, logic) -> FNode:
         with Interpolator(name="msat") as s:
             return s.binary_interpolant(A, B)
+
+    def to_cnf(self, A: FNode) -> FNode:
+        val = CNFizer().convert_as_formula(A)
+        return val
 
     def sequence_interpolant(self, A: FNode, B: FNode, logic) -> FNode:
         # TODO
