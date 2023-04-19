@@ -830,10 +830,10 @@ class PredicateAbstraction:
             invar_preds_effects = []
 
             if t_formula in self.abstract_effect_invars.keys():
-                invar_preds_effects += [iff(pred_name_dict[p], X(pred_name_dict[p])) for p in self.abstract_effect_invars[t_formula]]
+                invar_preds_effects += [iff(pred_name_dict[p], X(pred_name_dict[p])) for p in set(self.abstract_effect_invars[t_formula])]
 
             if t_formula in self.abstract_effect_constant.keys():
-                invar_preds_effects += [X(pred_name_dict[p]) for p in self.abstract_effect_constant[t_formula]]
+                invar_preds_effects += [X(pred_name_dict[p]) for p in set(self.abstract_effect_constant[t_formula])]
 
             invar_preds_formula = conjunct_formula_set(invar_preds_effects)
             pred_effects = []
@@ -863,10 +863,10 @@ class PredicateAbstraction:
             invar_preds_effects = []
 
             if t_formula in self.abstract_effect_invars.keys():
-                invar_preds_effects += [iff(pred_name_dict[p], X(pred_name_dict[p])) for p in self.abstract_effect_invars[t_formula]]
+                invar_preds_effects += [iff(pred_name_dict[p], X(pred_name_dict[p])) for p in set(self.abstract_effect_invars[t_formula])]
 
             if t_formula in self.abstract_effect_constant.keys():
-                invar_preds_effects += [X(pred_name_dict[p]) for p in self.abstract_effect_constant[t_formula]]
+                invar_preds_effects += [X(pred_name_dict[p]) for p in set(self.abstract_effect_constant[t_formula])]
 
             invar_preds_formula = conjunct_formula_set(invar_preds_effects)
 
