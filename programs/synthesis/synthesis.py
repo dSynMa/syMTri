@@ -243,7 +243,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
 
         system = create_nuxmv_model_for_compatibility_checking(program, mealy, program_out_and_states_vars, pred_list,
                                                                not program.deterministic, not program.deterministic,
-                                                               predicate_mismatch=True,
+                                                               predicate_mismatch=False,
                                                                prefer_lassos=prefer_lasso_counterexamples,
                                                                controller_transition_explicit=controller_transition_explicit)
         print(system)
