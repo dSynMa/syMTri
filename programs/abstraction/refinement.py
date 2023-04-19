@@ -526,7 +526,8 @@ def use_liveness_refinement(program,
                             disagreed_on_state,
                             program_taken_transition,
                             last_counterstrategy_state,
-                            symbol_table, pred_label_to_formula):
+                            symbol_table, pred_label_to_formula,
+                            only_env_desired_loops=True):
     yes = False
     mon_transitions = [(y, st) for (y, st) in agreed_on_transitions]
     ce = [x for _, x in agreed_on_transitions]
@@ -547,7 +548,7 @@ def use_liveness_refinement(program,
         loop_in_cs = True
 
     # check if the program is actually looping
-    if not yes_state:
+    if not only_env_desired_loops and not yes_state:
         prev_appearance = [t == program_taken_transition[0] for t, _ in mon_transitions]
         if True in prev_appearance:
             yes = True
