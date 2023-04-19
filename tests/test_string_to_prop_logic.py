@@ -13,3 +13,7 @@ class Test(TestCase):
         x = string_to_math_expression('-1')
         print(x)
         self.assertTrue(str(x) == '-1')
+
+    def test_string_to_prop(self):
+        val = string_to_prop("((cl = 0) & (cr = 0) & entry_r & !exit_l & entry_l & !exit_r & (!(0 < cl) | entry_l | !exit_r) & (0 <= cl) & (entry_r | !(0 < cr) | !exit_l) & !((cl + 1) = 0) & (0 <= cr) & !((cr + 1) = 0) & ((cr + 1) >= 0) & ((cl + 1) >= 0))")
+        self.fail()
