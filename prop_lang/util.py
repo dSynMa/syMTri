@@ -519,7 +519,7 @@ def negate(formula):
     elif isinstance(formula, MathExpr):
         return MathExpr(negate(formula.formula))
     else:
-        return UniOp("!", formula)
+        return UniOp("!", formula).simplify()
 
 
 def expand_LTL_to_env_con_steps_with_until(formula: Formula, env_events: [Variable]):
