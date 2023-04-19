@@ -755,10 +755,40 @@ class PredicateAbstraction:
 
         print("Tagging abstract transitions with predicates..")
         start = time.time()
-        for p in new_state_predicates + new_transition_predicates:
-            for t in self.all_program_trans:
-                self.compute_abstract_effect_with_p(t, t in self.abstract_guard_env.keys(), p)
 
+        for p in new_state_predicates + new_transition_predicates:
+            if parallelise:
+                results_env = Parallel(n_jobs=20)(
+                    delayed(self.compute_abstract_effect_with_p)(t, self.abstract_guard_env_disjuncts[t], self.abstract_effect[t], p) for t in self.abstract_guard_env.keys())
+                results_con = Parallel(n_jobs=20)(
+                    delayed(self.compute_abstract_effect_with_p)(t, self.abstract_guard_con_disjuncts[t], self.abstract_effect[t], p) for t in self.abstract_guard_con.keys())
+            else:
+                results_env = []
+                for t in self.abstract_guard_env.keys():
+                    results_env.append(self.compute_abstract_effect_with_p(t, self.abstract_guard_env_disjuncts[t], self.abstract_effect[t], p))
+
+                results_con = []
+                for t in self.abstract_guard_con.keys():
+                    results_con.append(self.compute_abstract_effect_with_p(t, self.abstract_guard_con_disjuncts[t], self.abstract_effect[t], p))
+
+            # TODO can optimise, since same t may be both env or con
+            for t, t_formula, invars, constants, Es, new_effects in results_env:
+                self.abstract_effect_invars[t_formula] += invars
+                self.abstract_effect_constant[t_formula] += constants
+                self.abstract_guard_env_disjuncts[t] = Es
+                self.abstract_effect[t] = new_effects
+
+            for t, t_formula, invars, constants, Es, new_effects in results_con:
+                self.abstract_effect_invars[t_formula] += invars
+                self.abstract_effect_constant[t_formula] += constants
+                self.abstract_guard_con_disjuncts[t] = Es
+                self.abstract_effect[t] = new_effects
+
+        end = time.time()
+        print(end - start)
+
+        start = time.time()
+        self.prune_predicate_sets()
         end = time.time()
         print(end - start)
 
