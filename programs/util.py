@@ -86,8 +86,8 @@ def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmv
         + [BiOp(UniOp("next", Variable(m.name)), ' = ', Variable(m.name)) for m in
            [label_pred(p, pred_list) for p in pred_list]]))
 
-    turn_logic = ["(turn = con -> (next(turn) = mon_con & " + maintain_mon_vars + "))"]
-    turn_logic += ["(turn = env -> (next(turn) = mon_env & " + maintain_mon_vars + "))"]
+    turn_logic = ["(turn = con -> (next(turn) = mon_con))"]
+    turn_logic += ["(turn = env -> (next(turn) = mon_env))"]
     turn_logic += ["(turn = mon_env -> (next(turn) = con))"]
     turn_logic += ["(turn = mon_con -> next(turn) = env)"]
 
