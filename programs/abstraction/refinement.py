@@ -44,7 +44,7 @@ def safety_refinement(ce: [dict], agreed_on_transitions: [(Transition, dict)],
 
     for s in disagreed_on_state[0]:
         # ground and DNF disagreed_on_state formula
-        grounded_condition = ground_formula_on_ce_state(s,
+        grounded_condition = ground_formula_on_ce_state(propagate_negations(s),
                                                         project_ce_state_onto_ev(disagreed_on_state[1],
                                                                                             program.env_events
                                                                                             + program.con_events))
