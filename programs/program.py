@@ -258,8 +258,8 @@ class Program:
         if not prefer_compatibility:
             transitions = guard_and_act
         else:
-            guard_act_and_compatible = ["(" + ga + " & (act_" + str(i) + " -> next(compatible)))" for i, ga in
-                                        enumerate(guard_and_act)]
+            guard_act_and_compatible = ["(guard_" + str(i) + " & (act_" + str(i) + " & next(compatible))" +
+                                        ")" for i, g in enumerate(guards)]
             guard_and_not_compatible = ["(guard_" + str(i) + " & (act_" + str(i) + " -> next(compatible)))" for i in
                                         range(len(guards))]
 
