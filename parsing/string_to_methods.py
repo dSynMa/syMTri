@@ -1,21 +1,27 @@
 #!/usr/bin/env python3
 
-from collections import Counter
+from collections import Counter, deque
 from copy import deepcopy
 from dataclasses import dataclass
-from enum import Enum, auto
-from itertools import product
+from enum import Enum
+from itertools import chain, combinations
 from operator import add, mul, sub
-from typing import Any
 
-from pysmt.shortcuts import (GE, GT, LE, LT, And, Bool, Equals, Symbol, FALSE, TRUE,
-                             Iff, Int, Not, Or, get_type, simplify, Implies)
+from pysmt.shortcuts import (FALSE, GE, GT, LE, LT, And, Bool, Implies, Int,
+                             Not, Or, Symbol, get_free_variables, get_type,
+                             simplify, substitute)
 from pysmt.typing import BOOL, INT
 from tatsu.grammars import Grammar
 from tatsu.objectmodel import Node
 from tatsu.semantics import ModelBuilderSemantics
 from tatsu.tool import compile
 from tatsu.walkers import NodeWalker
+
+
+
+def powerset(iterable):
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))  # noqa: E501
 
 
 class Token(Enum):
@@ -115,6 +121,7 @@ class Decl(BaseNode):
     var_type = None
     var_name = None
     init = None
+    io = None
 
 
 class EnumDef(BaseNode):
@@ -144,7 +151,7 @@ GRAMMAR = '''
 
 
 start::Program =
-    { decls+:decl | enums+:enum_def }*
+    { decls+:global_decl | enums+:enum_def }*
     methods:{ method_extern | method_intern }+
     $
     ;
@@ -155,6 +162,11 @@ enum_def::EnumDef =
 
 decl::Decl =
     var_type:identifier var_name:identifier ':=' init:expression ';'
+    ;
+
+global_decl::Decl
+    =
+    [io:'output'] >decl
     ;
 
 signature =
@@ -325,10 +337,10 @@ number::int = /[0-9]+/ ;
 test = """
 int cars_from_left := 0;
 int cars_from_right := 0;
-bool danger := false;
-bool closed_from_left := true;
-bool closed_from_right := true;
-bool change_direction := false;
+output bool danger := false;
+output bool closed_from_left := true;
+output bool closed_from_right := true;
+output bool change_direction := false;
 
 method extern sensor_update(bool car_from_left_entry, bool car_from_right_entry,
                                 bool car_from_left_exit, bool car_from_right_exit,
@@ -364,6 +376,7 @@ class SymbolTableEntry:
     context: str
     init: any
     type_: any
+    ast: Decl
 
 
 class SymbolTable:
@@ -396,43 +409,20 @@ class SymbolTable:
         else:
             return self.parent.lookup(name)
 
-    def add(self, name, init, type_) -> SymbolTableEntry:
+    def add(self, node: Decl, init) -> SymbolTableEntry:
         builtin_types = {'int': INT, 'bool': BOOL}
-        symbol = SymbolTableEntry(name, self, init, builtin_types[type_])
-        self.symbols[name] = symbol
+        symbol = SymbolTableEntry(
+            node.var_name, self, init, builtin_types[node.var_type], node)
+        self.symbols[node.var_name] = symbol
         return symbol
-
-
-class Path:
-    def __init__(self) -> None:
-        self.variables = {}
-        self.counters = Counter()
-        self.assignments = []
-        self.conditions = []
-
-    def __str__(self) -> str:
-        return f"{self.conditions}-->{self.assignments}({self.variables})"
-
-    def __repr__(self) -> str:
-        return f"{self.prefix}({self.variables})"
-
-    def fresh(self, name, table):
-        symbol = table.lookup(name)
-        self.counters[name] += 1
-        self.variables[name] = Symbol(f"{name}#{self.counters[name]}", symbol.type_)  # noqa: E501
-        return self.variables[name]
-
-    def lookup_or_fresh(self, name, table):
-        if name in self.variables:
-            return self.variables[name]
-        return self.fresh(name, table)
 
 
 class ForkingPath:
     def __init__(self, parent=None) -> None:
         self.variables = {}
         self.counters = Counter() if parent is None else deepcopy(parent.counters)  # noqa: E501
-        self.assignments = []
+        self.assignments = {}
+        # self.assignments = []
         self.conditions = []
         self.children = []
         self.parent = parent
@@ -468,24 +458,82 @@ class ForkingPath:
                     yield from descend(child)
         yield from descend(start_from or self)
 
-    def _collect(self):
+    def get_path(self):
         n = self
-        conds, asgns = [], []
+        conds, asgns = [], {}
         while n is not None:
             conds.extend(n.conditions)
-            asgns.extend(n.assignments)
+            asgns.update(n.assignments)
             n = n.parent
         return conds, asgns
 
+    def to_transition(self, table: SymbolTable):
+        conds, asgns = self.get_path()
+        subs = []
+        for x in asgns:
+            name, version = str(x)[1:-1].split("#")
+            version = int(version)
+            if 0 < version < self.counters[name] - 1:
+                # This is neither the 1st or last version of x
+                subs.append(x)
+        # We topologically sort variables so that we
+        # can do the substitution in a single pass
+        topo_sort = []
+        unsorted = deque(subs)
+        while unsorted:
+            var = unsorted.popleft()
+            if any(var in get_free_variables(asgns[x]) for x in unsorted):
+                unsorted.append(var)
+            else:
+                topo_sort.append(var)
+
+        # Substitute and remove intermediate variables
+        for x in topo_sort:
+            sub = {x: asgns[x]}
+            for y in asgns:
+                asgns[y] = substitute(asgns[y], sub)
+            conds = [
+                substitute(f, {x: asgns[x]})
+                for f in conds]
+        for x in subs:
+            del asgns[x]
+
+        def remove_version(var):
+            return Symbol(var.symbol_name().split("#")[0], get_type(var))
+
+        def remove_all_versions(formula):
+            fvs = get_free_variables(formula)
+            return substitute(formula, {fv: remove_version(fv) for fv in fvs})
+
+        conds = [remove_all_versions(f) for f in conds]
+        action = {
+            remove_version(x): remove_all_versions(asgns[x])
+            for x in asgns
+        }
+
+        # Branch on output variables and yield
+        output_vars = {
+            x: action[x] for x in action
+            if table.lookup(x.symbol_name()).ast.io == "output"}
+
+        actions_wo_out = {x: action[x] for x in action if x not in output_vars}
+        for positive_out in powerset(output_vars):
+            negated_out = {x for x in output_vars if x not in positive_out}
+            new_conds = [c for c in conds]
+            new_conds.extend(action[o] for o in positive_out)
+            new_conds.extend(Not(action[o]) for o in negated_out)
+            yield new_conds, actions_wo_out, positive_out
+
+
     def prune(self):
         for x in self.leaves(self.get_root()):
-            conds, _ = x._collect()
+            conds, _ = x.get_path()
             if simplify(And(conds)) == FALSE():
                 # print(f"{conds} is unsat, pruning {x} away")
                 x.parent.children.remove(x)
 
     def pprint(self) -> str:
-        conds, asgns = self._collect()
+        conds, asgns = self.get_path()
         return f"{conds}-->{asgns}"
 
 
@@ -511,20 +559,18 @@ class Walker(NodeWalker):
 
     def walk_Decl(self, node: Decl):
         init = self.walk(node.init)
-        symbol = self.table.add(node.var_name, init, node.var_type)
+        self.table.add(node, init)
         if self.table.parent is not None and node.init is not None:
-            # Local variable
-            op = Iff if symbol.type_ == BOOL else Equals
             var = self.fp.fresh(node.var_name, self.table)
-            self.fp.assignments.append(op(var, init))
-        elif "##params" in self.table.name:
-            # This is a parameter
-            for x in self.fp.leaves(self.fp.get_root()):
-                var = x.fresh(node.var_name, self.table)
-                child1 = x.add_child()
-                child1.conditions.append(Iff(var, TRUE()))
-                child2 = x.add_child()
-                child2.conditions.append(Iff(var, FALSE()))
+            self.fp.assignments[var] = init
+        # elif "##params" in self.table.name:
+        #     # This is a parameter
+        #     for x in self.fp.leaves(self.fp.get_root()):
+        #         var = x.fresh(node.var_name, self.table)
+        #         child1 = x.add_child()
+        #         child1.conditions.append(Iff(var, TRUE()))
+        #         child2 = x.add_child()
+        #         child2.conditions.append(Iff(var, FALSE()))
 
     def walk_Program(self, node: Program):
         self.walk(node.decls)
@@ -553,28 +599,26 @@ class Walker(NodeWalker):
             if isinstance(node.value, bool)
             else Int(node.value))
 
-    def walk_Store(self, node:Store):
+    def walk_Store(self, node: Store):
         return self.fp.fresh(node.name, self.table)
 
     def walk_Assign(self, node: Assign):
         rhs = self.walk(node.rhs)
         lhs = self.walk(node.lhs)
-        op = Iff if get_type(lhs) == BOOL else Equals
         for leaf in self.fp.leaves():
-            leaf.assignments.append(op(lhs, rhs))
+            leaf.assignments[lhs] = rhs
 
     def _walk_Increment_or_Decrement(self, node, op):
         rhs = self.fp.lookup_or_fresh(node.var_name.name, self.table)
         lhs = self.walk(node.var_name)
         for leaf in self.fp.leaves():
-            leaf.assignments.append(Equals(lhs, op(rhs)))
+            leaf.assignments[lhs] = op(rhs)
 
     def walk_Increment(self, node: Increment):
         self._walk_Increment_or_Decrement(node, lambda x: x + 1)
 
     def walk_Decrement(self, node: Decrement):
         self._walk_Increment_or_Decrement(node, lambda x: x - 1)
-
 
     def walk_If(self, node: If):
         or_else = node.or_else or []
@@ -583,8 +627,8 @@ class Walker(NodeWalker):
             self.fp = leaf.add_child()
             cond = self.walk(node.cond)
             self.fp.conditions.append(cond)
-
             self.walk(node.body)
+
             self.fp = leaf.add_child()
             self.fp.conditions.append(Not(cond))
             self.walk(or_else)
@@ -601,14 +645,14 @@ class Walker(NodeWalker):
         self.walk(node.decls)
         self.walk(node.body)
 
-        self.fp.prune()
+        # self.fp.prune()
         leaves = list(self.fp.leaves(self.fp.get_root()))
         # TODO save these paths somewhere before we reset
         print(node.kind, "method", node.name, "has", len(leaves), "paths")
         input()
         for x in leaves:
-            print(x.pprint())
-            print()
+            for tr in x.to_transition(self.table):
+                print(tr)
         input("[Enter] to scan next method")
         # Move symbol table back to global context
         self.table = self.table.parent
