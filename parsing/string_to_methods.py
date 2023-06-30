@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -7,8 +8,8 @@ from itertools import product
 from operator import add, mul, sub
 from typing import Any
 
-from pysmt.shortcuts import (GE, GT, LE, LT, And, Bool, Equals, FreshSymbol,
-                             Iff, Int, Not, Or, get_type, simplify)
+from pysmt.shortcuts import (GE, GT, LE, LT, And, Bool, Equals, Symbol, FALSE, TRUE,
+                             Iff, Int, Not, Or, get_type, simplify, Implies)
 from pysmt.typing import BOOL, INT
 from tatsu.grammars import Grammar
 from tatsu.objectmodel import Node
@@ -30,6 +31,7 @@ class Token(Enum):
     AND     = "&&"
     OR      = "||"
     IMPL    = "=>"
+    NOT     = "!"
 
 
 class BaseNode(Node):
@@ -56,14 +58,21 @@ class Load(Expr):
     name = None
 
 
-class BinOp(Expr):
+class Operation(Expr):
+    def __init__(self, ast=None, **attributes):
+        super().__init__(ast, **attributes)
+        self.op = Token(self.op)
+
+
+class BinOp(Operation):
     left = None
     op = None
     right = None
 
-    def __init__(self, ast=None, **attributes):
-        super().__init__(ast, **attributes)
-        self.op = Token(self.op)
+
+class UnaryOp(Operation):
+    op = None
+    expr = None
 
 
 class Comparison(BinOp):
@@ -78,6 +87,7 @@ class If(BaseNode):
     cond = None
     body = None
     or_else = None
+
 
 class Assign(BaseNode):
     lhs = None
@@ -142,9 +152,10 @@ decl::Decl =
 signature =
     name:identifier '(' params:','.{ parameter }* ')'
     ;
-parameter =
-    typ:identifier name:identifier
+
+parameter::Decl = var_type:identifier var_name:identifier init:()
     ;
+
 method_body
     =
     decls: { decl }*
@@ -241,14 +252,21 @@ mul_or_div::BinOp
 factor
     =
     | '(' ~ @:expression ')'
+    | unary
     | bool_lit
     | number_lit
     | var_reference
     ;
 
-var_reference::Load = name:var_name ;
+unary::UnaryOp
+    =
+    | op:'!' expr:expression
+    | op:'-' expr:expression
+    ;
 
-var_name = identifier ;
+var_reference::Load = name:store ;
+
+store = identifier ;
 
 @name
 identifier = /\_?[a-zA-Z][a-zA-Z0-9\_]*/;
@@ -263,34 +281,69 @@ number_lit::Literal = value:number ;
 number::int = /[0-9]+/ ;
 '''
 
+# test = """
+#     bool x := false;
+#     bool y := true;
+#     int z := 0;
+#     //enum foo { bar, baz };
+#     //foo myFoo := baz;
+
+#     method extern foo (bool param) {
+#         // This is a comment
+#         assume(z > 1 && z < 4);
+#         int localInteger := 0 ;
+#         z := 2*z;
+
+#         if (z > 10) {
+#             z := 5*z; y := z > 4;
+#         } else {
+
+#         }
+
+#         z := z+1;
+#     }
+#     method intern bar () {
+#         x := true;
+#         if (x) {
+#             if (z>10) z := z + 1;
+#         } else {
+#             x := x; y := x;
+#         }
+#     }
+# """
+
+
 test = """
-    bool x := false;
-    bool y := true;
-    int z := 0;
-    //enum foo { bar, baz };
-    //foo myFoo := baz;
+int cars_from_left := 0;
+    int cars_from_right := 0;
+    bool danger := false;
+    bool closed_from_left := true;
+    bool closed_from_right := true;
+    bool change_direction := false;
 
-    method extern foo (bool param) {
-        // This is a comment
-        assume(z > 1 && z < 4);
-        int localInteger := 0 ;
-        z := 2*z;
+    method extern sensor_update(bool car_from_left_entry, bool car_from_right_entry,
+                                  bool car_from_left_exit, bool car_from_right_exit,
+                                  bool _change_direction){
+        assume(closed_from_left => !car_from_left_entry);
+        assume(closed_from_right => !car_from_right_entry);
 
-        if (z > 10) {
-            z := 5*z; y := z > 4;
-        } else {
+        if (car_from_left_entry) cars_from_left := cars_from_left+1;
 
-        }
+        if (car_from_right_entry) cars_from_right := cars_from_right+1;
 
-        z := z+1;
+        if (car_from_left_exit) cars_from_left := cars_from_left - 1;
+
+        if (car_from_right_exit) cars_from_right := cars_from_right - 1;
+
+        change_direction := _change_direction;
+
+        danger := cars_from_left > 0 && cars_from_right > 0;
     }
-    method intern bar () {
-        x := true;
-        if (x) {
-            if (z>10) z := z + 1;
-        } else {
-            x := x; y := x;
-        }
+
+    method intern control(bool close_from_left, bool close_from_right){
+        int pippo := 3;
+        closed_from_left := close_from_left;
+        closed_from_right := close_from_right;
     }
 """
 
@@ -328,33 +381,36 @@ class SymbolTable:
         if name in self.symbols:
             return self.symbols[name]
         elif self.parent is None:
+            print(self)
             raise KeyError(f"Symbol {name} not found")
         else:
             return self.parent.lookup(name)
 
-    def add(self, name, init, type_):
+    def add(self, name, init, type_) -> SymbolTableEntry:
         builtin_types = {'int': INT, 'bool': BOOL}
         symbol = SymbolTableEntry(name, self, init, builtin_types[type_])
         self.symbols[name] = symbol
+        return symbol
 
 
 class Path:
-    def __init__(self, copy_from: 'Path' = None) -> None:
-        if copy_from is not None:
-            self.variables = {**copy_from.variables}
-            self.prefix = {*copy_from.prefix}
+    def __init__(self) -> None:
         self.variables = {}
-        self.prefix = []
+        self.counters = Counter()
+        self.assignments = []
+        self.conditions = []
 
     def __str__(self) -> str:
-        return f"{self.prefix}({self.variables})"
+        return f"{self.conditions}-->{self.assignments}({self.variables})"
 
     def __repr__(self) -> str:
         return f"{self.prefix}({self.variables})"
 
     def fresh(self, name, table):
         symbol = table.lookup(name)
-        self.variables[name] = FreshSymbol(symbol.type_, name + "!%d")
+        self.counters[name] += 1
+        self.variables[name] = Symbol(f"{name}#{self.counters[name]}", symbol.type_)  # noqa: E501
+        # self.variables[name] = FreshSymbol(symbol.type_, name + "!%d")
         return self.variables[name]
 
     def lookup_or_fresh(self, name, table):
@@ -391,10 +447,29 @@ class Walker(NodeWalker):
         return self.ctx[-1]
 
     def walk_Decl(self, node: Decl):
-        self.table.add(node.var_name, node.init, node.var_type)
+        init = self.walk(node.init)
+        symbol = self.table.add(node.var_name, init, node.var_type)
+        if self.table.parent is not None and node.init is not None:
+            # Local variable
+            op = Iff if symbol.type_ == BOOL else Equals
+            for p in self.all_paths:
+                var = p.fresh(node.var_name, self.table)
+                p.assignments.append(op(var, init))
+        elif "##params" in self.table.name:
+            # This is a parameter
+            snap_paths = deepcopy(self.all_paths)
+            for p in self.all_paths:
+                var = p.fresh(node.var_name, self.table)
+                p.conditions.append(Iff(var, TRUE()))
+            for p in snap_paths:
+                var = p.fresh(node.var_name, self.table)
+                p.conditions.append(Iff(var, FALSE()))
+            self.all_paths.extend(snap_paths)
+            # print(len(self.all_paths))
+            # print(*self.all_paths, sep="\n", end='\n\n')
+            # input()
 
     def walk_Program(self, node: Program):
-        
         for n in node.decls:
             self.walk(n)
 
@@ -404,16 +479,22 @@ class Walker(NodeWalker):
     def walk_Load(self, node: Load):
         return self.cur_path.lookup_or_fresh(node.name, self.table)
 
-
     def walk_BinOp(self, node: Comparison):
         op = {
             Token.GT: GT, Token.LE: LE, Token.LT: LT,
-            Token.AND: And, Token.OR: Or,
-            Token.MUL: mul, Token.ADD: add
+            Token.AND: And, Token.OR: Or, Token.IMPL: Implies,
+            Token.MUL: mul, Token.ADD: add, Token.SUB: sub,
         }
         left = self.walk(node.left)
         right = self.walk(node.right)
         return op[node.op](left, right)
+
+    def walk_UnaryOp(self, node: UnaryOp):
+        op = {
+            Token.NOT: Not
+        }
+        expr = self.walk(node.expr)
+        return op[node.op](expr)
 
     def walk_Literal(self, node: Literal):
         return (
@@ -430,47 +511,59 @@ class Walker(NodeWalker):
             rhs = self.walk(node.rhs)
             lhs = self.walk(node.lhs)
             op = Iff if get_type(lhs) == BOOL else Equals
-            p.prefix.append(op(lhs, rhs))
+            p.assignments.append(op(lhs, rhs))
 
     def walk_If(self, node: If):
-        body = [node.body] if not isinstance(node.body, list) else node.body
-        if node.or_else is not None:
-            snap_before = deepcopy(self.all_paths)
+        or_else = node.or_else or []
+        snap_before = deepcopy(self.all_paths)
         for p in self.all_paths:
             self.cur_path = p
             cond = self.walk(node.cond)
-            p.prefix.append(cond)
-        for p, n in product(self.all_paths, body):
-            self.cur_path = p
-            self.walk(n)
+            p.conditions.append(cond)
 
-        if node.or_else is not None:
-            or_else = [node.or_else] if not isinstance(node.or_else, list) else node.or_else  # noqa: E501
-            snap_after = deepcopy(self.all_paths)
-            self.all_paths = snap_before
-            for p in self.all_paths:
-                self.cur_path = p
-                cond = self.walk(node.cond)
-                p.prefix.append(Not(cond))
-            for p, n in product(self.all_paths, or_else):
-                self.cur_path = p
-                self.walk(n)
-            self.all_paths.extend(snap_after)
+        self.walk(node.body)
+
+        snap_after = deepcopy(self.all_paths)
+        self.all_paths = snap_before
+        for p in self.all_paths:
+            self.cur_path = p
+            cond = self.walk(node.cond)
+            p.conditions.append(Not(cond))
+
+        self.walk(or_else)
+        self.all_paths.extend(snap_after)
 
     def walk_MethodDef(self, node: MethodDef):
         self._reset_paths()
-        self.table = self.table.add_child(node.name)
-        print(node.name, node.kind)
-        for n in node.decls:
-            self.walk(n)
-        self.cur_path.prefix.extend(self.walk(n) for n in node.precond)
-
-        for n in node.body:
-            self.walk(n)
+        if node.params:
+            self.table = self.table.add_child(node.name + "##params")
+            self.walk(node.params)
         for p in self.all_paths:
-            print(p)
-            print(simplify(And(p.prefix)))
-            print()
+            self.cur_path = p
+            p.conditions.extend(self.walk(n) for n in node.precond)
+        self.all_paths = [
+            p for p in self.all_paths
+            if simplify(And(p.conditions)) != FALSE()
+        ]
+
+        self.table = self.table.add_child(node.name)
+        # for n in node.decls:
+        self.walk(node.decls)
+        self.walk(node.body)
+
+        self.all_paths = [
+            p for p in self.all_paths
+            if simplify(And(And(p.conditions), And(p.assignments))) != FALSE()
+        ]
+        print(node.name, node.kind, len(self.all_paths))
+        input()
+        for p in self.all_paths:
+            # cond = simplify(And(p.conditions))
+            cond = simplify(And(And(p.conditions), And(p.assignments)))
+            if cond != FALSE():
+                print(p)
+                print()
+
             # TODO save the paths somewhere before we reset
         self.table = self.table.parent
 
@@ -487,4 +580,3 @@ if __name__ == "__main__":
     print("______")
     Walker().walk(tree)
     print("______")
-
