@@ -70,6 +70,14 @@ class BinOp(Operation):
     right = None
 
 
+class Increment(BaseNode):
+    var_name = None
+
+
+class Decrement(BaseNode):
+    var_name = None
+
+
 class UnaryOp(Operation):
     op = None
     expr = None
@@ -187,9 +195,12 @@ statement =
     | if
     | '{' @:{ statement }* '}'
     | assignment
+    | incr
+    | decr
     ;
 
-
+incr::Increment = var_name:lhs '++' ';' ;
+decr::Decrement = var_name:lhs '--' ';' ;
 
 assignment::Assign = lhs:lhs ':=' rhs:expression ';' ;
 
@@ -264,9 +275,7 @@ unary::UnaryOp
     | op:'-' expr:expression
     ;
 
-var_reference::Load = name:store ;
-
-store = identifier ;
+var_reference::Load = name:identifier ;
 
 @name
 identifier = /\_?[a-zA-Z][a-zA-Z0-9\_]*/;
@@ -327,13 +336,13 @@ int cars_from_left := 0;
         assume(closed_from_left => !car_from_left_entry);
         assume(closed_from_right => !car_from_right_entry);
 
-        if (car_from_left_entry) cars_from_left := cars_from_left+1;
+        if (car_from_left_entry) cars_from_left++;
 
-        if (car_from_right_entry) cars_from_right := cars_from_right+1;
+        if (car_from_right_entry) cars_from_right++;
 
-        if (car_from_left_exit) cars_from_left := cars_from_left - 1;
+        if (car_from_left_exit) cars_from_left--;
 
-        if (car_from_right_exit) cars_from_right := cars_from_right - 1;
+        if (car_from_right_exit) cars_from_right--;
 
         change_direction := _change_direction;
 
@@ -341,7 +350,6 @@ int cars_from_left := 0;
     }
 
     method intern control(bool close_from_left, bool close_from_right){
-        int pippo := 3;
         closed_from_left := close_from_left;
         closed_from_right := close_from_right;
     }
@@ -418,6 +426,67 @@ class Path:
         return self.fresh(name, table)
 
 
+class ForkingPath:
+    def __init__(self, parent=None) -> None:
+        self.variables = {}
+        self.counters = Counter() if parent is None else deepcopy(parent.counters)  # noqa: E501
+        self.assignments = []
+        self.conditions = []
+        self.children = []
+        self.parent = parent
+
+    def _lookup(self, name):
+        if name in self.variables:
+            return self.variables[name]
+        return None if self.parent is None else self.parent._lookup(name)
+
+    def fresh(self, name, table):
+        symbol = table.lookup(name)
+        self.counters[name] += 1
+        self.variables[name] = Symbol(f"{name}#{self.counters[name]}", symbol.type_)  # noqa: E501
+        return self.variables[name]
+
+    def lookup_or_fresh(self, name, table):
+        return self._lookup(name) or self.fresh(name, table)
+
+    def add_child(self):
+        child = ForkingPath(self)
+        self.children.append(child)
+        return child
+
+    def get_root(self):
+        return self if self.parent is None else self.parent.get_root()
+
+    def leaves(self, start_from=None):
+        def descend(n):
+            if not n.children:
+                yield n
+            else:
+                for child in n.children:
+                    yield from descend(child)
+        yield from descend(start_from or self)
+
+    def _collect(self):
+        n = self
+        conds, asgns = [], []
+        while n is not None:
+            conds.extend(n.conditions)
+            asgns.extend(n.assignments)
+            n = n.parent
+        return conds, asgns
+
+    def prune(self):
+        for x in self.leaves(self.get_root()):
+            conds, _ = x._collect()
+            if simplify(And(conds)) == FALSE():
+                # print(f"{conds} is unsat, pruning {x} away")
+                x.parent.children.remove(x)
+
+    def pprint(self) -> str:
+        conds, asgns = self._collect()
+        return f"{conds}-->{asgns}"
+
+
 class Walker(NodeWalker):
 
     def __init__(self):
@@ -427,9 +496,7 @@ class Walker(NodeWalker):
         self.symbols = {}
 
     def _reset_paths(self):
-        root_path = Path()
-        self.cur_path = root_path
-        self.all_paths = [root_path]
+        self.fp = ForkingPath()
 
     def push(self, frame):
         self.ctx.append(frame)
@@ -446,26 +513,23 @@ class Walker(NodeWalker):
         if self.table.parent is not None and node.init is not None:
             # Local variable
             op = Iff if symbol.type_ == BOOL else Equals
-            for p in self.all_paths:
-                var = p.fresh(node.var_name, self.table)
-                p.assignments.append(op(var, init))
+            var = self.fp.fresh(node.var_name, self.table)
+            self.fp.assignments.append(op(var, init))
         elif "##params" in self.table.name:
             # This is a parameter
-            snap_paths = deepcopy(self.all_paths)
-            for p in self.all_paths:
-                var = p.fresh(node.var_name, self.table)
-                p.conditions.append(Iff(var, TRUE()))
-            for p in snap_paths:
-                var = p.fresh(node.var_name, self.table)
-                p.conditions.append(Iff(var, FALSE()))
-            self.all_paths.extend(snap_paths)
+            for x in self.fp.leaves(self.fp.get_root()):
+                var = x.fresh(node.var_name, self.table)
+                child1 = x.add_child()
+                child1.conditions.append(Iff(var, TRUE()))
+                child2 = x.add_child()
+                child2.conditions.append(Iff(var, FALSE()))
 
     def walk_Program(self, node: Program):
         self.walk(node.decls)
         self.walk(node.methods)
 
     def walk_Load(self, node: Load):
-        return self.cur_path.lookup_or_fresh(node.name, self.table)
+        return self.fp.lookup_or_fresh(node.name, self.table)
 
     def walk_BinOp(self, node: Comparison):
         op = {
@@ -488,68 +552,63 @@ class Walker(NodeWalker):
             else Int(node.value))
 
     def walk_Store(self, node:Store):
-        return self.cur_path.fresh(node.name, self.table)
+        return self.fp.fresh(node.name, self.table)
 
     def walk_Assign(self, node: Assign):
-        for p in self.all_paths:
-            self.cur_path = p
-            rhs = self.walk(node.rhs)
-            lhs = self.walk(node.lhs)
-            op = Iff if get_type(lhs) == BOOL else Equals
-            p.assignments.append(op(lhs, rhs))
+        rhs = self.walk(node.rhs)
+        lhs = self.walk(node.lhs)
+        op = Iff if get_type(lhs) == BOOL else Equals
+        for leaf in self.fp.leaves():
+            leaf.assignments.append(op(lhs, rhs))
+
+    def _walk_Increment_or_Decrement(self, node, op):
+        rhs = self.fp.lookup_or_fresh(node.var_name.name, self.table)
+        lhs = self.walk(node.var_name)
+        for leaf in self.fp.leaves():
+            leaf.assignments.append(Equals(lhs, op(rhs)))
+
+    def walk_Increment(self, node: Increment):
+        self._walk_Increment_or_Decrement(node, lambda x: x + 1)
+
+    def walk_Decrement(self, node: Decrement):
+        self._walk_Increment_or_Decrement(node, lambda x: x - 1)
+
 
     def walk_If(self, node: If):
         or_else = node.or_else or []
-        snap_before = deepcopy(self.all_paths)
-        for p in self.all_paths:
-            self.cur_path = p
+        parent_fp = self.fp
+        for leaf in self.fp.leaves():
+            self.fp = leaf.add_child()
             cond = self.walk(node.cond)
-            p.conditions.append(cond)
+            self.fp.conditions.append(cond)
 
-        self.walk(node.body)
-
-        snap_after = deepcopy(self.all_paths)
-        self.all_paths = snap_before
-        for p in self.all_paths:
-            self.cur_path = p
-            cond = self.walk(node.cond)
-            p.conditions.append(Not(cond))
-
-        self.walk(or_else)
-        self.all_paths.extend(snap_after)
+            self.walk(node.body)
+            self.fp = leaf.add_child()
+            self.fp.conditions.append(Not(cond))
+            self.walk(or_else)
+        self.fp = parent_fp
 
     def walk_MethodDef(self, node: MethodDef):
         self._reset_paths()
         if node.params:
             self.table = self.table.add_child(node.name + "##params")
             self.walk(node.params)
-        for p in self.all_paths:
-            self.cur_path = p
-            p.conditions.extend(self.walk(n) for n in node.precond)
-        self.all_paths = [
-            p for p in self.all_paths
-            if simplify(And(p.conditions)) != FALSE()
-        ]
+        self.fp.conditions.extend(self.walk(n) for n in node.precond)
 
         self.table = self.table.add_child(node.name)
-        # for n in node.decls:
         self.walk(node.decls)
         self.walk(node.body)
 
-        self.all_paths = [
-            p for p in self.all_paths
-            if simplify(And(And(p.conditions), And(p.assignments))) != FALSE()
-        ]
-        print(node.name, node.kind, len(self.all_paths))
+        self.fp.prune()
+        leaves = list(self.fp.leaves(self.fp.get_root()))
+        # TODO save these paths somewhere before we reset
+        print(node.kind, "method", node.name, "has", len(leaves), "paths")
         input()
-        for p in self.all_paths:
-            # cond = simplify(And(p.conditions))
-            cond = simplify(And(And(p.conditions), And(p.assignments)))
-            if cond != FALSE():
-                print(p)
-                print()
-
-            # TODO save the paths somewhere before we reset
+        for x in leaves:
+            print(x.pprint())
+            print()
+        input("[Enter] to scan next method")
+        # Move symbol table back to global context
         self.table = self.table.parent
 
 
