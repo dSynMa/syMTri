@@ -410,7 +410,6 @@ class Path:
         symbol = table.lookup(name)
         self.counters[name] += 1
         self.variables[name] = Symbol(f"{name}#{self.counters[name]}", symbol.type_)  # noqa: E501
-        # self.variables[name] = FreshSymbol(symbol.type_, name + "!%d")
         return self.variables[name]
 
     def lookup_or_fresh(self, name, table):
@@ -420,11 +419,6 @@ class Path:
 
 
 class Walker(NodeWalker):
-    # def walk_Program(self, node):
-    #     self.walk(node.decls)
-    #     self.walk(node.enums)
-    #     self.walk(node.body)
-    #     input(":")
 
     def __init__(self):
         super().__init__()
@@ -465,16 +459,10 @@ class Walker(NodeWalker):
                 var = p.fresh(node.var_name, self.table)
                 p.conditions.append(Iff(var, FALSE()))
             self.all_paths.extend(snap_paths)
-            # print(len(self.all_paths))
-            # print(*self.all_paths, sep="\n", end='\n\n')
-            # input()
 
     def walk_Program(self, node: Program):
-        for n in node.decls:
-            self.walk(n)
-
-        for n in node.methods:
-            self.walk(n)
+        self.walk(node.decls)
+        self.walk(node.methods)
 
     def walk_Load(self, node: Load):
         return self.cur_path.lookup_or_fresh(node.name, self.table)
@@ -483,16 +471,13 @@ class Walker(NodeWalker):
         op = {
             Token.GT: GT, Token.LE: LE, Token.LT: LT,
             Token.AND: And, Token.OR: Or, Token.IMPL: Implies,
-            Token.MUL: mul, Token.ADD: add, Token.SUB: sub,
-        }
+            Token.MUL: mul, Token.ADD: add, Token.SUB: sub}
         left = self.walk(node.left)
         right = self.walk(node.right)
         return op[node.op](left, right)
 
     def walk_UnaryOp(self, node: UnaryOp):
-        op = {
-            Token.NOT: Not
-        }
+        op = {Token.NOT: Not}
         expr = self.walk(node.expr)
         return op[node.op](expr)
 
