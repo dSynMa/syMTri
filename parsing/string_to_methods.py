@@ -434,8 +434,8 @@ class ForkingPath:
 
     def fresh(self, name, table):
         symbol = table.lookup(name)
-        self.counters[name] += 1
         self.variables[name] = Symbol(f"{name}#{self.counters[name]}", symbol.type_)  # noqa: E501
+        self.counters[name] += 1
         return self.variables[name]
 
     def lookup_or_fresh(self, name, table):
@@ -581,7 +581,7 @@ class Walker(NodeWalker):
 
     def walk_BinOp(self, node: Comparison):
         op = {
-            Token.GT: GT, Token.LE: LE, Token.LT: LT,
+            Token.GE: GE, Token.GT: GT, Token.LE: LE, Token.LT: LT,
             Token.AND: And, Token.OR: Or, Token.IMPL: Implies,
             Token.MUL: mul, Token.ADD: add, Token.SUB: sub}
         left = self.walk(node.left)
