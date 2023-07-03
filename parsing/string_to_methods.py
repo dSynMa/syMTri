@@ -348,8 +348,6 @@ method extern sensor_update(bool car_from_left_entry, bool car_from_right_entry,
     assume(closed_from_left => !car_from_left_entry);
     assume(closed_from_right => !car_from_right_entry);
 
-    cars_from_left++;
-
     if (car_from_left_entry) cars_from_left++;
 
     if (car_from_right_entry) cars_from_right++;
@@ -373,18 +371,20 @@ method intern control(bool close_from_left, bool close_from_right){
 @dataclass
 class SymbolTableEntry:
     name: str
-    context: str
+    context: 'SymbolTable'
     init: any
     type_: any
     ast: Decl
 
 
 class SymbolTable:
-    def __init__(self, name="<global>", parent=None):
+    GLOBAL_CTX = "<global>"
+    def __init__(self, name=GLOBAL_CTX, parent=None, is_params=False):
         self.name = name
         self.parent = parent
         self.children = []
         self.symbols = {}
+        self.is_params = is_params
 
     def __getitem__(self, key):
         return self.symbols[key]
@@ -395,10 +395,14 @@ class SymbolTable:
     def __str__(self) -> str:
         return f"{self.name}:{self.symbols}"
 
-    def add_child(self, name):
-        table = SymbolTable(name, parent=self)
+    def add_child(self, name, is_params=False):
+        name = name + "##params" if is_params else name
+        table = SymbolTable(name, parent=self, is_params=is_params)
         self.children.append(table)
         return table
+
+    def is_local(self):
+        return self.parent is not None and not self.is_params
 
     def lookup(self, name) -> SymbolTableEntry:
         if name in self.symbols:
@@ -470,12 +474,23 @@ class ForkingPath:
     def to_transition(self, table: SymbolTable):
         conds, asgns = self.get_path()
         subs = []
+        local_inits = {}
         for x in asgns:
             name, version = str(x)[1:-1].split("#")
             version = int(version)
             if 0 < version < self.counters[name] - 1:
                 # This is neither the 1st or last version of x
                 subs.append(x)
+            else:
+                # Always add x if it is local (= not global nor parameter)
+                symb: SymbolTableEntry = table.lookup(name)
+                if symb.context.is_local():
+                    subs.append(x)
+                    # Add information about initial value of x
+                    if version == 0:
+                        local_inits[x] = symb.init
+        asgns.update(local_inits)
+
         # We topologically sort variables so that we
         # can do the substitution in a single pass
         topo_sort = []
@@ -508,8 +523,7 @@ class ForkingPath:
         conds = [remove_all_versions(f) for f in conds]
         action = {
             remove_version(x): remove_all_versions(asgns[x])
-            for x in asgns
-        }
+            for x in asgns}
 
         # Branch on output variables and yield
         output_vars = {
@@ -637,7 +651,7 @@ class Walker(NodeWalker):
     def walk_MethodDef(self, node: MethodDef):
         self._reset_paths()
         if node.params:
-            self.table = self.table.add_child(node.name + "##params")
+            self.table = self.table.add_child(node.name, is_params=True)
             self.walk(node.params)
         self.fp.conditions.extend(self.walk(n) for n in node.precond)
 
