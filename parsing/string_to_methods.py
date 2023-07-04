@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from collections import Counter, deque
+from collections import Counter, deque, defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
@@ -373,51 +373,52 @@ number::int = /[0-9]+/ ;
 # """
 
 
-test = """
-int cars_from_left := 0;
-int cars_from_right := 0;
-output bool danger := false;
-output bool closed_from_left := true;
-output bool closed_from_right := true;
-output bool change_direction := false;
+# test = """
+# int cars_from_left := 0;
+# int cars_from_right := 0;
+# output bool danger := false;
+# output bool closed_from_left := true;
+# output bool closed_from_right := true;
+# output bool change_direction := false;
 
-method extern sensor_update(bool car_from_left_entry, bool car_from_right_entry,
-                                bool car_from_left_exit, bool car_from_right_exit,
-                                bool _change_direction){
-    assume(closed_from_left => !car_from_left_entry);
-    assume(closed_from_right => !car_from_right_entry);
+# method extern sensor_update(bool car_from_left_entry, bool car_from_right_entry,
+#                                 bool car_from_left_exit, bool car_from_right_exit,
+#                                 bool _change_direction){
+#     assume(closed_from_left => !car_from_left_entry);
+#     assume(closed_from_right => !car_from_right_entry);
 
-    if (car_from_left_entry) cars_from_left++;
+#     if (car_from_left_entry) cars_from_left++;
 
-    if (car_from_right_entry) cars_from_right++;
+#     if (car_from_right_entry) cars_from_right++;
 
-    if (car_from_left_exit) cars_from_left--;
+#     if (car_from_left_exit) cars_from_left--;
 
-    if (car_from_right_exit) cars_from_right--;
+#     if (car_from_right_exit) cars_from_right--;
 
-    change_direction := _change_direction;
+#     change_direction := _change_direction;
 
-    danger := cars_from_left > 0 && cars_from_right > 0;
-}
+#     danger := cars_from_left > 0 && cars_from_right > 0;
+# }
 
-method intern control(bool close_from_left, bool close_from_right){
-    closed_from_left := close_from_left;
-    closed_from_right := close_from_right;
-}
-"""
+# method intern control(bool close_from_left, bool close_from_right){
+#     closed_from_left := close_from_left;
+#     closed_from_right := close_from_right;
+# }
+# """
 
 
 @dataclass
 class SymbolTableEntry:
     name: str
     context: 'SymbolTable'
-    init: any
-    type_: any
+    init: any       
+    type_: any      # SMT type of the variable
     ast: Decl
 
 
 class SymbolTable:
     GLOBAL_CTX = "<global>"
+
     def __init__(self, name=GLOBAL_CTX, parent=None, is_params=False):
         self.name = name
         self.parent = parent
@@ -515,7 +516,7 @@ class ForkingPath:
             n = n.parent
         return conds, asgns
 
-    def to_transition(self, table: SymbolTable):
+    def to_transitions(self, table: SymbolTable):
         conds, asgns = self.get_path()
         subs = []
         local_inits = {}
@@ -602,6 +603,8 @@ class Walker(NodeWalker):
         self._reset_paths()
         self.table = SymbolTable()
         self.symbols = {}
+        self.extern_ts = defaultdict(list)
+        self.intern_ts = defaultdict(list)
 
     def _reset_paths(self):
         self.fp = ForkingPath()
@@ -706,25 +709,23 @@ class Walker(NodeWalker):
         # self.fp.prune()
         leaves = list(self.fp.leaves(self.fp.get_root()))
         # TODO save these paths somewhere before we reset
-        print(node.kind, "method", node.name, "has", len(leaves), "paths")
-        input()
         for x in leaves:
-            for tr in x.to_transition(self.table):
-                print(tr)
-        input("[Enter] to scan next method")
+            if node.kind == "extern":
+                self.extern_ts[node.name].extend(x.to_transitions(self.table))
+            else:
+                self.intern_ts[node.name].extend(x.to_transitions(self.table))
+
         # Move symbol table back to global context
-        self.table = self.table.parent
+        while self.table.parent is not None:
+            self.table = self.table.parent
 
 
-if __name__ == "__main__":
-    mbs = ModelBuilderSemantics(types=[
+dsl_parser: Grammar = compile(GRAMMAR)
+
+__semantics = ModelBuilderSemantics(types=[
         t for t in globals().values()
         if type(t) is type and issubclass(t, BaseNode)])
 
-    parser: Grammar = compile(GRAMMAR)
-    tree = parser.parse(test, semantics=mbs)
-    print(tree)
 
-    print("______")
-    Walker().walk(tree)
-    print("______")
+def parse(code: str) -> BaseNode:
+    return dsl_parser.parse(code, semantics=__semantics)
