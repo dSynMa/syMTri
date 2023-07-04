@@ -12,9 +12,11 @@ from programs.util import stutter_transition, symbol_table_from_program
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
-from prop_lang.util import disjunct_formula_set, mutually_exclusive_rules, conjunct_formula_set, conjunct, neg
+from prop_lang.util import disjunct_formula_set, mutually_exclusive_rules, conjunct_formula_set, conjunct, neg, true
 from prop_lang.value import Value
 from prop_lang.variable import Variable
+from parsing.string_to_methods import parse_dsl, SymexWalker, to_formula
+from pysmt.shortcuts import Not, And
 
 
 class Program:
@@ -253,3 +255,61 @@ class Program:
     def complete_action_set(self, actions: [BiOp]):
         non_updated_vars = [tv.name for tv in self.valuation if tv.name not in [str(act.left) for act in actions]]
         return actions + [BiOp(Variable(var), ":=", Variable(var)) for var in non_updated_vars]
+
+    @classmethod
+    def of_dsl(cls, code: str):
+        tree = parse_dsl(code)
+        symex_walker = SymexWalker()
+        symex_walker.walk(tree)
+        symbols = [x for x in symex_walker.table]
+        events = {
+            kind: [Variable(s.name) for s in symbols
+                   if s.context.is_params and s.ast.parent.kind == kind]
+            for kind in ("extern", "intern")}
+        out_actions = [
+            Variable(s.name) for s in symbols
+            if s.context.parent is None and s.ast.io == "output"]
+        init_values = [
+            TypedValuation(s.name, str(s.type_).lower(), s.init)
+            for s in symex_walker.table.symbols.values()]
+
+        def triples_to_transitions(s0, triples_dict: dict):
+            def _conjunct_smt(cond):
+                return conjunct_formula_set(to_formula(c) for c in cond)
+
+            def _act_to_formula(act:dict):
+                return [
+                    BiOp(to_formula(lhs), "=", to_formula(rhs))
+                    for lhs, rhs in act.items()]
+
+            def _variables(out):
+                return [Variable(x) for x in out]
+
+            negation = []
+            transitions = []
+            for method_triples in triples_dict.values():
+                for (cond, act, out) in method_triples:
+                    negation.append(Not(And(cond)))
+                    transitions.append(Transition(
+                        s0,
+                        _conjunct_smt(cond),
+                        _act_to_formula(act),
+                        _variables(out),
+                        s0))
+            # Add stutter transition
+            transitions.append(Transition(
+                s0,
+                _conjunct_smt(negation),
+                tuple(),
+                tuple(),
+                s0))
+            return transitions
+
+        s0 = 's0'
+        env_ts = triples_to_transitions(s0, symex_walker.extern_triples)
+        con_ts = triples_to_transitions(s0, symex_walker.intern_triples)
+
+        return Program(
+            'dsl', [s0], s0, init_values, env_ts, con_ts,
+            env_events=events["extern"], con_events=events["intern"],
+            out_events=out_actions)
