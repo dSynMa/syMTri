@@ -10,6 +10,9 @@ from operator import add, mul, sub
 from pysmt.shortcuts import (FALSE, GE, GT, LE, LT, And, Bool, Implies, Int,
                              Not, Or, Symbol, get_free_variables, get_type,
                              simplify, substitute)
+
+from pysmt.fnode import FNode
+
 from pysmt.typing import BOOL, INT
 from tatsu.grammars import Grammar
 from tatsu.objectmodel import Node
@@ -17,7 +20,10 @@ from tatsu.semantics import ModelBuilderSemantics
 from tatsu.tool import compile
 from tatsu.walkers import NodeWalker
 
-
+from prop_lang.biop import BiOp
+from prop_lang.uniop import UniOp
+from prop_lang.variable import Variable
+from prop_lang.value import Value
 
 def powerset(iterable):
     s = list(iterable)
@@ -71,9 +77,11 @@ class Operation(Expr):
 
 
 class BinOp(Operation):
-    left = None
+    left: Expr = None
     op = None
-    right = None
+    right: Expr = None
+
+    
 
 
 class Increment(BaseNode):
@@ -86,7 +94,7 @@ class Decrement(BaseNode):
 
 class UnaryOp(Operation):
     op = None
-    expr = None
+    expr: Expr = None
 
 
 class Comparison(BinOp):
@@ -142,6 +150,37 @@ class Program(BaseNode):
     decls = None
     enums = None
     methods = None
+
+
+def to_formula(expr: FNode):
+    tests_biop = {
+        "+": expr.is_plus,
+        "-": expr.is_minus,
+        "*": expr.is_times,
+        "/": expr.is_div,
+        "<=": expr.is_le,
+        "<": expr.is_lt,
+        "==": expr.is_equals,
+        "<=>": expr.is_iff,
+        "=>": expr.is_implies,
+        "&&": expr.is_and,
+        "||": expr.is_or,
+    }
+
+    for op, test in tests_biop.items():
+        if test():
+            return BiOp(to_formula(expr.arg(0)), op, to_formula(expr.arg(1)))
+
+    if expr.is_constant():
+        return Value(str(expr))
+
+    if expr.is_symbol():
+        return Variable(expr.symbol_name())
+    elif expr.is_not():
+        return UniOp("!", to_formula(expr.arg(0)))
+
+    # We've tried so hard & got so far
+    raise NotImplementedError(expr, expr.node_type())
 
 
 GRAMMAR = '''
