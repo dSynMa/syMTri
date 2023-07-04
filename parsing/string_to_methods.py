@@ -48,7 +48,7 @@ class Token(Enum):
 
 class BaseNode(Node):
     def unparse(self) -> str:
-        return NotImplementedError()
+        raise NotImplementedError()
 
 
 class Store(BaseNode):
@@ -57,7 +57,6 @@ class Store(BaseNode):
 
 class Expr(BaseNode):
     pass
-
 
 class Literal(Expr):
     value = None
@@ -582,7 +581,6 @@ class ForkingPath:
             new_conds.extend(action[o] for o in positive_out)
             new_conds.extend(Not(action[o]) for o in negated_out)
             yield new_conds, actions_wo_out, positive_out
-
 
     def prune(self):
         for x in self.leaves(self.get_root()):
