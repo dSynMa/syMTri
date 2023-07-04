@@ -601,8 +601,9 @@ class SymexWalker(NodeWalker):
         self._reset_paths()
         self.table = SymbolTable()
         self.symbols = {}
-        self.extern_ts = defaultdict(list)
-        self.intern_ts = defaultdict(list)
+
+        self.extern_triples = defaultdict(list)
+        self.intern_triples = defaultdict(list)
 
     def _reset_paths(self):
         self.fp = ForkingPath()
@@ -706,12 +707,11 @@ class SymexWalker(NodeWalker):
 
         # self.fp.prune()
         leaves = list(self.fp.leaves(self.fp.get_root()))
-        # TODO save these paths somewhere before we reset
         for x in leaves:
             if node.kind == "extern":
-                self.extern_ts[node.name].extend(x.to_transitions(self.table))
+                self.extern_triples[node.name].extend(x.to_transitions(self.table))
             else:
-                self.intern_ts[node.name].extend(x.to_transitions(self.table))
+                self.intern_triples[node.name].extend(x.to_transitions(self.table))
 
         # Move symbol table back to global context
         while self.table.parent is not None:
