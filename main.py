@@ -33,7 +33,7 @@ def main():
     date_file = open(args.program, "r").read()
 
     date = (
-        Program.of_dsl(date_file)
+        Program.of_dsl(args.program, date_file)
         if Path(args.program).suffix == ".dsl"
         else string_to_program(date_file))
     check_determinism(date)

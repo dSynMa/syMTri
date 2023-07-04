@@ -257,7 +257,7 @@ class Program:
         return actions + [BiOp(Variable(var), ":=", Variable(var)) for var in non_updated_vars]
 
     @classmethod
-    def of_dsl(cls, code: str):
+    def of_dsl(cls, file_name: str, code: str):
         tree = parse_dsl(code)
         symex_walker = SymexWalker()
         symex_walker.walk(tree)
@@ -331,7 +331,7 @@ class Program:
                 [], [], s_con_loses))
 
         prg = Program(
-            'dsl', [s0, s_con_wins, s_con_loses], s0, init_values,
+            file_name, [s0, s_con_wins, s_con_loses], s0, init_values,
             env_ts, con_ts,
             env_events=events["extern"], con_events=events["intern"],
             out_events=out_actions)
