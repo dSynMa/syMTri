@@ -594,7 +594,7 @@ class ForkingPath:
         return f"{conds}-->{asgns}"
 
 
-class Walker(NodeWalker):
+class SymexWalker(NodeWalker):
 
     def __init__(self):
         super().__init__()
@@ -725,5 +725,5 @@ __semantics = ModelBuilderSemantics(types=[
         if type(t) is type and issubclass(t, BaseNode)])
 
 
-def parse(code: str) -> BaseNode:
+def parse_dsl(code: str) -> BaseNode:
     return dsl_parser.parse(code, semantics=__semantics)
