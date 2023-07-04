@@ -1,11 +1,13 @@
 import argparse
 
+from programs.program import Program
 from programs.analysis.model_checker import ModelChecker
 from parsing.string_to_program import string_to_program
 from programs.synthesis.synthesis import synthesize
 # inputs: date_file ltl_file
 from programs.util import create_nuxmv_model, check_determinism
 import time
+from pathlib import Path
 
 def main():
     parser = argparse.ArgumentParser()
@@ -30,7 +32,10 @@ def main():
 
     date_file = open(args.program, "r").read()
 
-    date = string_to_program(date_file)
+    date = (
+        Program.of_dsl(date_file)
+        if Path(args.program).suffix == ".dsl"
+        else string_to_program(date_file))
     check_determinism(date)
 
     if args.translate is not None:
