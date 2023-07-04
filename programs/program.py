@@ -273,9 +273,13 @@ class Program:
             TypedValuation(s.name, str(s.type_).lower(), s.init)
             for s in symex_walker.table.symbols.values()]
 
+        def _conjunct_smt(cond):
+            return conjunct_formula_set(to_formula(c) for c in cond)
+
+        def _disjunct_smt(cond):
+            return disjunct_formula_set(to_formula(c) for c in cond)
+
         def triples_to_transitions(s0, triples_dict: dict):
-            def _conjunct_smt(cond):
-                return conjunct_formula_set(to_formula(c) for c in cond)
 
             def _act_to_formula(act:dict):
                 return [
@@ -297,19 +301,39 @@ class Program:
                         _variables(out),
                         s0))
             # Add stutter transition
-            transitions.append(Transition(
-                s0,
-                _conjunct_smt(negation),
-                tuple(),
-                tuple(),
-                s0))
             return transitions
 
-        s0 = 's0'
+        s0, s_con_wins, s_con_loses = 's0', 's_con_wins', 's_con_loses'
+
         env_ts = triples_to_transitions(s0, symex_walker.extern_triples)
         con_ts = triples_to_transitions(s0, symex_walker.intern_triples)
+        # Environment stutter
+        if symex_walker.extern_assumes:
+            env_ts.append(Transition(
+                s0, _conjunct_smt(Not(x) for x in symex_walker.extern_assumes),
+                [], [], s0
+            ))
+        # Controller stutter
+        if symex_walker.intern_assumes:
+            con_ts.append(Transition(
+                s0, _conjunct_smt(Not(x) for x in symex_walker.intern_assumes),
+                [], [], s0))
 
-        return Program(
-            'dsl', [s0], s0, init_values, env_ts, con_ts,
+        # Assertion violations (env side)
+        if symex_walker.extern_asserts:
+            env_ts.append(Transition(
+                s0, _disjunct_smt(symex_walker.extern_asserts),
+                [], [], s_con_wins))
+        # Assertion violations (env side)
+        if symex_walker.intern_asserts:
+            con_ts.append(Transition(
+                s0, _disjunct_smt(symex_walker.intern_asserts),
+                [], [], s_con_loses))
+
+        prg = Program(
+            'dsl', [s0, s_con_wins, s_con_loses], s0, init_values,
+            env_ts, con_ts,
             env_events=events["extern"], con_events=events["intern"],
             out_events=out_actions)
+
+        return prg
