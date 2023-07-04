@@ -434,6 +434,11 @@ class SymbolTable:
     def __str__(self) -> str:
         return f"{self.name}:{self.symbols}"
 
+    def __iter__(self):
+        yield from self.symbols.values()
+        for child in self.children:
+            yield from child
+
     def add_child(self, name, is_params=False):
         name = name + "##params" if is_params else name
         table = SymbolTable(name, parent=self, is_params=is_params)
