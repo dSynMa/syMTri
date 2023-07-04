@@ -25,9 +25,19 @@ from prop_lang.uniop import UniOp
 from prop_lang.variable import Variable
 from prop_lang.value import Value
 
+
 def powerset(iterable):
     s = list(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))  # noqa: E501
+    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+
+
+def remove_version(var):
+    return Symbol(var.symbol_name().split("#")[0], get_type(var))
+
+
+def remove_all_versions(formula):
+    fvs = get_free_variables(formula)
+    return substitute(formula, {fv: remove_version(fv) for fv in fvs})
 
 
 class Token(Enum):
@@ -140,7 +150,8 @@ class MethodDef(BaseNode):
     name = None
     kind = None
     params = None
-    precond = None
+    assumes = None
+    asserts = None
     decls = None
     body = None
 
@@ -190,7 +201,7 @@ GRAMMAR = '''
 
 start::Program =
     { decls+:global_decl | enums+:enum_def }*
-    methods:{ method_extern | method_intern }+
+    methods:{ method }+
     $
     ;
 
@@ -214,27 +225,15 @@ signature =
 parameter::Decl = var_type:identifier var_name:identifier init:()
     ;
 
-method_body
-    =
+method::MethodDef =
+    'method' kind:( 'extern' | 'intern' ) ~ >signature '{'
+    { assumes+:assumption | asserts+:assertion }*
     decls: { decl }*
     body:{ statement }*
-;
-
-method_extern::MethodDef =
-    'method' kind:'extern' ~ >signature '{'
-    precond:{ assumption }*
-    >method_body
     '}'
     node_type:`method_extern`
     ;
 
-method_intern::MethodDef =
-    'method' kind:'intern' ~ >signature '{'
-    precond:{ assertion }*
-    >method_body
-    '}'
-    node_type:`method_intern`
-    ;
 
 
 
@@ -452,8 +451,7 @@ class SymbolTable:
         if name in self.symbols:
             return self.symbols[name]
         elif self.parent is None:
-            print(self)
-            raise KeyError(f"Symbol {name} not found")
+            raise KeyError(f"Symbol {name} not found in {self}")
         else:
             return self.parent.lookup(name)
 
@@ -557,13 +555,6 @@ class ForkingPath:
         for x in subs:
             del asgns[x]
 
-        def remove_version(var):
-            return Symbol(var.symbol_name().split("#")[0], get_type(var))
-
-        def remove_all_versions(formula):
-            fvs = get_free_variables(formula)
-            return substitute(formula, {fv: remove_version(fv) for fv in fvs})
-
         conds = [remove_all_versions(f) for f in conds]
         action = {
             remove_version(x): remove_all_versions(asgns[x])
@@ -601,6 +592,10 @@ class SymexWalker(NodeWalker):
         self._reset_paths()
         self.table = SymbolTable()
         self.symbols = {}
+        self.extern_assumes = set()
+        self.extern_asserts = set()
+        self.intern_assumes = set()
+        self.intern_asserts = set()
 
         self.extern_triples = defaultdict(list)
         self.intern_triples = defaultdict(list)
@@ -699,7 +694,18 @@ class SymexWalker(NodeWalker):
         if node.params:
             self.table = self.table.add_child(node.name, is_params=True)
             self.walk(node.params)
-        self.fp.conditions.extend(self.walk(n) for n in node.precond)
+        assumes = [self.walk(n) for n in node.assumes or []]
+        asserts = [self.walk(n) for n in node.asserts or []]
+        if node.kind == "intern":
+            self.intern_assumes.update(remove_all_versions(x) for x in assumes)
+            self.intern_asserts.update(remove_all_versions(x) for x in asserts)
+        else:
+            self.extern_assumes.update(remove_all_versions(x) for x in assumes)
+            self.extern_asserts.update(remove_all_versions(x) for x in asserts)
+        
+        self.fp.conditions.extend(assumes)
+        self.fp.conditions.extend(asserts)
+
 
         self.table = self.table.add_child(node.name)
         self.walk(node.decls)
@@ -727,3 +733,12 @@ __semantics = ModelBuilderSemantics(types=[
 
 def parse_dsl(code: str) -> BaseNode:
     return dsl_parser.parse(code, semantics=__semantics)
+
+
+if __name__ == "__main__":
+    with open("/Users/lucad/git/syMTri/examples/dsl/rev_lane.dsl") as f:
+        code = f.read()
+    tree = parse_dsl(code)
+    wlk = SymexWalker()
+    wlk.walk(tree)
+
