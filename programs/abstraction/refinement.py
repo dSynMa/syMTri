@@ -146,7 +146,7 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
 
         if C is not None:
             Cf = fnode_to_formula(C)
-            previous_vars_related_to_current_vars = [v for v in Cf.variablesin() if Variable(str(v).split("_")[0] + "_" + str(int(str(v).split("_")[1]) - 1)) in Cf.variablesin()]
+            previous_vars_related_to_current_vars = [v for v in Cf.variablesin() if Variable(str(v).rsplit("_", 1)[0] + "_" + str(int(str(v).rsplit("_", 1)[1]) - 1)) in Cf.variablesin()]
             if len(previous_vars_related_to_current_vars) > 0:
                 # ground previous variables on their values; TODO instead of just looking one step back, have to go back to the first action, or just use the variables value in the previous step
                 for v in previous_vars_related_to_current_vars:
