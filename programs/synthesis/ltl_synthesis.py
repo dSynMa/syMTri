@@ -46,7 +46,8 @@ def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variab
             tmp.close()
 
             # cmd = strix_tlsf_command + " -v '" + tmp.name + "':./spec.tlsf -m both "
-            cmd = "docker run" + " -v " + tmp.name + ":/spec.tlsf" + " --entrypoint ./strix/scripts/strix_tlsf_file.sh strix_tlsf_file /spec.tlsf" + " -m both"
+            # cmd = "docker run " + " -v " + tmp.name + ":/spec.tlsf" + " --entrypoint ./strix/scripts/strix_tlsf.sh strix_tlsf /spec.tlsf" + " -m both"
+            cmd = f"strix_tlsf.sh {tmp.name} -m both"
 
             so = subprocess.getstatusoutput(cmd)
             output: str = so[1]
