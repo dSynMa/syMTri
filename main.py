@@ -5,7 +5,7 @@ from programs.analysis.model_checker import ModelChecker
 from parsing.string_to_program import string_to_program
 from programs.synthesis.synthesis import synthesize
 # inputs: date_file ltl_file
-from programs.util import create_nuxmv_model, check_determinism
+from programs.util import create_nuxmv_model, is_deterministic
 import time
 from pathlib import Path
 
@@ -36,7 +36,7 @@ def main():
         Program.of_dsl(args.program, date_file)
         if Path(args.program).suffix == ".dsl"
         else string_to_program(date_file))
-    check_determinism(date)
+    is_deterministic(date)
 
     if args.translate is not None:
         if args.translate.lower() == "dot":

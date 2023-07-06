@@ -573,9 +573,9 @@ class SymexWalker(NodeWalker):
         self.walk(node.methods)
 
         self.env_choices = {
-            name: Symbol(f"__{name}") for name in self.extern_triples}
+            name: Symbol(f"RESERVED_{name}") for name in self.extern_triples}
         self.con_choices = {
-            name: Symbol(f"__{name}") for name in self.intern_triples}
+            name: Symbol(f"RESERVED_{name}") for name in self.intern_triples}
 
         # Post-processing: add booleans to represent chosen methods
         def add_choice_booleans(triples_dict, booleans_dict):
