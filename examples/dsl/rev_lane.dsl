@@ -1,7 +1,10 @@
+// Global variables
 int cars_from_left := 0;
 int cars_from_right := 0;
 bool danger := false;
 bool change_direction := false;
+
+// Output events
 output bool closed_from_left := true;
 output bool closed_from_right := true;
 
