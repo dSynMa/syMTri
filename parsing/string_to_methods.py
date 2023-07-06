@@ -90,7 +90,7 @@ class BinOp(Operation):
     op = None
     right: Expr = None
 
-    
+
 
 
 class Increment(BaseNode):
@@ -179,7 +179,13 @@ def to_formula(expr: FNode):
 
     for op, test in tests_biop.items():
         if test():
-            return BiOp(to_formula(expr.arg(0)), op, to_formula(expr.arg(1)))
+            new_expr = None
+            for arg in expr.args():
+                if new_expr is None:
+                    new_expr = to_formula(arg)
+                    continue
+                new_expr = BiOp(new_expr, op, to_formula(arg))
+            return new_expr
 
     if expr.is_constant():
         return Value(str(expr))
@@ -409,7 +415,7 @@ number::int = /[0-9]+/ ;
 class SymbolTableEntry:
     name: str
     context: 'SymbolTable'
-    init: any       
+    init: any
     type_: any      # SMT type of the variable
     ast: Decl
 
@@ -472,6 +478,7 @@ class ForkingPath:
         self.conditions = []
         self.children = []
         self.parent = parent
+
 
     def _lookup(self, name):
         if name in self.variables:
