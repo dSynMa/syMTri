@@ -1,7 +1,9 @@
+from itertools import combinations
 from typing import Set
 
 from graphviz import Digraph
-from pysmt.shortcuts import And
+from parsing.string_to_methods import parse_dsl, SymexWalker, to_formula
+from pysmt.shortcuts import And, Or, Not
 
 from parsing.string_to_prop_logic import string_to_prop
 from programs.analysis.nuxmv_model import NuXmvModel
@@ -324,3 +326,94 @@ class Program:
 
     def __str__(self):
         return str(self.to_dot())
+    
+    @classmethod
+    def of_dsl(cls, file_name: str, code: str) -> "Program":
+        """Parse a DSL program and return a Program"""
+        
+        tree = parse_dsl(code)
+        symex_walker = SymexWalker()
+        symex_walker.walk(tree)
+
+        # All method parameters are treated as events
+        events = {
+            kind: [Variable(s.name) for s in symex_walker.table
+                   if s.context.is_params and s.ast.parent.kind == kind]
+            for kind in ("extern", "intern")}
+        events["extern"].extend([Variable(s.symbol_name()) for s in symex_walker.env_choices.values()])  # noqa: E501
+        events["intern"].extend([Variable(s.symbol_name()) for s in symex_walker.con_choices.values()])  # noqa: E501
+
+        out_actions = [
+            Variable(s.name) for s in symex_walker.table
+            if s.context.parent is None and s.ast.io == "output"]
+        init_values = [
+            TypedValuation(s.name, str(s.type_).lower(), s.init)
+            for s in symex_walker.table.symbols.values()]
+
+        def _conjunct_smt(cond):
+            return conjunct_formula_set(to_formula(c) for c in cond)
+
+        def _disjunct_smt(cond):
+            return disjunct_formula_set(to_formula(c) for c in cond)
+
+        def triples_to_transitions(s0, triples_dict: dict):
+
+            def _act_to_formula(act: dict):
+                return [
+                    BiOp(to_formula(lhs), "=", to_formula(rhs))
+                    for lhs, rhs in act.items()]
+
+            def _variables(out):
+                return [Variable(x) for x in out]
+
+            transitions = [
+                Transition(s0, _conjunct_smt(cond), _act_to_formula(act), _variables(out), s0)
+                for method_triples in triples_dict.values()
+                for (cond, act, out) in method_triples]
+            return transitions
+
+        s0, s_con_wins, s_con_loses = 's0', 's_con_wins', 's_con_loses'
+
+        env_ts = triples_to_transitions(s0, symex_walker.extern_triples)
+        con_ts = triples_to_transitions(s0, symex_walker.intern_triples)
+        # Environment stutter
+        if symex_walker.extern_assumes:
+            env_ts.append(Transition(
+                s0, _conjunct_smt(Not(x) for x in symex_walker.extern_assumes),
+                [], [], s0
+            ))
+        # Controller stutter
+        if symex_walker.intern_assumes:
+            con_ts.append(Transition(
+                s0, _conjunct_smt(Not(x) for x in symex_walker.intern_assumes),
+                [], [], s0))
+
+        # Go to winning/losing state if any assertion is violated
+        def add_assert_violations(choices, asserts, ts, sink):
+            for method in choices:
+                if asserts.get(method):
+                    assertion = Or(Not(x) for x in asserts[method])
+                    ind = symex_walker.indicator(method, choices)
+                    ind.append(assertion)
+                    assertion = And(ind)
+                    assertion = to_formula(assertion)
+                    ts.append(Transition(s0, assertion, [], [], sink))
+
+        add_assert_violations(symex_walker.env_choices, symex_walker.extern_asserts, env_ts, s_con_wins)
+        add_assert_violations(symex_walker.con_choices, symex_walker.intern_asserts, con_ts, s_con_loses)
+
+        # Guarantee only one method is chosen
+        def add_mutex_guarantee(choices, ts, sink):
+            if len(choices) > 1:
+                dnf = (And(x, y) for x, y in combinations(choices.values(), 2))
+                ts.append(Transition(s0, _disjunct_smt(dnf), [], [], sink))
+
+        add_mutex_guarantee(symex_walker.env_choices, env_ts, s_con_wins)
+        add_mutex_guarantee(symex_walker.con_choices, con_ts, s_con_loses)
+
+        prg = Program(
+            file_name, [s0, s_con_wins, s_con_loses], s0, init_values,
+            env_ts, con_ts,
+            env_events=events["extern"], con_events=events["intern"],
+            out_events=out_actions)
+        return prg
