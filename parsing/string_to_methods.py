@@ -600,9 +600,9 @@ class SymexWalker(NodeWalker):
         self.table = SymbolTable()
         self.symbols = {}
         self.extern_assumes = set()
-        self.extern_asserts = set()
+        self.extern_asserts = {}
         self.intern_assumes = set()
-        self.intern_asserts = set()
+        self.intern_asserts = {}
 
         self.extern_triples = defaultdict(list)
         self.intern_triples = defaultdict(list)
@@ -637,6 +637,24 @@ class SymexWalker(NodeWalker):
     def walk_Program(self, node: Program):
         self.walk(node.decls)
         self.walk(node.methods)
+
+        self.env_choices = {
+            name: Symbol(f"__{name}") for name in self.extern_triples}
+        self.con_choices = {
+            name: Symbol(f"__{name}") for name in self.intern_triples}
+
+        # Post-processing: add booleans to represent chosen methods
+        def add_choice_booleans(triples_dict, booleans_dict):
+            for name, triples in triples_dict.items():
+                for x in triples:
+                    x[0].extend(self.indicator(name, booleans_dict))
+        add_choice_booleans(self.extern_triples, self.env_choices)
+        add_choice_booleans(self.intern_triples, self.con_choices)
+
+    def indicator(self, name, booleans_dict):
+        result = [Not(var) if var_name != name else var
+                for var_name, var in booleans_dict.items()]
+        return result
 
     def walk_Load(self, node: Load):
         return self.fp.lookup_or_fresh(node.name, self.table)
@@ -703,16 +721,14 @@ class SymexWalker(NodeWalker):
             self.walk(node.params)
         assumes = [self.walk(n) for n in node.assumes or []]
         asserts = [self.walk(n) for n in node.asserts or []]
+
         if node.kind == "intern":
-            self.intern_assumes.update(remove_all_versions(x) for x in assumes)
-            self.intern_asserts.update(remove_all_versions(x) for x in asserts)
+            self.intern_asserts[node.name] = [remove_all_versions(x) for x in asserts]
         else:
-            self.extern_assumes.update(remove_all_versions(x) for x in assumes)
-            self.extern_asserts.update(remove_all_versions(x) for x in asserts)
-        
+            self.extern_asserts[node.name] = [remove_all_versions(x) for x in asserts]
+
         self.fp.conditions.extend(assumes)
         self.fp.conditions.extend(asserts)
-
 
         self.table = self.table.add_child(node.name)
         self.walk(node.decls)
