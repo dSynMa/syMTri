@@ -658,8 +658,10 @@ class SymexWalker(NodeWalker):
 
         if node.kind == "intern":
             self.intern_asserts[node.name] = [remove_all_versions(x) for x in asserts]
+            self.intern_asserts[node.name].extend(remove_all_versions(x) for x in assumes)
         else:
             self.extern_asserts[node.name] = [remove_all_versions(x) for x in asserts]
+            self.extern_asserts[node.name].extend(remove_all_versions(x) for x in assumes)
 
         self.fp.conditions.extend(assumes)
         self.fp.conditions.extend(asserts)

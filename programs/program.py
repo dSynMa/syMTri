@@ -377,16 +377,16 @@ class Program:
         env_ts = triples_to_transitions(s0, symex_walker.extern_triples)
         con_ts = triples_to_transitions(s0, symex_walker.intern_triples)
         # Environment stutter
-        if symex_walker.extern_assumes:
-            env_ts.append(Transition(
-                s0, _conjunct_smt(Not(x) for x in symex_walker.extern_assumes),
-                [], [], s0
-            ))
-        # Controller stutter
-        if symex_walker.intern_assumes:
-            con_ts.append(Transition(
-                s0, _conjunct_smt(Not(x) for x in symex_walker.intern_assumes),
-                [], [], s0))
+        # if symex_walker.extern_assumes:
+        #     env_ts.append(Transition(
+        #         s0, _conjunct_smt(Not(x) for x in symex_walker.extern_assumes),
+        #         [], [], s0
+        #     ))
+        # # Controller stutter
+        # if symex_walker.intern_assumes:
+        #     con_ts.append(Transition(
+        #         s0, _conjunct_smt(Not(x) for x in symex_walker.intern_assumes),
+        #         [], [], s0))
 
         # Go to winning/losing state if any assertion is violated
         def add_assert_violations(choices, asserts, ts, sink):
