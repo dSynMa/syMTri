@@ -37,7 +37,6 @@ def main():
         if Path(args.program).suffix == ".dsl"
         else string_to_program(date_file)
     )
-    print(program.to_dot())
 
     if args.translate is not None:
         if args.translate.lower() == "dot":
