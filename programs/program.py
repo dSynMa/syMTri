@@ -364,7 +364,7 @@ class Program:
                     for lhs, rhs in act.items()]
 
             def _variables(out):
-                return [Variable(x) for x in out]
+                return [Variable(x.symbol_name()) for x in out]
 
             transitions = [
                 Transition(s0, _conjunct_smt(cond), _act_to_formula(act), _variables(out), s0)
