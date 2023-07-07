@@ -3,9 +3,10 @@ import subprocess
 from tempfile import NamedTemporaryFile
 
 from parsing.string_to_prop_logic import string_to_prop, string_to_math_expression
-
+from ..util import timing
 
 class Ranker:
+    @timing
     def check(self, main_function: str):
         with NamedTemporaryFile('w', suffix='.c', delete=False) as tmp:
             tmp.write(main_function)

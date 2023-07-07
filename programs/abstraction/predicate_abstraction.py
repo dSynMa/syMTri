@@ -18,6 +18,7 @@ from prop_lang.util import conjunct, neg, conjunct_formula_set, conjunct_typed_v
     implies, G, X, true, false, disjunct
 from prop_lang.value import Value
 from prop_lang.variable import Variable
+from ..util import timing
 
 smt_checker = SMTChecker()
 
@@ -215,6 +216,7 @@ class PredicateAbstraction:
                                    env_transitions, con_transitions, program.env_events,
                                    program.con_events, program.out_events, False)
 
+    @timing
     def compute_with_predicates(self, state_predicatess: [Formula], transition_predicatess: [Formula],
                                 simplified: bool):
         print("state preds: " + ", ".join(list(map(str, state_predicatess))))

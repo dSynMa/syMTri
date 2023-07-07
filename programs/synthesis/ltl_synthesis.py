@@ -11,7 +11,9 @@ from prop_lang.formula import Formula
 from prop_lang.util import true
 from prop_lang.variable import Variable
 
+from ..util import timing
 
+@timing
 def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variable], out_act: [Variable],
                   strix_tlsf_command: str) -> Tuple[
     bool, MealyMachine]:

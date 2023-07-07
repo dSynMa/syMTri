@@ -21,6 +21,21 @@ from prop_lang.util import conjunct_formula_set, conjunct, neg, append_to_variab
 from prop_lang.value import Value
 from prop_lang.variable import Variable
 
+from functools import wraps
+from time import time
+
+
+def timing(f):
+    @wraps(f)
+    def wrap(*args, **kw):
+        ts = time()
+        result = f(*args, **kw)
+        te = time()
+        print(f'{f.__qualname__} took {te - ts:2.4f} sec')
+        return result
+    return wrap
+
+
 smt_checker = SMTChecker()
 
 
