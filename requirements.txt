@@ -24,3 +24,5 @@ sympy ~= 1.11
 tatsu ~= 5.8.3
 
 z3-solver ~= 4.11.2.0
+
+pysmt ~= 0.9.5
