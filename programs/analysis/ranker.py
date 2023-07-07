@@ -12,7 +12,7 @@ class Ranker:
             tmp.close()
 
             try:
-                cmd = "docker run -v " + tmp.name + ":/workdir/prog.c" + " -v ./output:/output" + " --entrypoint /bin/bash cpachecker -c " + \
+                cmd = "docker run -v " + tmp.name + ":/workdir/prog.c" + " -v ./output:/output" + " --entrypoint /bin/bash registry.gitlab.com/sosy-lab/software/cpachecker:latest -c " + \
                       '"(rm -r -f ./output); (/cpachecker/scripts/cpa.sh  -preprocess -terminationAnalysis /workdir/prog.c -spec /cpachecker/config/properties/termination.prp ' \
                       '&& cat output/terminationAnalysisResult.txt)"'
 
