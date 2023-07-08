@@ -619,6 +619,8 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
     ranking = None
     for (cond, add_natural_conditions) in conditions:
         for exit_pred in disjuncts_in_exit_pred_grounded:
+            if len(exit_pred.variablesin()) == 0:
+                continue
             try:
                 ranking, invars = liveness_refinement(symbol_table,
                                                       program,
@@ -689,6 +691,8 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
                 ranking = None
                 for (cond, add_natural_conditions) in conditions:
                     for exit_pred in disjuncts_in_exit_pred_grounded:
+                        if len(exit_pred.variablesin()) == 0:
+                            continue
                         try:
                             ranking, invars = liveness_refinement(symbol_table,
                                                                   program,
