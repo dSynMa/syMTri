@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 
-from collections import Counter, deque, defaultdict
+from collections import Counter, defaultdict, deque
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
 from itertools import chain, combinations
 from operator import add, mul, sub
 
-from pysmt.shortcuts import (FALSE, GE, GT, LE, LT, And, Bool, Implies, Int,
-                             Not, Or, Symbol, get_free_variables, get_type,
-                             simplify, substitute)
-
 from pysmt.fnode import FNode
-
+from pysmt.shortcuts import (FALSE, GE, GT, LE, LT, And, Bool, EqualsOrIff,
+                             Implies, Int, Not, NotEquals, Or, Symbol,
+                             get_free_variables, get_type, simplify,
+                             substitute, is_sat)
 from pysmt.typing import BOOL, INT
 from tatsu.grammars import Grammar
 from tatsu.objectmodel import Node
@@ -22,8 +21,8 @@ from tatsu.walkers import NodeWalker
 
 from prop_lang.biop import BiOp
 from prop_lang.uniop import UniOp
-from prop_lang.variable import Variable
 from prop_lang.value import Value
+from prop_lang.variable import Variable
 
 
 def powerset(iterable):
@@ -50,6 +49,7 @@ class Token(Enum):
     GE      = ">="
     LE      = "<="
     EQ      = "=="
+    NE      = "!="
     AND     = "&&"
     OR      = "||"
     IMPL    = "=>"
@@ -121,7 +121,7 @@ class If(BaseNode):
 
 
 class Assign(BaseNode):
-    lhs = None
+    lhs: Store = None
     rhs = None
 
     def __repr__(self) -> str:
@@ -595,6 +595,7 @@ class SymexWalker(NodeWalker):
 
     def walk_BinOp(self, node: Comparison):
         op = {
+            Token.EQ: EqualsOrIff, Token.NE: NotEquals,
             Token.GE: GE, Token.GT: GT, Token.LE: LE, Token.LT: LT,
             Token.AND: And, Token.OR: Or, Token.IMPL: Implies,
             Token.MUL: mul, Token.ADD: add, Token.SUB: sub}
