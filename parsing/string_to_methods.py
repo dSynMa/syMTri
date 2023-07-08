@@ -404,32 +404,32 @@ class SymbolTable:
 
 
 class ForkingPath:
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, table=None) -> None:
         self.variables = {}
         self.counters = Counter() if parent is None else deepcopy(parent.counters)  # noqa: E501
         self.assignments = {}
         # self.assignments = []
         self.conditions = []
         self.children = []
+        self.table = table or (SymbolTable() if parent is None else parent.table)
         self.parent = parent
-
 
     def _lookup(self, name):
         if name in self.variables:
             return self.variables[name]
         return None if self.parent is None else self.parent._lookup(name)
 
-    def fresh(self, name, table):
-        symbol = table.lookup(name)
+    def fresh(self, name):
+        symbol = self.table.lookup(name)
         self.variables[name] = Symbol(f"{name}#{self.counters[name]}", symbol.type_)  # noqa: E501
         self.counters[name] += 1
         return self.variables[name]
 
-    def lookup_or_fresh(self, name, table):
-        return self._lookup(name) or self.fresh(name, table)
+    def lookup_or_fresh(self, name):
+        return self._lookup(name) or self.fresh(name)
 
-    def add_child(self):
-        child = ForkingPath(self)
+    def add_child(self, table=None):
+        child = ForkingPath(self, table)
         self.children.append(child)
         return child
 
@@ -454,7 +454,8 @@ class ForkingPath:
             n = n.parent
         return conds, asgns
 
-    def to_transitions(self, table: SymbolTable):
+    def to_transitions(self):
+        table = self.table
         conds, asgns = self.get_path()
         subs = []
         local_inits = {}
@@ -530,9 +531,9 @@ class SymexWalker(NodeWalker):
 
     def __init__(self):
         super().__init__()
-        self._reset_paths()
-        self.table = SymbolTable()
-        self.symbols = {}
+        self.paths = {}
+        self.fp = ForkingPath()
+
         self.extern_assumes = set()
         self.extern_asserts = {}
         self.intern_assumes = set()
@@ -541,8 +542,6 @@ class SymexWalker(NodeWalker):
         self.extern_triples = defaultdict(list)
         self.intern_triples = defaultdict(list)
 
-    def _reset_paths(self):
-        self.fp = ForkingPath()
 
     def push(self, frame):
         self.ctx.append(frame)
@@ -555,9 +554,9 @@ class SymexWalker(NodeWalker):
 
     def walk_Decl(self, node: Decl):
         init = self.walk(node.init)
-        self.table.add(node, init)
-        if self.table.parent is not None and node.init is not None:
-            var = self.fp.fresh(node.var_name, self.table)
+        self.fp.table.add(node, init)
+        if self.fp.table.parent is not None and node.init is not None:
+            var = self.fp.fresh(node.var_name)
             self.fp.assignments[var] = init
         # elif "##params" in self.table.name:
         #     # This is a parameter
@@ -591,7 +590,7 @@ class SymexWalker(NodeWalker):
         return result
 
     def walk_Load(self, node: Load):
-        return self.fp.lookup_or_fresh(node.name, self.table)
+        return self.fp.lookup_or_fresh(node.name)
 
     def walk_BinOp(self, node: Comparison):
         op = {
@@ -615,7 +614,7 @@ class SymexWalker(NodeWalker):
             else Int(node.value))
 
     def walk_Store(self, node: Store):
-        return self.fp.fresh(node.name, self.table)
+        return self.fp.fresh(node.name)
 
     def walk_Assign(self, node: Assign):
         rhs = self.walk(node.rhs)
@@ -624,7 +623,7 @@ class SymexWalker(NodeWalker):
             leaf.assignments[lhs] = rhs
 
     def _walk_Increment_or_Decrement(self, node, op):
-        rhs = self.fp.lookup_or_fresh(node.var_name.name, self.table)
+        rhs = self.fp.lookup_or_fresh(node.var_name.name)
         lhs = self.walk(node.var_name)
         for leaf in self.fp.leaves():
             leaf.assignments[lhs] = op(rhs)
@@ -650,9 +649,9 @@ class SymexWalker(NodeWalker):
         self.fp = parent_fp
 
     def walk_MethodDef(self, node: MethodDef):
-        self._reset_paths()
+        self.fp = self.fp.add_child(
+            self.fp.table.add_child(node.name, is_params=node.params))
         if node.params:
-            self.table = self.table.add_child(node.name, is_params=True)
             self.walk(node.params)
         assumes = [self.walk(n) for n in node.assumes or []]
         asserts = [self.walk(n) for n in node.asserts or []]
@@ -667,21 +666,22 @@ class SymexWalker(NodeWalker):
         self.fp.conditions.extend(assumes)
         self.fp.conditions.extend(asserts)
 
-        self.table = self.table.add_child(node.name)
+        if node.params:
+            self.fp.table = self.fp.table.add_child(node.name)
+
         self.walk(node.decls)
         self.walk(node.body)
 
-        # self.fp.prune()
-        leaves = list(self.fp.leaves(self.fp.get_root()))
-        for x in leaves:
-            if node.kind == "extern":
-                self.extern_triples[node.name].extend(x.to_transitions(self.table))
-            else:
-                self.intern_triples[node.name].extend(x.to_transitions(self.table))
+        self.paths[node.name] = self.fp 
+        while self.fp.parent is not None:
+            self.fp = self.fp.parent
 
-        # Move symbol table back to global context
-        while self.table.parent is not None:
-            self.table = self.table.parent
+        # self.fp.prune()
+        for x in self.paths[node.name].leaves():
+            if node.kind == "extern":
+                self.extern_triples[node.name].extend(x.to_transitions())
+            else:
+                self.intern_triples[node.name].extend(x.to_transitions())
 
 
 dsl_parser: Grammar = compile(GRAMMAR)
