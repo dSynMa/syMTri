@@ -580,13 +580,13 @@ class SymexWalker(NodeWalker):
         def add_choice_booleans(triples_dict, booleans_dict):
             for name, triples in triples_dict.items():
                 for x in triples:
-                    x[0].extend(self.indicator(name, booleans_dict))
+                    x[0].extend(self.one_hot(name, booleans_dict))
         add_choice_booleans(self.extern_triples, self.env_choices)
         add_choice_booleans(self.intern_triples, self.con_choices)
 
-    def indicator(self, name, booleans_dict):
+    def one_hot(self, name, booleans_dict):
         result = [Not(var) if var_name != name else var
-                for var_name, var in booleans_dict.items()]
+                  for var_name, var in booleans_dict.items()]
         return result
 
     def walk_Load(self, node: Load):

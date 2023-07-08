@@ -393,7 +393,7 @@ class Program:
             for method in choices:
                 if asserts.get(method):
                     assertion = Or(Not(x) for x in asserts[method])
-                    ind = symex_walker.indicator(method, choices)
+                    ind = symex_walker.one_hot(method, choices)
                     ind.append(assertion)
                     assertion = And(ind)
                     assertion = to_formula(assertion)
