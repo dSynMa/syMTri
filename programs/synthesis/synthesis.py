@@ -118,7 +118,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         mon_events = predicate_abstraction.program.out_events \
                      + [Variable(s) for s in predicate_abstraction.program.states]
         ## Compute abstraction
-        print(predicate_abstraction.simplified_transitions_abstraction().to_dot())
+        # print(predicate_abstraction.simplified_transitions_abstraction().to_dot())
         state_predicates = predicate_abstraction.state_predicates
         pred_list = list(state_predicates) + list(transition_predicates)
 
