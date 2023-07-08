@@ -334,21 +334,22 @@ class Program:
         tree = parse_dsl(code)
         symex_walker = SymexWalker()
         symex_walker.walk(tree)
+        table = symex_walker.fp.get_root().table
 
         # All method parameters are treated as events
         events = {
-            kind: [Variable(s.name) for s in symex_walker.table
+            kind: [Variable(s.name) for s in table
                    if s.context.is_params and s.ast.parent.kind == kind]
             for kind in ("extern", "intern")}
         events["extern"].extend([Variable(s.symbol_name()) for s in symex_walker.env_choices.values()])  # noqa: E501
         events["intern"].extend([Variable(s.symbol_name()) for s in symex_walker.con_choices.values()])  # noqa: E501
 
         out_actions = [
-            Variable(s.name) for s in symex_walker.table
-            if s.context.parent is None and s.ast.io == "output"]
+            Variable(s.name) for s in table.symbols.values()
+            if s.ast.io == "output"]
         init_values = [
             TypedValuation(s.name, str(s.type_).lower(), s.init)
-            for s in symex_walker.table.symbols.values()]
+            for s in table.symbols.values()]
 
         def _conjunct_smt(cond):
             return conjunct_formula_set(to_formula(c) for c in cond)
