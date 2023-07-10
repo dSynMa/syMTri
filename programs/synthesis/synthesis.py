@@ -573,6 +573,7 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
     invars = []
     #TODO consider if sometimes bool vals are needed or not
     bool_vars = [v for v in symbol_table.keys() if symbol_table[v].type == "bool" or symbol_table[v].type == "boolean"]
+    bool_vars += [Variable(str(v) + "_prev") for v in symbol_table.keys()]
 
     # first ground on bool vars
 
