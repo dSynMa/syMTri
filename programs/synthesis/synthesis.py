@@ -118,7 +118,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
         mon_events = predicate_abstraction.program.out_events \
                      + [Variable(s) for s in predicate_abstraction.program.states]
         ## Compute abstraction
-        print(predicate_abstraction.simplified_transitions_abstraction().to_dot())
+        # print(predicate_abstraction.simplified_transitions_abstraction().to_dot())
         state_predicates = predicate_abstraction.state_predicates
         pred_list = list(state_predicates) + list(transition_predicates)
 
@@ -574,6 +574,7 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
     invars = []
     #TODO consider if sometimes bool vals are needed or not
     bool_vars = [v for v in symbol_table.keys() if symbol_table[v].type == "bool" or symbol_table[v].type == "boolean"]
+    bool_vars += [Variable(str(v) + "_prev") for v in symbol_table.keys()]
 
     # first ground on bool vars
 
@@ -620,6 +621,8 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
     ranking = None
     for (cond, add_natural_conditions) in conditions:
         for exit_pred in disjuncts_in_exit_pred_grounded:
+            if len(exit_pred.variablesin()) == 0:
+                continue
             try:
                 ranking, invars = liveness_refinement(symbol_table,
                                                       program,
@@ -690,6 +693,8 @@ def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, e
                 ranking = None
                 for (cond, add_natural_conditions) in conditions:
                     for exit_pred in disjuncts_in_exit_pred_grounded:
+                        if len(exit_pred.variablesin()) == 0:
+                            continue
                         try:
                             ranking, invars = liveness_refinement(symbol_table,
                                                                   program,
