@@ -19,7 +19,7 @@ from programs.util import create_nuxmv_model_for_compatibility_checking, \
     parse_nuxmv_ce_output_finite, reduce_up_to_iff, \
     add_prev_suffix, label_pred, \
     concretize_transitions, ground_transitions, keep_bool_preds, function_is_of_natural_type, \
-    ground_predicate_on_vars
+    ground_predicate_on_vars, timing
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.mathexpr import MathExpr
@@ -565,6 +565,7 @@ def abstract_synthesis_loop(program: Program, ltl_assumptions: Formula, ltl_guar
             state_predicates = list(new_all_preds)
 
 
+@timing
 def liveness_step(program, counterexample_loop, symbol_table, entry_valuation, entry_predicate,
                   exit_condition, exit_prestate):
     # ground transitions in the counterexample loop
