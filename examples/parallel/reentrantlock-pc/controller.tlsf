@@ -9,23 +9,26 @@ INFO {
 MAIN {
 
   INPUTS {
-    env_error;
     env_lock;
-    stop;
     con_error;
+    lock_free;
+    locking;
+    out_of_lock;
   }
 
   OUTPUTS {
     dec;
     inc;
+    con_unlock;
   }
 
   ASSUMPTIONS {
-    G(!env_error);
+    G F (out_of_lock);
   }
 
   GUARANTEES {
     G(!con_error);
+    ((G F lock_free));
   }
 
 }
