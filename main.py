@@ -30,11 +30,12 @@ def main():
     if args.program is None:
         raise Exception("Program path not specified.")
 
+    fname = Path(args.program)
     date_file = open(args.program, "r").read()
 
     program = (
-        Program.of_dsl(args.program, date_file)
-        if Path(args.program).suffix == ".dsl"
+        Program.of_dsl(fname.name, date_file)
+        if fname.suffix == ".dsl"
         else string_to_program(date_file)
     )
 
@@ -57,6 +58,9 @@ def main():
             raise Exception("No property specified.")
 
         start = time.time()
+        print(f"Program has {len(program.states)} states,",
+              len(program.con_transitions) + len(program.env_transitions),
+              "transitions")
         (realiz, mm) = synthesize(program, args.ltl, args.tlsf, args.docker)
         end = time.time()
 
