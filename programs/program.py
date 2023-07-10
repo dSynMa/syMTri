@@ -266,13 +266,13 @@ class Program:
         vars = ["turn : {env, mon_env, con, mon_con}"]
         vars += [str(st) + " : boolean" for st in self.states]
         vars += [str(var.name) + " : " + str(var.type).replace("bool", "boolean") for var in self.valuation if
-                 not (var.type == "nat" or var.type == "natural")]
-        vars += [str(var.name) + " : integer" for var in self.valuation if (var.type == "nat" or var.type == "natural")]
+                 var.type not in ("nat", "natural", "int")]
+        vars += [str(var.name) + " : integer" for var in self.valuation if var.type in ("nat", "natural", "int")]
         # for transition_predicate checking
         vars += [str(var.name) + "_prev : " + str(var.type.replace("bool", "boolean")) for var in self.valuation if
-                 not (var.type == "nat" or var.type == "natural")]
+                var.type not in ("nat", "natural", "int")]
         vars += [str(var.name) + "_prev : integer" for var in self.valuation if
-                 (var.type == "nat" or var.type == "natural")]
+                 var.type in ("nat", "natural", "int")]
 
         vars += [str(var) + " : boolean" for var in self.env_events]
         vars += [str(var) + " : boolean" for var in self.con_events]
@@ -348,8 +348,9 @@ class Program:
             Variable(s.name) for s in table.symbols.values()
             if s.ast.io == "output"]
         init_values = [
-            TypedValuation(s.name, str(s.type_).lower(), s.init)
-            for s in table.symbols.values()]
+            TypedValuation(s.name, str(s.type_).lower(), to_formula(s.init))
+            for s in table.symbols.values()
+            if s.ast.io != "output"]
 
         def _conjunct_smt(cond):
             return conjunct_formula_set(to_formula(c) for c in cond)
