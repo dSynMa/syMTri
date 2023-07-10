@@ -10,7 +10,7 @@ from programs.analysis.smt_checker import SMTChecker
 from programs.program import Program
 from programs.transition import Transition
 from programs.util import ce_state_to_formula, fnode_to_formula, ground_formula_on_ce_state_with_index, \
-    project_ce_state_onto_ev, get_differently_value_vars
+    project_ce_state_onto_ev, get_differently_value_vars, timing
 from prop_lang.biop import BiOp
 from prop_lang.formula import Formula
 from prop_lang.uniop import UniOp
@@ -20,6 +20,7 @@ from prop_lang.variable import Variable
 
 smt_checker = SMTChecker()
 
+@timing
 def safety_refinement(ce: [dict], agreed_on_transitions: [(Transition, dict)],
                       disagreed_on_state: (Formula, dict), symbol_table, program, use_dnf=False) -> [FNode]:
     # we collect interpolants in this set
@@ -162,6 +163,7 @@ def interpolation(program: Program, concurring_transitions: [(Transition, dict)]
         return Cs
 
 
+@timing
 def liveness_refinement(symbol_table, program, entry_condition, unfolded_loop: [Transition], exit_predicate_grounded, add_natural_conditions=True):
     try:
         c_code = loop_to_c(symbol_table, program, entry_condition, unfolded_loop,

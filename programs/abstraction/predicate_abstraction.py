@@ -59,6 +59,7 @@ class PredicateAbstraction:
         Ps = self.getFromCache(f)
         return meaning_within_incremental(f, Ps, predicates, symbol_table)
 
+    @timing
     def add_predicates(self, state_predicatess: [Formula], transition_predicatess: [Formula], simplified: bool):
         if len(state_predicatess) + len(transition_predicatess) == 0:
             return

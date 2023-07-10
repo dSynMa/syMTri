@@ -447,6 +447,7 @@ def label_preds(ps, preds):
     return {label_pred(p, preds) for p in ps}
 
 
+@timing
 def there_is_mismatch_between_program_and_strategy(system, controller: bool, livenesstosafety: bool,
                                                    ltl_assumptions: Formula,
                                                    ltl_guarantees: Formula, debug=False, mismatch_condition=None):
