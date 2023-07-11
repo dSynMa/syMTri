@@ -8,11 +8,10 @@ program eventually__allow_grant {
     }
 
     CONTROLLER EVENTS {
-        dec, inc
     }
 
     PROGRAM EVENTS {
-        goal
+        goal, xis1
     }
 
     VALUATION {
@@ -22,12 +21,13 @@ program eventually__allow_grant {
     ENVIRONMENT TRANSITIONS {
         q0 -> q0 [!start && env_inc && !env_dec $ x := x + 1 # goal],
         q0 -> q0 [!start && !env_inc && env_dec $ x := x - 1 # goal],
-        q0 -> q1 [start],
+        q0 -> q1 [start && x == 1 # xis1],
+        q0 -> q1 [start && x < 0 # goal],
+        q0 -> q1 [start && !(x == 1 || x < 0) # goal],
         q1 -> q1 [x < 0 # goal]
     }
 
     CONTROLLER TRANSITIONS {
-        q1 -> q1 [dec && !inc $ x := x - 1],
-        q1 -> q1 [!dec && inc $ x := x + 1]
+        q1 -> q1 [ $ x := x + 1]
     }
 }
