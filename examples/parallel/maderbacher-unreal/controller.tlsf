@@ -20,7 +20,7 @@ MAIN {
   }
 
   GUARANTEES {
-    (F start) -> F(start && xis1 && F goal)
+    (F start) -> F(start && (xis1 -> F goal))
   }
 
 }
