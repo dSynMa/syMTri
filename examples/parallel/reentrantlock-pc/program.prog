@@ -16,12 +16,13 @@ program eventually__allow_grant {
     }
 
     VALUATION {
-        got_lock : integer := 0;
-        L : integer := 0;
+        got_lock : natural := 0;
+        L : natural := 0;
     }
 
     ENVIRONMENT TRANSITIONS {
-        start -> locking_st [env_lock],
+        start -> locking_st [env_lock && got_lock == 0],
+        start -> con_error_st [env_lock && got_lock != 0],
         start -> consider_unlock [!env_lock # out_of_lock],
 
         locking_st -> lock [],
@@ -44,9 +45,9 @@ program eventually__allow_grant {
         lock -> con_error_st [dec | inc],
         done_unlocking -> con_error_st [dec | inc],
 
-        consider_unlock -> consider_unlock_int [ got_lock != 0 && L > 0 $ L := L - 1],
-        consider_unlock -> con_error_st [got_lock != 0 && (L <= 0)],
-        consider_unlock -> done_unlocking [got_lock == 0],
+        consider_unlock -> consider_unlock_int [con_unlock && got_lock != 0 $ L := L - 1],
+        consider_unlock -> con_error_st [con_unlock && L == 0],
+        consider_unlock -> done_unlocking [!con_unlock],
 
         locked -> locked [dec & !inc $ got_lock := got_lock - 1],
         locked -> locked [!dec & inc $ got_lock := got_lock + 1],
