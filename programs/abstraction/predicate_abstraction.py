@@ -87,6 +87,8 @@ class PredicateAbstraction:
         # TODO we are not doing this incrementally...
         predicates = self.state_predicates + self.transition_predicates
         new_predicates = state_predicatess + transition_predicatess
+        print(f"INFO: now abstracting with {len(self.state_predicates)} state "
+              f"and {len(self.transition_predicatess)} transition predicates")
 
         new_env_to_program_transitions = {}
         new_con_to_program_transitions = {}
