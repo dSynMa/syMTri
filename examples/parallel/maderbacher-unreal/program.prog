@@ -23,7 +23,7 @@ program eventually__allow_grant {
         q0 -> q0 [!start && !env_inc && env_dec $ x := x - 1 # goal],
         q0 -> q1 [start && x == 1 # xis1],
         q0 -> q1 [start && x < 0 # goal],
-        q0 -> q1 [start && !(x == 1 || x < 0) # goal],
+        q0 -> q1 [start && !(x == 1 || x < 0) #],
         q1 -> q1 [x < 0 # goal]
     }
 
