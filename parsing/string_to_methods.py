@@ -274,12 +274,6 @@ binary_logic_op::BinLogic
     left:expression op:('&&'|'||'|'=>') ~ right:comparison
     ;
 
-# equality = eq_or_neq | comparison ;
-# eq_or_neq::Comparison
-#     =
-#     left:equality op:('=='|'!=') ~ right:comparison
-#     ;
-
 comparison
     =
     | compare_op
