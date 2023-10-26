@@ -96,8 +96,10 @@ def create_nuxmv_model_for_compatibility_checking(program, strategy_model: NuXmv
         [BiOp(UniOp("next", Variable("mon_" + m.name)), ' = ', Variable("mon_" + m.name)) for m in (mon_events)]
         + [BiOp(UniOp("next", Variable(m.name)), ' = ', Variable(m.name)) for m in
            [label_pred(p, pred_list) for p in pred_list]]))
-    new_trans = ["compatible", "!next(mismatch)"] + program_model.trans + strategy_model.trans + turn_logic
-    normal_trans = "\t((" + ")\n\t& (".join(new_trans) + "))\n"
+    # new_trans = ["compatible", "!next(mismatch)"] + program_model.trans + strategy_model.trans + turn_logic
+    new_trans = (f"\n\t({t})" for t in ("compatible", "!next(mismatch)", *program_model.trans, *strategy_model.trans, *turn_logic))
+
+    normal_trans = "\t(" + " & ".join(new_trans) + ")\n"
 
     normal_trans += "\t | (!compatible & " + \
                     " next(mismatch) & identity_" + program_model.name + \
