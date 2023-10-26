@@ -384,19 +384,27 @@ class Program:
         env_ts = triples_to_transitions(s0, symex_walker.extern_triples)
         con_ts = triples_to_transitions(s0, symex_walker.intern_triples)
 
-        # Go to winning/losing state if any assertion is violated
-        def add_assert_violations(choices, asserts, ts, sink):
+        # Go to losing/winning state if any assertion/assumption is violated
+        def add_assert_violations(choices, asserts, assumes, ts, sink):
             for method in choices:
                 if asserts.get(method):
                     assertion = Or(Not(x) for x in asserts[method])
+                    if assumes.get(method):
+                        assertion = And(assertion, *assumes[method])
                     ind = symex_walker.one_hot(method, choices)
                     ind.append(assertion)
                     assertion = And(ind)
                     assertion = to_formula(assertion)
                     ts.append(Transition(s0, assertion, [], [], sink))
 
-        add_assert_violations(symex_walker.env_choices, symex_walker.extern_asserts, env_ts, s_con_wins)
-        add_assert_violations(symex_walker.con_choices, symex_walker.intern_asserts, con_ts, s_con_loses)
+        # Environment cannot violate an assume() to break an assert()
+        add_assert_violations(symex_walker.env_choices, symex_walker.extern_asserts, symex_walker.extern_assumes, env_ts, s_con_loses)
+        # Controller cannot violate an assert() to break an assume()
+        add_assert_violations(symex_walker.con_choices, symex_walker.intern_assumes, symex_walker.intern_asserts, con_ts, s_con_wins)
+
+        add_assert_violations(symex_walker.con_choices, symex_walker.intern_asserts, {}, con_ts, s_con_loses)
+        add_assert_violations(symex_walker.env_choices, symex_walker.extern_assumes, {}, env_ts, s_con_wins)
+
 
         # Guarantee only one method is chosen
         def add_mutex_guarantee(choices, ts, sink):
@@ -412,4 +420,5 @@ class Program:
             env_ts, con_ts,
             env_events=events["extern"], con_events=events["intern"],
             out_events=out_actions)
+
         return prg
