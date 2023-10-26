@@ -528,9 +528,9 @@ class SymexWalker(NodeWalker):
         self.paths = {}
         self.fp = ForkingPath()
 
-        self.extern_assumes = set()
+        self.extern_assumes = {}
         self.extern_asserts = {}
-        self.intern_assumes = set()
+        self.intern_assumes = {}
         self.intern_asserts = {}
 
         self.extern_triples = defaultdict(list)
@@ -651,10 +651,10 @@ class SymexWalker(NodeWalker):
 
         if node.kind == "intern":
             self.intern_asserts[node.name] = [remove_all_versions(x) for x in asserts]
-            self.intern_asserts[node.name].extend(remove_all_versions(x) for x in assumes)
+            self.intern_assumes[node.name] = [remove_all_versions(x) for x in assumes]
         else:
             self.extern_asserts[node.name] = [remove_all_versions(x) for x in asserts]
-            self.extern_asserts[node.name].extend(remove_all_versions(x) for x in assumes)
+            self.extern_assumes[node.name] = [remove_all_versions(x) for x in assumes]
 
         self.fp.conditions.extend(assumes)
         self.fp.conditions.extend(asserts)
