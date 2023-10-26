@@ -402,7 +402,6 @@ class ForkingPath:
         self.variables = {}
         self.counters = Counter() if parent is None else deepcopy(parent.counters)  # noqa: E501
         self.assignments = {}
-        # self.assignments = []
         self.conditions = []
         self.children = []
         self.table = table or (SymbolTable() if parent is None else parent.table)
@@ -551,14 +550,6 @@ class SymexWalker(NodeWalker):
         if self.fp.table.parent is not None and node.init is not None:
             var = self.fp.fresh(node.var_name)
             self.fp.assignments[var] = init
-        # elif "##params" in self.table.name:
-        #     # This is a parameter
-        #     for x in self.fp.leaves(self.fp.get_root()):
-        #         var = x.fresh(node.var_name, self.table)
-        #         child1 = x.add_child()
-        #         child1.conditions.append(Iff(var, TRUE()))
-        #         child2 = x.add_child()
-        #         child2.conditions.append(Iff(var, FALSE()))
 
     def walk_Program(self, node: Program):
         self.walk(node.decls)
