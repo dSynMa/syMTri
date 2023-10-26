@@ -326,11 +326,11 @@ class Program:
 
     def __str__(self):
         return str(self.to_dot())
-    
+
     @classmethod
     def of_dsl(cls, file_name: str, code: str) -> "Program":
         """Parse a DSL program and return a Program"""
-        
+
         tree = parse_dsl(code)
         symex_walker = SymexWalker()
         symex_walker.walk(tree)

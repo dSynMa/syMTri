@@ -536,7 +536,6 @@ class SymexWalker(NodeWalker):
         self.extern_triples = defaultdict(list)
         self.intern_triples = defaultdict(list)
 
-
     def push(self, frame):
         self.ctx.append(frame)
 
@@ -666,7 +665,7 @@ class SymexWalker(NodeWalker):
         self.walk(node.decls)
         self.walk(node.body)
 
-        self.paths[node.name] = self.fp 
+        self.paths[node.name] = self.fp
         while self.fp.parent is not None:
             self.fp = self.fp.parent
 
@@ -695,4 +694,3 @@ if __name__ == "__main__":
     tree = parse_dsl(code)
     wlk = SymexWalker()
     wlk.walk(tree)
-
