@@ -42,6 +42,7 @@ def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variab
                                                    assumptions_tlsf,
                                                    guarantees_tlsf)
     print(tlsf_script)
+
     try:
         with NamedTemporaryFile('w', suffix='.tlsf', delete=False) as tmp:
             tmp.write(tlsf_script)
@@ -60,17 +61,13 @@ def ltl_synthesis(assumptions: [Formula], guarantees: [Formula], in_act: [Variab
                 return False, mon
             elif "REALIZABLE" in output:
                 print("\nINFO: Strix thinks the current abstract problem is realisable! I will check..\n")
-                try:
-                    mon = parse_hoa(env_events=in_act, con_events=out_act, output=output)
-                    return True, mon
-                except Exception as err:
-                    raise err
+                mon = parse_hoa(env_events=in_act, con_events=out_act, output=output)
+                return True, mon
             else:
                 raise Exception(
                     "Strix not returning appropriate value.\n\n" + cmd + "\n\n" + output + "\n\n" + tlsf_script)
     except Exception as err:
         raise err
-    pass
 
 
 def parse_hoa(env_events, con_events, output) -> Program:

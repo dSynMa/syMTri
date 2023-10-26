@@ -405,7 +405,6 @@ class Program:
         add_assert_violations(symex_walker.con_choices, symex_walker.intern_asserts, {}, con_ts, s_con_loses)
         add_assert_violations(symex_walker.env_choices, symex_walker.extern_assumes, {}, env_ts, s_con_wins)
 
-
         # Guarantee only one method is chosen
         def add_mutex_guarantee(choices, ts, sink):
             if len(choices) > 1:

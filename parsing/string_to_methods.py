@@ -243,9 +243,6 @@ method::MethodDef =
     node_type:`method_extern`
     ;
 
-
-
-
 assumption = 'assume' '(' @:expression ')' ';' ;
 assertion = 'assert' '(' @:expression ')' ';' ;
 
@@ -674,8 +671,8 @@ class SymexWalker(NodeWalker):
 dsl_parser: Grammar = compile(GRAMMAR)
 
 __semantics = ModelBuilderSemantics(types=[
-        t for t in globals().values()
-        if type(t) is type and issubclass(t, BaseNode)])
+    t for t in globals().values()
+    if type(t) is type and issubclass(t, BaseNode)])
 
 
 def parse_dsl(code: str) -> BaseNode:
