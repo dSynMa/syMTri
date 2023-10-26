@@ -29,8 +29,8 @@ method extern incr0 () {
     count0++;
 }
 method extern decr1 () {
-    assume(canDecr1);       //If violated, environment loses
-    assert(count1-1 >= MIN1); //If violated, environment wins
+    assume(canDecr1);           //If violated, environment loses
+    assert(count1-1 >= MIN1);   //If violated, environment wins
     count1--;
 }
 method extern incr1 () {
@@ -39,24 +39,15 @@ method extern incr1 () {
     count1++;
 }
 
-// Controller actions
+// Controller actions (basic)
+method GF intern toggleDecr0 () { canDecr0 := !canDecr0; }
+method GF intern toggleIncr0 () { canIncr0 := !canIncr0; }
+method GF intern toggleDecr1 () { canDecr1 := !canDecr1; }
+method GF intern toggleIncr1 () { canIncr1 := !canIncr1; }
+
+
+// Controller actions (limited)
 // method intern toggleDecr0 () { assert(!canIncr0 || count0 == MIN0); canDecr0 := !canDecr0; }
 // method intern toggleIncr0 () { assert(!canIncr0 || count0 == MAX0); canIncr0 := !canIncr0; }
-// method intern toggleDecr1 () { assert(!canIncr1 || count1 == MIN1); canDecr1 := !canDecr1; } 
-// method intern toggleIncr1 () { assert(!canIncr1 || count1 == MAX1); canIncr1 := !canIncr1; } 
-
-method intern toggleDecr0 () { canDecr0 := !canDecr0; }
-method intern toggleIncr0 () { canIncr0 := !canIncr0; }
-method intern toggleDecr1 () { canDecr1 := !canDecr1; } 
-method intern toggleIncr1 () { canIncr1 := !canIncr1; } 
-
-
-// Extra guarantees: liveness of increase/decrease buttons
-// GF(canDecr0), GF(canIncr0), GF(canDecr1), GF(canIncr1)
-// But this gives a tad too much power to the controller
-
-// //Alternative toggle that limits the controller's power
-// method intern toggleIncr0limited () {
-//     assert(!canIncr0 || count0 == MAX0);
-//     canIncr0 = !canIncr0;
-// }
+// method intern toggleDecr1 () { assert(!canIncr1 || count1 == MIN1); canDecr1 := !canDecr1; }
+// method intern toggleIncr1 () { assert(!canIncr1 || count1 == MAX1); canIncr1 := !canIncr1; }
