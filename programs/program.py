@@ -333,7 +333,7 @@ class Program:
         return str(self.to_dot())
 
     @classmethod
-    def of_dsl(cls, file_name: str, code: str) -> "Program":
+    def of_dsl(cls, file_name: str, code: str) -> ("Program", list):
         """Parse a DSL program and return a Program"""
 
         tree = parse_dsl(code)
@@ -421,4 +421,8 @@ class Program:
             env_events=events["extern"], con_events=events["intern"],
             out_events=out_actions)
 
-        return prg
+        gf_methods = [
+            method.name for method in tree.methods
+            if method.gf and method.kind == "intern"]
+
+        return prg, gf_methods

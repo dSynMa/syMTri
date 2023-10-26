@@ -149,6 +149,7 @@ class EnumDef(BaseNode):
 class MethodDef(BaseNode):
     name = None
     kind = None
+    gf = None
     params = None
     assumes = None
     asserts = None
@@ -231,8 +232,10 @@ signature =
 parameter::Decl = var_type:identifier var_name:identifier init:()
     ;
 
+is_gf::bool = 'GF';
+
 method::MethodDef =
-    'method' kind:( 'extern' | 'intern' ) ~ >signature '{'
+    'method' gf:[is_gf] kind:( 'extern' | 'intern' ) ~ >signature '{'
     { assumes+:assumption | asserts+:assertion }*
     decls: { decl }*
     body:{ statement }*

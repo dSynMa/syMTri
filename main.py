@@ -33,11 +33,12 @@ def main():
     fname = Path(args.program)
     date_file = open(args.program, "r").read()
 
-    program = (
-        Program.of_dsl(fname.name, date_file)
-        if fname.suffix == ".dsl"
-        else string_to_program(date_file)
-    )
+    gf_methods = None
+    if fname.suffix == ".dsl":
+        program, gf_methods = Program.of_dsl(fname.name, date_file)
+        print(program)
+    else:
+        program = string_to_program(date_file)
 
     if args.translate is not None:
         if args.translate.lower() == "dot":
@@ -56,6 +57,9 @@ def main():
     elif args.synthesise:
         if args.ltl is None and args.tlsf is None:
             raise Exception("No property specified.")
+
+        if args.ltl is not None and gf_methods is not None:
+            args.ltl += "&&" + " & ".join(f"G(F(_METHOD_{m}))" for m in gf_methods)
 
         start = time.time()
         print(f"Program has {len(program.states)} states,",
