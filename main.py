@@ -58,8 +58,8 @@ def main():
         if args.ltl is None and args.tlsf is None:
             raise Exception("No property specified.")
 
-        if args.ltl is not None and gf_methods is not None:
-            args.ltl += "&&" + " & ".join(f"G(F(_METHOD_{m}))" for m in gf_methods)
+        if args.ltl is not None and gf_methods:
+            args.ltl += " && " + " & ".join(f"G(F(_METHOD_{m}))" for m in gf_methods)
 
         start = time.time()
         print(f"Program has {len(program.states)} states,",
