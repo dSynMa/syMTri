@@ -40,10 +40,10 @@ method extern incr1 () {
 }
 
 // Controller actions (basic)
-method intern toggleDecr0 () { canDecr0 := !canDecr0; }
-method intern toggleIncr0 () { canIncr0 := !canIncr0; }
-method intern toggleDecr1 () { canDecr1 := !canDecr1; }
-method intern toggleIncr1 () { canIncr1 := !canIncr1; }
+method GF intern toggleDecr0 () { canDecr0 := !canDecr0; }
+method GF intern toggleIncr0 () { canIncr0 := !canIncr0; }
+method GF intern toggleDecr1 () { canDecr1 := !canDecr1; }
+method GF intern toggleIncr1 () { canIncr1 := !canIncr1; }
 
 
 // Controller actions (limited)

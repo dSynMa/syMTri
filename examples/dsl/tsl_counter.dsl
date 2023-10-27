@@ -6,15 +6,10 @@
 
 int MIN0 := 0;
 int MAX0 := 3;
-int MIN1 := 0;
-int MAX1 := 3;
 
 int count0 := 0;
-int count1 := 0;
 bool canDecr0 := false; 
-bool canDecr1 := false;
 bool canIncr0 := true;
-bool canIncr1 := true;
 
 
 method extern decr0 () {
@@ -28,22 +23,10 @@ method extern incr0 () {
     assert(count0+1 <= MAX0);
     count0++;
 }
-method extern decr1 () {
-    assume(canDecr1);           //If violated, environment loses
-    assert(count1-1 >= MIN1);   //If violated, environment wins
-    count1--;
-}
-method extern incr1 () {
-    assume(canIncr1);
-    assert(count1+1 <= MAX1);
-    count1++;
-}
 
 // Controller actions (basic)
 method intern toggleDecr0 () { canDecr0 := !canDecr0; }
 method intern toggleIncr0 () { canIncr0 := !canIncr0; }
-method intern toggleDecr1 () { canDecr1 := !canDecr1; }
-method intern toggleIncr1 () { canIncr1 := !canIncr1; }
 
 
 // Controller actions (limited)
