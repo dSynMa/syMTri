@@ -16,20 +16,20 @@ bool hasChosen := false;
 
 
 // First, choose a non-empty row and remove 1 item.
-method extern envChoose (bool c0, bool c1, bool c2, bool c3) {
+method extern envChoose (bool c0, bool c1) {
     assume(envTurn && !hasChosen);
-    assume(c0 => !c1 && !c2 && !c3 && row0 > 0);
-    assume(c1 => !c0 && !c2 && !c3 && row1 > 0);
-    assume(c2 => !c0 && !c1 && !c3 && row2 > 0);
-    assume(c3 => !c0 && !c1 && !c2 && row3 > 0);
-    if (c0) { chosenRow := 0; row0--; }
-    if (c1) { chosenRow := 1; row1--; }
-    if (c2) { chosenRow := 2; row2--; }
-    if (c3) { chosenRow := 3; row3--; }
+    assume((!c0 && !c1) => row0 > 0);
+    assume((!c0 &&  c1) => row1 > 0);
+    assume(( c0 && !c1) => row2 > 0);
+    assume(( c0 &&  c1) => row3 > 0);
+    // If the board is cleared, controller loses
+    assert(row0 + row1 + row2 + row3 > 1);
+    if (!c0 && !c1) { chosenRow := 0; row0--; }
+    if (!c0 &&  c1) { chosenRow := 1; row1--; }
+    if ( c0 && !c1) { chosenRow := 2; row2--; }
+    if ( c0 &&  c1) { chosenRow := 3; row3--; }
     hasChosen := true;
 
-    // If the board is cleared, controller loses
-    assert(row0 + row1 + row2 + row3 > 0);
 }
 
 // After a row has been chosen, environment can keep removing items
@@ -56,22 +56,19 @@ method extern envPass() {
 }
 
 // Same for the controller, more or less
-method intern conChoose (bool cc0, bool cc1, bool cc2, bool cc3) {
+method intern conChoose (bool cc0, bool cc1) {
     assert(!envTurn && !hasChosen);
-    // Cardinality
-    assert(cc0 || cc1 || cc2 || cc3);
-    assert(cc0 => !cc1 && !cc2 && !cc3 && row0 > 0);
-    assert(cc1 => !cc0 && !cc2 && !cc3 && row1 > 0);
-    assert(cc2 => !cc0 && !cc1 && !cc3 && row2 > 0);
-    assert(cc3 => !cc0 && !cc1 && !cc2 && row3 > 0);
+    assert((!cc0 && !cc1) => row0 > 0);
+    assert((!cc0 &&  cc1) => row1 > 0);
+    assert(( cc0 && !cc1) => row2 > 0);
+    assert(( cc0 &&  cc1) => row3 > 0);
+    // If the board is cleared, controller wins
+    assume(row0 + row1 + row2 + row3 > 1);
     if (cc0) { chosenRow := 0; row0--; }
     if (cc1) { chosenRow := 1; row1--; }
     if (cc2) { chosenRow := 2; row2--; }
     if (cc3) { chosenRow := 3; row3--; }
     hasChosen := true;
-
-    // If the board is cleared, controller wins
-    assume(row0 + row1 + row2 + row3 > 0);
 }
 
 // After a row has been chosen, controller can keep removing items...
