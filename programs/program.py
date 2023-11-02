@@ -505,9 +505,9 @@ class Program:
         # Go to losing/winning state if any assertion/assumption is violated
         def add_assert_violations(choices, asserts, assumes, ts, sink):
             for method in choices:
-                if asserts.get(method):
+                if method in asserts:
                     assertion = Or(Not(x) for x in asserts[method])
-                    if assumes.get(method):
+                    if method in assumes:
                         assertion = And(assertion, *assumes[method])
                     ind = symex_walker.one_hot(method, choices)
                     ind.append(assertion)
@@ -524,7 +524,7 @@ class Program:
         add_assert_violations(symex_walker.con_choices, symex_walker.intern_asserts, {}, con_ts, s_con_loses)
         add_assert_violations(symex_walker.env_choices, symex_walker.extern_assumes, {}, env_ts, s_con_wins)
 
-        # Guarantee only one method is chosen
+        # Guarantee at most one method is chosen
         def add_mutex_guarantee(choices, ts, sink):
             if len(choices) > 1:
                 dnf = (And(x, y) for x, y in combinations(choices.values(), 2))
@@ -533,6 +533,30 @@ class Program:
 
         add_mutex_guarantee(symex_walker.env_choices, env_ts, s_con_wins)
         add_mutex_guarantee(symex_walker.con_choices, con_ts, s_con_loses)
+
+        # Prevent stuttering when at least one method is available
+        def prevent_stuttering(choices, assumes_or_asserts, ts, sink):
+            no_choice = [Not(x) for x in choices.values()]
+            conds = []
+            for method in choices:
+                if method in assumes_or_asserts:
+                    cond = assumes_or_asserts[method]
+                    if cond:
+                        conds.append(And(*cond))
+                    else:
+                        # Found a method that is always available
+                        # Thus, stuttering is never allowed
+                        conds = []
+                        break
+            condition = (
+                _conjunct_smt((*no_choice, Or(*conds)))
+                if conds else _conjunct_smt(no_choice))
+
+            out = out_cl if sink == s_con_loses else out_cw
+            ts.append(Transition(s0, condition, [], [out], sink))
+
+        prevent_stuttering(symex_walker.env_choices, symex_walker.extern_assumes, env_ts, s_con_wins)
+        prevent_stuttering(symex_walker.con_choices, symex_walker.intern_asserts, con_ts, s_con_loses)
 
         prg = Program(
             file_name, [s0, s_con_wins, s_con_loses], s0, init_values,

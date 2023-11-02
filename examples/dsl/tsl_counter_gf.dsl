@@ -27,3 +27,4 @@ method extern incr0 () {
 // Controller actions (basic)
 method GF intern toggleDecr0 () { canDecr0 := !canDecr0; }
 method GF intern toggleIncr0 () { canIncr0 := !canIncr0; }
+method intern stutter () {}
