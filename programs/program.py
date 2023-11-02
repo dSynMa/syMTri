@@ -349,9 +349,11 @@ class Program:
         events["extern"].extend([Variable(s.symbol_name()) for s in symex_walker.env_choices.values()])  # noqa: E501
         events["intern"].extend([Variable(s.symbol_name()) for s in symex_walker.con_choices.values()])  # noqa: E501
 
+        out_cw, out_cl = Variable("_con_wins"), Variable("_con_loses")
         out_actions = [
             Variable(s.name) for s in table.symbols.values()
             if s.ast.io == "output"]
+        out_actions.extend((out_cw, out_cl))
         init_values = [
             TypedValuation(s.name, str(s.type_).lower(), to_formula(s.init))
             for s in table.symbols.values()
@@ -384,6 +386,9 @@ class Program:
         env_ts = triples_to_transitions(s0, symex_walker.extern_triples)
         con_ts = triples_to_transitions(s0, symex_walker.intern_triples)
 
+        env_ts.append(Transition(s_con_wins, None, [], [out_cw], s_con_wins))
+        env_ts.append(Transition(s_con_loses, None, [], [out_cl], s_con_loses))
+
         # Go to losing/winning state if any assertion/assumption is violated
         def add_assert_violations(choices, asserts, assumes, ts, sink):
             for method in choices:
@@ -395,7 +400,8 @@ class Program:
                     ind.append(assertion)
                     assertion = And(ind)
                     assertion = to_formula(assertion)
-                    ts.append(Transition(s0, assertion, [], [], sink))
+                    out = out_cl if sink == s_con_loses else out_cw
+                    ts.append(Transition(s0, assertion, [], [out], sink))
 
         # Environment cannot violate an assume() to break an assert()
         add_assert_violations(symex_walker.env_choices, symex_walker.extern_asserts, symex_walker.extern_assumes, env_ts, s_con_loses)
@@ -409,7 +415,8 @@ class Program:
         def add_mutex_guarantee(choices, ts, sink):
             if len(choices) > 1:
                 dnf = (And(x, y) for x, y in combinations(choices.values(), 2))
-                ts.append(Transition(s0, _disjunct_smt(dnf), [], [], sink))
+                out = out_cl if sink == s_con_loses else out_cw
+                ts.append(Transition(s0, _disjunct_smt(dnf), [], [out], sink))
 
         add_mutex_guarantee(symex_walker.env_choices, env_ts, s_con_wins)
         add_mutex_guarantee(symex_walker.con_choices, con_ts, s_con_loses)
