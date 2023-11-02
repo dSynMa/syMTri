@@ -427,8 +427,11 @@ class Program:
             env_events=events["extern"], con_events=events["intern"],
             out_events=out_actions)
 
-        gf_methods = [
+        gf_methods_in = [
             method.name for method in tree.methods
             if method.gf and method.kind == "intern"]
+        gf_methods_ext = [
+            method.name for method in tree.methods
+            if method.gf and method.kind == "extern"]
 
-        return prg, gf_methods
+        return prg, gf_methods_in, gf_methods_ext
