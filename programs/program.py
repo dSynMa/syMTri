@@ -1,5 +1,6 @@
 from itertools import combinations
 from typing import Set
+from textwrap import dedent, indent
 
 from graphviz import Digraph
 from parsing.string_to_methods import parse_dsl, SymexWalker, to_formula
@@ -136,6 +137,118 @@ class Program:
 
     def add_type_constraints_to_guards(self, transition: Transition):
         return transition.add_condition(type_constraints_acts(transition.action, self.symbol_table).to_nuxmv())
+
+    def to_prog_and_tlsf(self, ltl: str = None, tlsf: str = None, gf_in=None, gf_ext=None):
+        def state_to_str(x):
+            if not isinstance(x, str) and hasattr(x, "__iter__"):
+                return ", ".join(str[v] for v in list(x))
+            return str(x)
+
+        def tr_to_str(t, is_env):
+            def remove_paren(s):
+                s1 = str(s)
+                return s1[1:-1] if s1.startswith('(') else s1
+
+            result = f"{state_to_str(t.src)} -> {state_to_str(t.tgt)} [{remove_paren(t.condition)}"
+            if t.action is not None and len(t.action) > 0:
+                result += " $ " + ', '.join(map(remove_paren, t.action)).replace("=", ":=")
+            if is_env and t.output is not None and len(t.output) > 0:
+                result += " # " + ', '.join(map(remove_paren, t.output))
+            return result + ']'
+
+        other_states = ", ".join(
+            state_to_str(s)
+            for s in self.states
+            if s != self.initial_state)
+
+        def fmt_valuation(v: TypedValuation):
+            typ = {
+                "int": "integer", "nat": "integer", "natural": "integer",
+                "bool": "boolean"}.get(str(v.type), str(v.type))
+            return f"{v.name} : {typ} := {str(v.value).lower()}"
+
+        valuations = [fmt_valuation(v) for v in self.valuation]
+
+
+        INDENT = " " * 16
+        CN = ",\n" + INDENT
+        SN = ";\n" + INDENT
+        prog = f"""\
+        program {self.name.replace('.dsl', '')} {{
+            STATES {{
+                {state_to_str(self.initial_state)}: init, {other_states}
+            }}
+            ENVIRONMENT EVENTS {{
+                {', '.join(str(e) for e in self.env_events)}
+            }}
+            CONTROLLER EVENTS {{
+                {', '.join(str(e) for e in self.con_events)}
+            }}
+            PROGRAM EVENTS {{
+              {', '.join(str(e) for e in self.out_events)}
+            }}
+            VALUATION {{
+                {SN.join(valuations)}{';' if valuations else ''}
+
+            }}
+            ENVIRONMENT TRANSITIONS {{
+                {CN.join(tr_to_str(t, True) for t in self.env_transitions)}
+            }}
+            CONTROLLER TRANSITIONS {{
+                {CN.join(tr_to_str(t, False) for t in self.con_transitions)}
+            }}
+        }}
+        """
+
+        if tlsf is not None:
+            return dedent(prog), tlsf
+
+        assumes = (
+            ["G (!_con_wins)"]
+            if any(v.name == "_con_wins" for v in self.out_events)
+            else [])
+        if gf_ext:
+            assumes.extend(f"G F(_METHOD_{name})" for name in gf_ext)
+
+        guarantees = (
+            ["G (!_con_loses)"]
+            if any(v.name == "_con_loses" for v in self.out_events)
+            else [])
+        if ltl:
+            guarantees.append(ltl)
+        if gf_in:
+            guarantees.extend(f"G F(_METHOD_{name})" for name in gf_in)
+
+        tlsf = f"""
+        INFO {{
+            TITLE:       "{self.name}"
+            DESCRIPTION: "Generated from {self.name} with syMTri"
+            SEMANTICS:   Mealy
+            TARGET:      Mealy
+        }}
+
+        MAIN {{
+
+            INPUTS {{
+                {SN.join(str(e) for e in self.env_events)}{';' if self.env_events else ''}
+                {SN.join(str(e) for e in self.out_events)}{';' if self.out_events else ''}
+            }}
+
+            OUTPUTS {{
+                {SN.join(str(e) for e in self.con_events)}{';' if self.con_events else ''}
+            }}
+
+            ASSUMPTIONS {{
+                {SN.join(assumes)}{';' if assumes else ''}
+            }}
+
+            GUARANTEES {{
+                {SN.join(guarantees)}{';' if guarantees else ''}
+            }}
+        }}
+        """
+
+        return dedent(prog), dedent(tlsf)
 
     def to_dot(self):
         dot = Digraph(name=self.name,
