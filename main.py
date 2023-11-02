@@ -33,15 +33,18 @@ def main():
     fname = Path(args.program)
     date_file = open(args.program, "r").read()
 
-    gf_methods = None
+    gf_in, gf_ext = None, None
     if fname.suffix == ".dsl":
-        program, gf_methods = Program.of_dsl(fname.name, date_file)
-        print(program)
+        program, gf_in, gf_ext = Program.of_dsl(fname.name, date_file)
     else:
         program = string_to_program(date_file)
 
     if args.translate is not None:
-        if args.translate.lower() == "dot":
+        if args.translate.lower() == "prog-tlsf":
+            print(
+                *program.to_prog_and_tlsf(args.ltl, args.tlsf, gf_in, gf_ext),
+                sep="\n")
+        elif args.translate.lower() == "dot":
             print(program.to_dot())
         elif args.translate.lower() == "nuxmv":
             print(create_nuxmv_model(program.to_nuXmv_with_turns()))

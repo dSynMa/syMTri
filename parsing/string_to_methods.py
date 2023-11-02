@@ -68,6 +68,7 @@ class Store(BaseNode):
 class Expr(BaseNode):
     pass
 
+
 class Literal(Expr):
     value = None
 
