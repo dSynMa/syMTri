@@ -27,7 +27,7 @@ method extern incr0 () {
 // Controller actions (basic)
 method intern toggleDecr0 () { canDecr0 := !canDecr0; }
 method intern toggleIncr0 () { canIncr0 := !canIncr0; }
-
+method intern stutter () {}
 
 // Controller actions (limited)
 // method intern toggleDecr0 () { assert(!canIncr0 || count0 == MIN0); canDecr0 := !canDecr0; }
