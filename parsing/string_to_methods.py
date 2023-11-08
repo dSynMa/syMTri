@@ -52,7 +52,7 @@ class Token(Enum):
     NE      = "!="
     AND     = "&&"
     OR      = "||"
-    IMPL    = "=>"
+    IMPL    = "->"
     NOT     = "!"
 
 
@@ -173,8 +173,8 @@ def to_formula(expr: FNode):
         "<=": expr.is_le,
         "<": expr.is_lt,
         "==": expr.is_equals,
-        "<=>": expr.is_iff,
-        "=>": expr.is_implies,
+        "<->": expr.is_iff,
+        "->": expr.is_implies,
         "&&": expr.is_and,
         "||": expr.is_or,
     }
@@ -272,7 +272,7 @@ expression
 
 binary_logic_op::BinLogic
     =
-    left:expression op:('&&'|'||'|'=>') ~ right:comparison
+    left:expression op:('&&'|'||'|'->') ~ right:comparison
     ;
 
 comparison
@@ -295,7 +295,7 @@ arithmetic
 add_or_sub::BinOp
     =
     | left:arithmetic op:'+' ~ right:term
-    | left:arithmetic op:'-' ~ right:term
+    | left:arithmetic op:/-(?!>)/ ~ right:term
     ;
 
 term
@@ -312,17 +312,22 @@ mul_or_div::BinOp
 
 factor
     =
-    | '(' ~ @:expression ')'
     | unary
-    | bool_lit
-    | number_lit
-    | var_reference
+    | base_expr
     ;
 
 unary::UnaryOp
     =
-    | op:'!' expr:expression
-    | op:'-' expr:expression
+    | op:'!' ~ expr:base_expr
+    | op:/-(?!>)/ expr:base_expr
+    ;
+
+base_expr
+    =
+    | '(' ~ @:expression ')'
+    | bool_lit
+    | number_lit
+    | var_reference
     ;
 
 var_reference::Load = name:identifier ;
