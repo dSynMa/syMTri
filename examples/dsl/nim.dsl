@@ -60,18 +60,18 @@ method extern envPass() {
 }
 
 // Same for the controller, more or less
-method intern conChoose (bool cc0, bool cc1) {
+method intern conChoose (bool c0, bool c1) {
     assert(!envTurn && !hasChosen);
-    assert((!cc0 && !cc1) -> row0 > 0);
-    assert((!cc0 &&  cc1) -> row1 > 0);
-    assert(( cc0 && !cc1) -> row2 > 0);
-    assert(( cc0 &&  cc1) -> row3 > 0);
+    assert((!c0 && !c1) -> row0 > 0);
+    assert((!c0 &&  c1) -> row1 > 0);
+    assert(( c0 && !c1) -> row2 > 0);
+    assert(( c0 &&  c1) -> row3 > 0);
     // If the board is cleared, controller wins
     assume(row0 + row1 + row2 + row3 > 1);
-    if (!cc0 && !cc1) { chosenRow := 0; row0--; }
-    if (!cc0 &&  cc1) { chosenRow := 1; row1--; }
-    if ( cc0 && !cc1) { chosenRow := 2; row2--; }
-    if ( cc0 &&  cc1) { chosenRow := 3; row3--; }
+    if (!c0 && !c1) { chosenRow := 0; row0--; }
+    if (!c0 &&  c1) { chosenRow := 1; row1--; }
+    if ( c0 && !c1) { chosenRow := 2; row2--; }
+    if ( c0 &&  c1) { chosenRow := 3; row3--; }
     hasChosen := true;
 }
 
