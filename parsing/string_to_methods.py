@@ -11,7 +11,7 @@ from pysmt.fnode import FNode
 from pysmt.shortcuts import (FALSE, GE, GT, LE, LT, And, Bool, EqualsOrIff,
                              Implies, Int, Not, NotEquals, Or, Symbol,
                              get_free_variables, get_type, simplify,
-                             substitute, is_sat)
+                             substitute)
 from pysmt.typing import BOOL, INT
 from tatsu.grammars import Grammar
 from tatsu.objectmodel import Node
@@ -59,6 +59,15 @@ class Token(Enum):
 class BaseNode(Node):
     def unparse(self) -> str:
         raise NotImplementedError()
+
+
+class MethodModality(Enum):
+    F       = "F"
+    GF      = "GF"
+    notG    = "!G"
+
+    def to_ltl(self):
+        return " ".join(self.value)
 
 
 class Store(BaseNode):
@@ -150,18 +159,25 @@ class EnumDef(BaseNode):
 class MethodDef(BaseNode):
     name = None
     kind = None
-    gf = None
+    modalities = None
     params = None
     assumes = None
     asserts = None
     decls = None
     body = None
 
+    def __init__(self, ast=None, **attributes):
+        global CONTEXT
+        super().__init__(ast, **attributes)
+        self.modalities = [MethodModality(m) for m in self.modalities]
+        CONTEXT = self
+
 
 class Program(BaseNode):
     decls = None
     enums = None
     methods = None
+    guarantees = None
 
 
 def to_formula(expr: FNode):
@@ -206,10 +222,14 @@ GRAMMAR = '''
 @@keyword :: assert assume else enum extern false if intern method true
 @@eol_comments :: /\/\/.*?$/
 
-
 start::Program =
     { decls+:global_decl | enums+:enum_def }*
     methods:{ method }+
+    [
+        'guarantee' '{'
+            guarantees:{ ?'[^}]*' }
+        '}'
+    ]
     $
     ;
 
@@ -233,10 +253,12 @@ signature =
 parameter::Decl = var_type:identifier var_name:identifier init:()
     ;
 
-is_gf::bool = 'GF';
+method_modality = 'GF' | 'G' | 'F' | '!G' ;
 
 method::MethodDef =
-    'method' gf:[is_gf] kind:( 'extern' | 'intern' ) ~ >signature '{'
+    'method'
+    modalities:{ method_modality }
+    kind:( 'extern' | 'intern' ) ~ >signature '{'
     { assumes+:assumption | asserts+:assertion }*
     decls: { decl }*
     body:{ statement }*

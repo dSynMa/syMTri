@@ -33,16 +33,16 @@ def main():
     fname = Path(args.program)
     date_file = open(args.program, "r").read()
 
-    gf_in, gf_ext = None, None
+    guarantees, assumes = None, None
     if fname.suffix == ".dsl":
-        program, gf_in, gf_ext = Program.of_dsl(fname.name, date_file)
+        program, guarantees, assumes = Program.of_dsl(fname.name, date_file)
     else:
         program = string_to_program(date_file)
 
     if args.translate is not None:
         if args.translate.lower() == "prog-tlsf":
             print(
-                *program.to_prog_and_tlsf(args.ltl, args.tlsf, gf_in, gf_ext),
+                *program.to_prog_and_tlsf(args.ltl, args.tlsf, guarantees, assumes),
                 sep="\n")
         elif args.translate.lower() == "dot":
             print(program.to_dot())

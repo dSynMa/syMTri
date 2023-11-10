@@ -138,7 +138,7 @@ class Program:
     def add_type_constraints_to_guards(self, transition: Transition):
         return transition.add_condition(type_constraints_acts(transition.action, self.symbol_table).to_nuxmv())
 
-    def to_prog_and_tlsf(self, ltl: str = None, tlsf: str = None, gf_in=None, gf_ext=None):
+    def to_prog_and_tlsf(self, ltl: str = None, tlsf: str = None, dsl_guarantees=None, dsl_assumes=None):  # noqa: E501
         def state_to_str(x):
             if not isinstance(x, str) and hasattr(x, "__iter__"):
                 return ", ".join(str[v] for v in list(x))
@@ -207,8 +207,8 @@ class Program:
             ["G (!_con_wins)"]
             if any(v.name == "_con_wins" for v in self.out_events)
             else [])
-        if gf_ext:
-            assumes.extend(f"G F(_METHOD_{name})" for name in gf_ext)
+        if dsl_assumes:
+            assumes.extend(dsl_assumes)
 
         guarantees = (
             ["G (!_con_loses)"]
@@ -216,8 +216,8 @@ class Program:
             else [])
         if ltl:
             guarantees.append(ltl)
-        if gf_in:
-            guarantees.extend(f"G F(_METHOD_{name})" for name in gf_in)
+        if dsl_guarantees:
+            guarantees.extend(dsl_guarantees)
 
         tlsf = f"""
         INFO {{
@@ -243,7 +243,7 @@ class Program:
             }}
 
             GUARANTEES {{
-                {SN.join(guarantees)}{';' if guarantees else ''}
+                {SN.join(guarantees)}{';' if (guarantees and guarantees[-1].strip()[-1]!=';') else ''}
             }}
         }}
         """
@@ -564,11 +564,24 @@ class Program:
             env_events=events["extern"], con_events=events["intern"],
             out_events=out_actions)
 
-        gf_methods_in = [
-            method.name for method in tree.methods
-            if method.gf and method.kind == "intern"]
-        gf_methods_ext = [
-            method.name for method in tree.methods
-            if method.gf and method.kind == "extern"]
+        guarantees = [
+            f"{mod.to_ltl()} (_METHOD_{method.name})"
+            for method in tree.methods
+            for mod in method.modalities
+            if method.kind == "intern"]
 
-        return prg, gf_methods_in, gf_methods_ext
+        gf_methods_ext = [
+            f"{mod.to_ltl()} (_METHOD_{method.name})"
+            for method in tree.methods
+            for mod in method.modalities
+            if method.kind == "extern"]
+
+        def add_method_prefixes(x):
+            for method in tree.methods:
+                x = x.replace(method.name, f"_METHOD_{method.name}")
+            return x
+
+        if tree.guarantees:
+            guarantees.extend(add_method_prefixes(x) for x in tree.guarantees)
+
+        return prg, guarantees, gf_methods_ext
