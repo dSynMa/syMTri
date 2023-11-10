@@ -1,5 +1,3 @@
-
-
 int maxFloor := 0;
 int curFloor := 0;
 int target := 0;
@@ -12,7 +10,7 @@ method extern incrMaxFloor () {
     maxFloor++;
 }
 
-method extern done () {
+method F extern done () {
     assume(!doneInit);
     doneInit := true;
 }
@@ -25,23 +23,28 @@ method extern changeTarget(bool incr) {
     else target--;
 }
 
-method extern setTarget () {
+method GF extern setTarget () {
     assume(doneInit && !targetSet);
     targetSet := true;
 }
 
-// TODO we should scope parameter names to their methods
-method intern changeFloor (bool incrFloor) {
+method intern changeFloor (bool incr) {
     assert(doneInit && targetSet);
-    assert(incrFloor -> curFloor < maxFloor);
-    assert(!incrFloor -> curFloor > 1);
-    if (incrFloor) curFloor++;
+    assert(incr -> curFloor < maxFloor);
+    assert(!incr -> curFloor > 1);
+    if (incr) curFloor++;
     else curFloor--;
 }
 
-method intern targetReached() {
+//method intern stutter () {}
+
+method intern reachTarget() {
     assert(doneInit && targetSet);
     assert(target == curFloor);
     targetSet := false;
 }
 
+
+guarantee {
+    G (setTarget -> F reachTarget)
+}
