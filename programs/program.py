@@ -3,7 +3,7 @@ from typing import Set
 from textwrap import dedent, indent
 
 from graphviz import Digraph
-from parsing.string_to_methods import parse_dsl, SymexWalker, to_formula
+from parsing.string_to_methods import VarRenamer, parse_dsl, SymexWalker, to_formula
 from pysmt.shortcuts import And, Or, Not
 
 from parsing.string_to_prop_logic import string_to_prop
@@ -449,6 +449,8 @@ class Program:
         """Parse a DSL program and return a Program"""
 
         tree = parse_dsl(code)
+        renamer = VarRenamer()
+        renamer.walk(tree)
         symex_walker = SymexWalker()
         symex_walker.walk(tree)
         table = symex_walker.fp.get_root().table

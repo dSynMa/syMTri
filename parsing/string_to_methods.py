@@ -548,6 +548,60 @@ class ForkingPath:
         return f"{conds}-->{asgns}"
 
 
+class VarRenamer(NodeWalker):
+    """Renames every variable to its fully qualified version"""
+
+    GLOBAL_PREFIX = "global"
+
+    def __init__(self):
+        super().__init__()
+        self.prefix = self.GLOBAL_PREFIX
+        self.seen = set()
+
+    def global_name(self, name):
+        return f"_{self.GLOBAL_PREFIX}_{name}"
+
+    def prefixed_name(self, name):
+        return f"_{self.prefix}_{name}"
+
+    def lookup(self, name):
+        if self.prefixed_name(name) in self.seen:
+            return self.prefixed_name(name)
+        if self.global_name(name) in self.seen:
+            return self.global_name(name)
+        return name
+
+    def walk_BaseNode(self, node: BaseNode):
+        """Default action: just recurse on all children"""
+        if node._children:
+            for child in node._children:
+                self.walk(child)
+
+    def walk_Decl(self, node: Decl):
+        name = self.prefixed_name(node.var_name)
+        node.var_name = name
+        self.seen.add(name)
+
+    def walk_Program(self, node: Program):
+        self.walk(node.decls)
+        self.walk(node.methods)
+        self.walk(node.guarantees)
+
+    def walk_Load(self, node: Load):
+        node.name = self.lookup(node.name)
+
+    def walk_Store(self, node: Store):
+        node.name = self.lookup(node.name)
+
+    def walk_MethodDef(self, node: MethodDef):
+        self.prefix = node.name
+        self.walk(node.params)
+        self.walk(node.body)
+        self.walk(node.asserts)
+        self.walk(node.assumes)
+        self.prefix = self.GLOBAL_PREFIX
+
+
 class SymexWalker(NodeWalker):
 
     def __init__(self):
