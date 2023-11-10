@@ -101,8 +101,6 @@ class BinOp(Operation):
     right: Expr = None
 
 
-
-
 class Increment(BaseNode):
     var_name = None
 
@@ -217,6 +215,7 @@ def to_formula(expr: FNode):
     raise NotImplementedError(expr, expr.node_type())
 
 
+# TODO add a proper LTL parser
 GRAMMAR = '''
 @@grammar::POPL
 @@keyword :: assert assume else enum extern false if intern method true
@@ -366,6 +365,7 @@ false::bool = 'false' ~ @:() ;
 number_lit::Literal = value:number ;
 number::int = /[0-9]+/ ;
 '''
+
 
 @dataclass
 class SymbolTableEntry:
@@ -563,15 +563,6 @@ class SymexWalker(NodeWalker):
         self.extern_triples = defaultdict(list)
         self.intern_triples = defaultdict(list)
 
-    def push(self, frame):
-        self.ctx.append(frame)
-
-    def pop(self):
-        return self.ctx.pop()
-
-    def context(self):
-        return self.ctx[-1]
-
     def walk_Decl(self, node: Decl):
         init = self.walk(node.init)
         self.fp.table.add(node, init)
@@ -697,6 +688,7 @@ class SymexWalker(NodeWalker):
 
 
 dsl_parser: Grammar = compile(GRAMMAR)
+
 
 __semantics = ModelBuilderSemantics(types=[
     t for t in globals().values()

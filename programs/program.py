@@ -169,7 +169,6 @@ class Program:
 
         valuations = [fmt_valuation(v) for v in self.valuation]
 
-
         INDENT = " " * 16
         CN = ",\n" + INDENT
         SN = ";\n" + INDENT
