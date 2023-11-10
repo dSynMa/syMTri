@@ -409,13 +409,18 @@ class SymbolTable:
     def is_local(self):
         return self.parent is not None and not self.is_params
 
-    def lookup(self, name) -> SymbolTableEntry:
+    def lookup(self, name, trail=None) -> SymbolTableEntry:
         if name in self.symbols:
             return self.symbols[name]
         elif self.parent is None:
-            raise KeyError(f"Symbol {name} not found in {self}")
+            trail = trail or []
+            trail.append(self)
+            trail_fmt = "\n".join(f"{st}" for st in trail)
+            raise KeyError(f"Symbol {name} not found in {trail_fmt}")
         else:
-            return self.parent.lookup(name)
+            trail = trail or []
+            trail.append(self)
+            return self.parent.lookup(name, trail)
 
     def add(self, node: Decl, init) -> SymbolTableEntry:
         builtin_types = {'int': INT, 'bool': BOOL}
@@ -432,7 +437,7 @@ class ForkingPath:
         self.assignments = {}
         self.conditions = []
         self.children = []
-        self.table = table or (SymbolTable() if parent is None else parent.table)
+        self.table = table or (SymbolTable() if parent is None else parent.table)  # noqa: E501
         self.parent = parent
 
     def _lookup(self, name):
